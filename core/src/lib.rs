@@ -10,6 +10,7 @@ const ORIENTATION_0: Orientation = Orientation(0);
 const ORIENTATION_1: Orientation = Orientation(1);
 const ORIENTATION_2: Orientation = Orientation(2);
 const ORIENTATION_3: Orientation = Orientation(3);
+const ORIENTATIONS: [Orientation; 4] = [ORIENTATION_0, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3];
 
 impl Orientation {
     fn new(n: u8) -> Self { Orientation(n % 4) }
@@ -100,68 +101,6 @@ impl MoveLog {
     fn get(&self, i: usize) -> Option<&MoveLogItem> { self.items.get(i) }
     fn get_mut(&mut self, i: usize) -> Option<&mut MoveLogItem> { self.items.get_mut(i) }
 }
-
-// #[derive(Clone, Debug)]
-// struct MovePath(Vec<Move>);
-//
-// impl MovePath {
-//     fn join(&mut self, path: &MovePath) {
-//         self.0.extend(path.0.clone());
-//     }
-//     fn push(&mut self, mv: Move) {
-//         if self.0.is_empty() {
-//             self.0.push(mv);
-//             return;
-//         }
-//         let m1 = self.0.pop().unwrap();
-//         let m2 = mv;
-//         match m2 {
-//             Move::Horizontally(n2) => {
-//                 if n2 == 0 {
-//                     self.0.push(m1);
-//                     return;
-//                 }
-//                 if let Move::Horizontally(n1) = m1 {
-//                     let n = n1 + n2;
-//                     if n != 0 {
-//                         self.0.push(Move::Horizontally(n));
-//                         return;
-//                     }
-//                 }
-//             }
-//             Move::Vertically(n2) => {
-//                 if n2 == 0 {
-//                     self.0.push(m1);
-//                     return;
-//                 }
-//                 if let Move::Vertically(n1) = m1 {
-//                     let n = n1 + n2;
-//                     if n != 0 {
-//                         self.0.push(Move::Vertically(n));
-//                         return;
-//                     }
-//                 }
-//             }
-//             Move::Rotation(n2) => {
-//                 if n2 == 0 {
-//                     self.0.push(m1);
-//                     return;
-//                 }
-//             }
-//             // NOTE: Rotations cannot be merged.
-//         }
-//         self.0.push(m1);
-//         self.0.push(m2);
-//     }
-//     fn normalize(&mut self) {
-//         let mut mvs: Vec<Move> = Vec::new();
-//         mvs.append(&mut self.0);
-//         debug_assert!(self.0.is_empty());
-//         for mv in mvs {
-//             self.push(mv);
-//         }
-//     }
-// }
 
 //---
 
@@ -947,6 +886,7 @@ impl FallingPiece {
                 }
             }
         }
+        self.move_log.push(MoveLogItem { by: mv, pos: self.pos });
         true
     }
     fn is_last_move_rotation(&self) -> bool {
@@ -992,7 +932,7 @@ impl Playfield {
         self.grid.bit_grid.num_droppable_rows_fast(fp.pos, &fp.grid().bit_grid)
     }
     fn can_drop(&self, fp: &FallingPiece, n: SizeY) -> bool {
-        self.grid.bit_grid.can_put_fast((fp.pos.0, fp.pos.1 - n as PosY), &fp.grid().bit_grid)
+        n <= self.grid.bit_grid.num_droppable_rows_fast(fp.pos, &fp.grid().bit_grid)
     }
     fn can_move_horizontally(&self, fp: &FallingPiece, n: PosX) -> bool {
         let to_right = n > 0;
@@ -1088,6 +1028,43 @@ impl Playfield {
         self.grid.put_fast(fp.pos, &fp.grid().bit_grid);
         let num_cleared_line = self.grid.drop_filled_rows();
         Some(LineClear::new(num_cleared_line, tspin))
+    }
+    fn search_route(&self, fp: &FallingPiece, dst: (Orientation, Pos), mode: RotationMode) -> Option<MoveLog> {
+        None
+    }
+    fn search_droppable_routes(&self, fp: &FallingPiece, mode: RotationMode) -> Vec<FallingPiece> {
+        let yend = (self.grid.height() - self.grid.top_padding()) as PosY;
+        let spec = PieceSpec::of(fp.piece);
+        let sub_bit_grids = [
+            &spec.grids[ORIENTATION_0.value() as usize].bit_grid,
+            &spec.grids[ORIENTATION_1.value() as usize].bit_grid,
+            &spec.grids[ORIENTATION_2.value() as usize].bit_grid,
+            &spec.grids[ORIENTATION_3.value() as usize].bit_grid,
+        ];
+        let mut r: Vec<FallingPiece> = Vec::new();
+        for y in -1..yend {
+            for x in -1..(self.grid.width() as PosX - 1) {
+                for o in &ORIENTATIONS {
+                    let g = sub_bit_grids[o.value() as usize];
+                    let can_put = self.grid.bit_grid.can_put_fast((x, y), g);
+                    if !can_put {
+                        continue;
+                    }
+                    let can_drop = self.grid.bit_grid.can_put_fast((x, y - 1), g);
+                    if can_drop {
+                        continue;
+                    }
+                    if let Some(mut move_log) = self.search_route(fp, (*o, (x, y)), mode) {
+                        let mut fp = fp.clone();
+                        fp.orientation = *o;
+                        fp.pos = (x, y);
+                        fp.move_log.items.append(&mut move_log.items);
+                        r.push(fp);
+                    }
+                }
+            }
+        }
+        r
     }
 }
 
