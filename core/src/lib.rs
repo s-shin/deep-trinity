@@ -1,72 +1,74 @@
 #[macro_use]
 extern crate lazy_static;
 
+use std::collections::{HashMap, HashSet};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct Orientation(u8);
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Orientation(u8);
 
-const ORIENTATION_0: Orientation = Orientation(0);
-const ORIENTATION_1: Orientation = Orientation(1);
-const ORIENTATION_2: Orientation = Orientation(2);
-const ORIENTATION_3: Orientation = Orientation(3);
-const ORIENTATIONS: [Orientation; 4] = [ORIENTATION_0, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3];
+pub const ORIENTATION_0: Orientation = Orientation(0);
+pub const ORIENTATION_1: Orientation = Orientation(1);
+pub const ORIENTATION_2: Orientation = Orientation(2);
+pub const ORIENTATION_3: Orientation = Orientation(3);
+pub const ORIENTATIONS: [Orientation; 4] = [ORIENTATION_0, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3];
 
 impl Orientation {
-    fn new(n: u8) -> Self { Orientation(n % 4) }
-    fn normalize(&mut self) {
+    pub fn new(n: u8) -> Self { Orientation(n % 4) }
+    pub fn normalize(&mut self) {
         self.0 %= 4;
     }
-    fn is(&self, n: u8) -> bool {
+    pub fn is(&self, n: u8) -> bool {
         debug_assert!(n < 4);
         self.0 % 4 == n
     }
-    fn rotate(self, n: i8) -> Self {
+    pub fn rotate(self, n: i8) -> Self {
         let mut n = (self.0 as i8 + n) % 4;
         if n < 0 {
             n += 4;
         }
         Self(n as u8)
     }
-    fn value(self) -> u8 { self.0 % 4 }
+    pub fn id(self) -> u8 { self.0 % 4 }
 }
 
 //---
 
 #[derive(Copy, Clone, Debug)]
-enum Move {
-    Horizontally(i8),
-    Vertically(i8),
-    Rotation(i8),
+pub enum Move {
+    Shift(i8),
+    Drop(i8),
+    Rotate(i8),
 }
 
 impl Move {
-    fn merge(self, m2: Move) -> Option<Move> {
+    pub fn merge(self, m2: Move) -> Option<Move> {
         let m1 = self;
         match m2 {
-            Move::Horizontally(n2) => {
+            Move::Shift(n2) => {
                 if n2 == 0 {
                     return Some(m1);
                 }
-                if let Move::Horizontally(n1) = m1 {
+                if let Move::Shift(n1) = m1 {
                     let n = n1 + n2;
                     if n != 0 {
-                        return Some(Move::Horizontally(n));
+                        return Some(Move::Shift(n));
                     }
                 }
             }
-            Move::Vertically(n2) => {
+            Move::Drop(n2) => {
                 if n2 == 0 {
                     return Some(m1);
                 }
-                if let Move::Vertically(n1) = m1 {
+                if let Move::Drop(n1) = m1 {
                     let n = n1 + n2;
                     if n != 0 {
-                        return Some(Move::Vertically(n));
+                        return Some(Move::Drop(n));
                     }
                 }
             }
-            Move::Rotation(n2) => {
+            Move::Rotate(n2) => {
                 if n2 == 0 {
                     return Some(m1);
                 }
@@ -78,58 +80,74 @@ impl Move {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct MoveLogItem {
+pub struct MoveLogItem {
     pub by: Move,
     pub pos: Pos,
 }
 
 #[derive(Clone, Debug)]
-struct MoveLog {
+pub struct MoveLog {
     pub initial_pos: Pos,
     pub items: Vec<MoveLogItem>,
 }
 
 impl MoveLog {
-    fn new(initial_pos: Pos) -> Self {
+    pub fn new(initial_pos: Pos) -> Self {
         Self {
             initial_pos,
             items: Vec::new(),
         }
     }
-    fn len(&self) -> usize { self.items.len() }
-    fn push(&mut self, item: MoveLogItem) { self.items.push(item); }
-    fn get(&self, i: usize) -> Option<&MoveLogItem> { self.items.get(i) }
-    fn get_mut(&mut self, i: usize) -> Option<&mut MoveLogItem> { self.items.get_mut(i) }
+    pub fn len(&self) -> usize { self.items.len() }
+    pub fn push(&mut self, item: MoveLogItem) { self.items.push(item); }
+    pub fn get(&self, i: usize) -> Option<&MoveLogItem> { self.items.get(i) }
+    pub fn get_mut(&mut self, i: usize) -> Option<&mut MoveLogItem> { self.items.get_mut(i) }
+    pub fn append(&mut self, other: &MoveLog) {
+        if let Some(item) = self.items.last() {
+            debug_assert_eq!(item.pos, other.initial_pos);
+        }
+        self.items.extend(&other.items);
+    }
+    pub fn merge_or_push(&mut self, item: MoveLogItem) {
+        if let Some(last) = self.items.last_mut() {
+            if let Some(mv) = last.by.merge(item.by) {
+                last.by = mv;
+                last.pos = item.pos;
+                return;
+            }
+        }
+        self.items.push(item);
+    }
 }
 
 //---
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum TSpin {
+pub enum TSpin {
     Standard,
     Mini,
 }
 
 #[derive(Copy, Clone, Debug)]
-struct LineClear {
+pub struct LineClear {
     pub num_lines: u8,
     pub tspin: Option<TSpin>,
 }
 
 impl LineClear {
-    fn new(num_lines: u8, tspin: Option<TSpin>) -> Self {
+    pub fn new(num_lines: u8, tspin: Option<TSpin>) -> Self {
         Self { num_lines, tspin }
     }
-    fn is_normal(&self) -> bool { self.tspin.is_none() }
-    fn is_tetris(&self) -> bool { self.is_normal() && self.num_lines == 4 }
-    fn is_tspin(&self) -> bool {
+    pub fn is_normal(&self) -> bool { self.tspin.is_none() }
+    pub fn is_tetris(&self) -> bool { self.is_normal() && self.num_lines == 4 }
+    pub fn is_tspin(&self) -> bool {
         if let Some(tspin) = self.tspin {
             tspin == TSpin::Standard
         } else {
             false
         }
     }
-    fn is_tspin_mini(&self) -> bool {
+    pub fn is_tspin_mini(&self) -> bool {
         if let Some(tspin) = self.tspin {
             tspin == TSpin::Mini
         } else {
@@ -141,12 +159,12 @@ impl LineClear {
 //---
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum RotationMode {
+pub enum RotationMode {
     Srs,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum TSpinJudgementMode {
+pub enum TSpinJudgementMode {
     PuyoPuyoTetris,
 }
 
@@ -156,10 +174,10 @@ enum TSpinJudgementMode {
 // 1: Any
 // 2-8: S, Z, L, J, I, T, O
 // 9: Garbage
-struct CellType(u8);
+pub struct CellType(u8);
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum Piece {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Piece {
     S,
     Z,
     L,
@@ -173,8 +191,8 @@ impl Into<CellType> for Piece {
     fn into(self) -> CellType { CellType(2 + (self as u8)) }
 }
 
-#[derive(Copy, Clone, Debug)]
-enum Block {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Block {
     Any,
     Piece(Piece),
     Garbage,
@@ -190,8 +208,8 @@ impl Into<CellType> for Block {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-enum Cell {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Cell {
     Empty,
     Block(Block),
 }
@@ -205,32 +223,49 @@ impl Into<CellType> for Cell {
     }
 }
 
-const CELL_CHARS: &'static str = " @SZLJITO#";
+pub const CELL_CHARS: &'static str = " @SZLJITO#";
 
 impl Cell {
-    fn is_empty(self) -> bool {
+    pub fn is_empty(self) -> bool {
         match self {
             Cell::Empty => true,
             _ => false
         }
     }
-    fn char(self) -> char {
+    pub fn char(self) -> char {
         let id: CellType = self.into();
         CELL_CHARS.chars().nth(id.0 as usize).unwrap()
     }
 }
 
+impl From<char> for Cell {
+    fn from(c: char) -> Self {
+        match c.to_ascii_uppercase() {
+            ' ' => Cell::Empty,
+            '@' => Cell::Block(Block::Any),
+            'S' => Cell::Block(Block::Piece(Piece::S)),
+            'Z' => Cell::Block(Block::Piece(Piece::Z)),
+            'L' => Cell::Block(Block::Piece(Piece::L)),
+            'J' => Cell::Block(Block::Piece(Piece::J)),
+            'I' => Cell::Block(Block::Piece(Piece::I)),
+            'T' => Cell::Block(Block::Piece(Piece::T)),
+            'O' => Cell::Block(Block::Piece(Piece::O)),
+            _ => Cell::Block(Block::Garbage),
+        }
+    }
+}
+
 //---
 
-type SizeX = u8;
-type SizeY = u8;
-type Size = (SizeX, SizeY);
-type PosX = i8;
-type PosY = i8;
-type Pos = (PosX, PosY);
-type UPosX = SizeX;
-type UPosY = SizeY;
-type UPos = Size;
+pub type SizeX = u8;
+pub type SizeY = u8;
+pub type Size = (SizeX, SizeY);
+pub type PosX = i8;
+pub type PosY = i8;
+pub type Pos = (PosX, PosY);
+pub type UPosX = SizeX;
+pub type UPosY = SizeY;
+pub type UPos = Size;
 
 trait Grid: Clone + fmt::Display {
     fn size(&self) -> Size;
@@ -425,26 +460,26 @@ trait Grid: Clone + fmt::Display {
 
 //---
 
-#[derive(Clone, Debug)]
-struct BasicGrid {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BasicGrid {
     size: Size,
     cells: Vec<Cell>,
 }
 
 impl BasicGrid {
-    fn new(size: Size) -> Self {
+    pub fn new(size: Size) -> Self {
         Self {
             size,
-            cells: vec![Cell::Empty; (size.0 * size.1) as usize],
+            cells: vec![Cell::Empty; size.0 as usize * size.1 as usize],
         }
     }
     fn pos_to_index(&self, pos: UPos) -> usize {
         debug_assert!(pos.0 < self.width());
         debug_assert!(pos.1 < self.height());
-        let idx = (pos.0 + pos.1 * self.width()) as usize;
+        let idx = pos.0 as usize + pos.1 as usize * self.width() as usize;
         idx
     }
-    fn rotate_cw(&self) -> Self {
+    pub fn rotate_cw(&self) -> Self {
         let mut g = Self::new((self.height(), self.width()));
         for y in 0..self.height() {
             for x in 0..self.width() {
@@ -475,8 +510,8 @@ impl fmt::Display for BasicGrid {
 
 type BitGridRow = u16;
 
-#[derive(Clone, Debug)]
-struct BitGrid {
+#[derive(Clone, Debug, Eq)]
+pub struct BitGrid {
     size: Size,
     // cells: 0000000000
     // pos x: 9876543210
@@ -485,15 +520,15 @@ struct BitGrid {
 }
 
 impl BitGrid {
-    fn new(size: Size) -> Self {
+    pub fn new(size: Size) -> Self {
         debug_assert!(size.0 as usize <= std::mem::size_of::<BitGridRow>() * 8);
         Self {
             size,
             rows: vec![0; size.1 as usize],
-            row_mask: !(!0 << (size.1 as BitGridRow)),
+            row_mask: !(!0 << (size.0 as BitGridRow)),
         }
     }
-    fn put_fast(&mut self, pos: Pos, sub: &BitGrid) -> bool {
+    pub fn put_fast(&mut self, pos: Pos, sub: &BitGrid) -> bool {
         debug_assert!(self.width() >= sub.width());
         debug_assert!(self.height() >= sub.height());
         let mut dirty = false;
@@ -532,10 +567,10 @@ impl BitGrid {
         }
         dirty
     }
-    fn can_put_fast(&self, pos: Pos, sub: &BitGrid) -> bool {
+    pub fn can_put_fast(&self, pos: Pos, sub: &BitGrid) -> bool {
         debug_assert!(self.width() >= sub.width());
         debug_assert!(self.height() >= sub.height());
-        let nshift = if pos.0 < 0 { -pos.0 } else { pos.0 } as BitGridRow;
+        let nshift = pos.0.abs() as BitGridRow;
         let to_right = pos.0 >= 0;
         let edge_checker = if to_right {
             1 << (self.width() - 1) as BitGridRow
@@ -544,6 +579,13 @@ impl BitGrid {
         };
         for sub_y in 0..sub.height() {
             let mut row = sub.rows[sub_y as usize];
+            let y = pos.1 + sub_y as PosY;
+            if y < 0 || y >= self.height() as PosY {
+                if row != 0 {
+                    return false;
+                }
+                continue;
+            }
             for _ in 0..nshift {
                 if row & edge_checker != 0 {
                     return false;
@@ -554,14 +596,13 @@ impl BitGrid {
                     row >>= 1;
                 }
             }
-            let y = pos.1 as usize + sub_y as usize;
-            if self.rows[y] & row != 0 {
+            if self.rows[y as usize] & row != 0 {
                 return false;
             }
         }
         true
     }
-    fn num_droppable_rows_fast(&self, pos: Pos, sub: &BitGrid) -> SizeY {
+    pub fn num_droppable_rows_fast(&self, pos: Pos, sub: &BitGrid) -> SizeY {
         if !self.can_put_fast(pos, sub) {
             return 0;
         }
@@ -578,8 +619,16 @@ impl BitGrid {
         loop {
             let mut can_put = true;
             for sub_y in 0..sub.height() {
-                let y = pos.1 as usize + sub_y as usize;
-                if self.rows[y] & rows_cache[sub_y as usize] != 0 {
+                let row = rows_cache[sub_y as usize];
+                let y = pos.1 as PosY - n as PosY + sub_y as PosY;
+                if y < 0 || y >= self.height() as PosY {
+                    if row != 0 {
+                        can_put = false;
+                        break;
+                    }
+                    continue;
+                }
+                if self.rows[y as usize] & rows_cache[sub_y as usize] != 0 {
                     can_put = false;
                     break;
                 }
@@ -640,29 +689,43 @@ impl fmt::Display for BitGrid {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
 }
 
+impl PartialEq for BitGrid {
+    fn eq(&self, other: &Self) -> bool {
+        self.size == other.size && self.rows == other.rows
+    }
+}
+
+impl Hash for BitGrid {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.size.hash(state);
+        self.rows.hash(state);
+    }
+}
+
+
 //---
 
-#[derive(Clone, Debug)]
-struct HybridGrid {
+#[derive(Clone, Debug, Eq)]
+pub struct HybridGrid {
     pub basic_grid: BasicGrid,
     pub bit_grid: BitGrid,
 }
 
 impl HybridGrid {
-    fn new(size: Size) -> Self {
+    pub fn new(size: Size) -> Self {
         Self {
             basic_grid: BasicGrid::new(size),
             bit_grid: BitGrid::new(size),
         }
     }
-    fn with_grids(basic_grid: BasicGrid, bit_grid: BitGrid) -> Self {
+    pub fn with_grids(basic_grid: BasicGrid, bit_grid: BitGrid) -> Self {
         debug_assert_eq!(basic_grid.size(), bit_grid.size());
         Self {
             basic_grid,
             bit_grid,
         }
     }
-    fn put_fast(&mut self, pos: Pos, sub: &BitGrid) {
+    pub fn put_fast(&mut self, pos: Pos, sub: &BitGrid) {
         self.basic_grid.put(pos, sub);
         self.bit_grid.put_fast(pos, sub);
     }
@@ -689,6 +752,14 @@ impl Grid for HybridGrid {
 
 impl fmt::Display for HybridGrid {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
+}
+
+impl PartialEq for HybridGrid {
+    fn eq(&self, other: &Self) -> bool { self.bit_grid == other.bit_grid }
+}
+
+impl Hash for HybridGrid {
+    fn hash<H: Hasher>(&self, state: &mut H) { self.bit_grid.hash(state); }
 }
 
 //---
@@ -720,7 +791,7 @@ fn srs_offset_data_others() -> Vec<Vec<Pos>> {
     ]
 }
 
-struct PieceSpec {
+pub struct PieceSpec {
     // The index of Vec is orientation.
     grids: Vec<HybridGrid>,
     initial_pos: Pos,
@@ -821,7 +892,7 @@ impl PieceSpec {
             srs_offset_data_o(),
         )
     }
-    fn of(piece: Piece) -> &'static Self { &PIECE_SPECS[piece as usize] }
+    pub fn of(piece: Piece) -> &'static Self { &PIECE_SPECS[piece as usize] }
 }
 
 fn gen_piece_specs() -> Vec<PieceSpec> {
@@ -837,67 +908,97 @@ fn gen_piece_specs() -> Vec<PieceSpec> {
 }
 
 lazy_static! {
-    static ref PIECE_SPECS: Vec<PieceSpec> = gen_piece_specs();
+    pub static ref PIECE_SPECS: Vec<PieceSpec> = gen_piece_specs();
 }
 
 //---
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PieceLocation {
+    orientation: Orientation,
+    pos: Pos,
+}
+
+impl PieceLocation {
+    fn new(orientation: Orientation, pos: Pos) -> Self {
+        Self { orientation, pos }
+    }
+}
+
 #[derive(Clone, Debug)]
-struct FallingPiece {
+pub struct FallingPiece {
     pub piece: Piece,
-    pub orientation: Orientation,
-    pub pos: Pos,
+    pub loc: PieceLocation,
     pub move_log: MoveLog,
 }
 
 impl FallingPiece {
-    fn new(piece: Piece, orientation: Orientation, pos: Pos) -> Self {
-        Self { piece, orientation, pos, move_log: MoveLog::new(pos) }
+    pub fn new(piece: Piece, loc: PieceLocation) -> Self {
+        Self { piece, loc, move_log: MoveLog::new(loc.pos) }
     }
-    fn grid(&self) -> &'static HybridGrid {
-        &PieceSpec::of(self.piece).grids[self.orientation.value() as usize]
+    pub fn spawn(piece: Piece) -> Self {
+        let spec = PieceSpec::of(piece);
+        Self::new(piece, PieceLocation::new(ORIENTATION_0, spec.initial_pos))
     }
-    fn apply_move(&mut self, mv: Move, pf: &Playfield, mode: RotationMode) -> bool {
+    pub fn grid(&self) -> &'static HybridGrid {
+        &PieceSpec::of(self.piece).grids[self.loc.orientation.id() as usize]
+    }
+    pub fn apply_move(&mut self, mv: Move, pf: &Playfield, mode: RotationMode) -> bool {
         debug_assert_eq!(RotationMode::Srs, mode);
+        let pf_str = format!("{}", pf.grid);
         match mv {
-            Move::Horizontally(n) => {
+            Move::Shift(n) => {
                 if !pf.can_move_horizontally(self, n) {
                     return false;
                 }
-                self.pos.0 += n;
+                self.loc.pos.0 += n;
             }
-            Move::Vertically(n) => {
-                if !pf.can_drop(self, n as SizeY) {
+            Move::Drop(n) => {
+                if !pf.can_drop_n(self, n as SizeY) {
                     return false;
                 }
-                self.pos.1 += n
+                self.loc.pos.1 -= n
             }
-            Move::Rotation(n) => {
-                let backup = (self.orientation, self.pos);
-                for _ in 0..(if n > 0 { n } else { n }) {
+            Move::Rotate(n) => {
+                let backup = self.loc;
+                for _ in 0..n.abs() {
                     if let Some(pos) = pf.check_rotation_by_srs(self, n > 0) {
-                        self.orientation = self.orientation.rotate(if n > 0 { 1 } else { -1 });
-                        self.pos = pos;
+                        self.loc.orientation = self.loc.orientation.rotate(if n > 0 { 1 } else { -1 });
+                        self.loc.pos = pos;
                     } else {
-                        self.orientation = backup.0;
-                        self.pos = backup.1;
+                        self.loc = backup;
                         return false;
                     }
                 }
             }
         }
-        self.move_log.push(MoveLogItem { by: mv, pos: self.pos });
+        self.move_log.push(MoveLogItem { by: mv, pos: self.loc.pos });
         true
     }
-    fn is_last_move_rotation(&self) -> bool {
+    pub fn rollback(&mut self) -> bool {
+        if let Some(removed) = self.move_log.items.pop() {
+            self.loc.pos = if let Some(last) = self.move_log.items.last() {
+                last.pos
+            } else {
+                self.move_log.initial_pos
+            };
+            if let Move::Rotate(n) = removed.by {
+                self.loc.orientation.rotate(-n);
+            }
+            true
+        } else {
+            false
+        }
+    }
+    pub fn is_last_move_rotation(&self) -> bool {
         if let Some(item) = self.move_log.items.last() {
-            if let Move::Rotation(_) = item.by {
+            if let Move::Rotate(_) = item.by {
                 return true;
             }
         }
         false
     }
-    fn last_two_positions(&self) -> Option<(Pos, Pos)> {
+    pub fn last_two_positions(&self) -> Option<(Pos, Pos)> {
         let len = self.move_log.items.len();
         if len < 2 {
             return None;
@@ -911,48 +1012,66 @@ impl FallingPiece {
 
 //---
 
-const PLAYFIELD_SIZE: Size = (10, 40);
-const PLAYFIELD_VISIBLE_HEIGHT: SizeY = 20;
+pub const PLAYFIELD_SIZE: Size = (10, 40);
+pub const PLAYFIELD_VISIBLE_HEIGHT: SizeY = 20;
 
-#[derive(Clone, Debug)]
-struct Playfield {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Playfield {
     pub grid: HybridGrid,
 }
 
 impl Playfield {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             grid: HybridGrid::new(PLAYFIELD_SIZE),
         }
     }
-    fn can_put(&self, fp: &FallingPiece) -> bool {
-        self.grid.bit_grid.can_put(fp.pos, &fp.grid().bit_grid)
+    pub fn set_rows(&mut self, pos: UPos, rows: &[&'static str]) {
+        for (dy, row) in rows.iter().rev().enumerate() {
+            let y = pos.1 + dy as UPosY;
+            if y >= self.grid.height() {
+                return;
+            }
+            for (dx, c) in row.chars().enumerate() {
+                let x = pos.0 + dx as UPosX;
+                if x >= self.grid.width() {
+                    break;
+                }
+                self.grid.set_cell((x, y), c.into());
+            }
+        }
     }
-    fn num_droppable_rows(&self, fp: &FallingPiece) -> SizeY {
-        self.grid.bit_grid.num_droppable_rows_fast(fp.pos, &fp.grid().bit_grid)
+    pub fn can_put(&self, fp: &FallingPiece) -> bool {
+        self.grid.bit_grid.can_put(fp.loc.pos, &fp.grid().bit_grid)
     }
-    fn can_drop(&self, fp: &FallingPiece, n: SizeY) -> bool {
-        n <= self.grid.bit_grid.num_droppable_rows_fast(fp.pos, &fp.grid().bit_grid)
+    pub fn num_droppable_rows(&self, fp: &FallingPiece) -> SizeY {
+        self.grid.bit_grid.num_droppable_rows_fast(fp.loc.pos, &fp.grid().bit_grid)
     }
-    fn can_move_horizontally(&self, fp: &FallingPiece, n: PosX) -> bool {
+    pub fn can_drop(&self, fp: &FallingPiece) -> bool {
+        self.grid.bit_grid.can_put((fp.loc.pos.0, fp.loc.pos.1 - 1), &fp.grid().bit_grid)
+    }
+    pub fn can_drop_n(&self, fp: &FallingPiece, n: SizeY) -> bool {
+        n <= self.grid.bit_grid.num_droppable_rows_fast(fp.loc.pos, &fp.grid().bit_grid)
+    }
+    pub fn can_move_horizontally(&self, fp: &FallingPiece, n: PosX) -> bool {
         let to_right = n > 0;
         let end = if to_right { n } else { -n };
         for dx in 0..end {
-            let x = fp.pos.0 + if to_right { dx } else { -dx };
-            if !self.grid.bit_grid.can_put_fast((x, fp.pos.1), &fp.grid().bit_grid) {
+            let x = fp.loc.pos.0 + if to_right { dx } else { -dx };
+            if !self.grid.bit_grid.can_put_fast((x, fp.loc.pos.1), &fp.grid().bit_grid) {
                 return false;
             }
         }
         true
     }
-    fn check_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Option<Pos> {
-        let after: Orientation = fp.orientation.rotate(if cw { 1 } else { -1 });
+    pub fn check_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Option<Pos> {
+        let after: Orientation = fp.loc.orientation.rotate(if cw { 1 } else { -1 });
         let spec = PieceSpec::of(fp.piece);
-        let next_grid: &HybridGrid = &spec.grids[after.value() as usize];
-        let offsets1: &Vec<Pos> = &spec.srs_offset_data[fp.orientation.value() as usize];
-        let offsets2: &Vec<Pos> = &spec.srs_offset_data[after.value() as usize];
+        let next_grid: &HybridGrid = &spec.grids[after.id() as usize];
+        let offsets1: &Vec<Pos> = &spec.srs_offset_data[fp.loc.orientation.id() as usize];
+        let offsets2: &Vec<Pos> = &spec.srs_offset_data[after.id() as usize];
         for i in 0..offsets1.len() {
-            let (mut x, mut y) = fp.pos;
+            let (mut x, mut y) = fp.loc.pos;
             x += offsets1[i].0 - offsets2[i].0;
             y += offsets1[i].1 - offsets2[i].1;
             if self.grid.bit_grid.can_put_fast((x, y), &next_grid.bit_grid) {
@@ -961,8 +1080,8 @@ impl Playfield {
         }
         None
     }
-    fn can_lock(&self, fp: &FallingPiece) -> bool { self.can_put(fp) && !self.can_drop(fp, 1) }
-    fn check_tspin(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> Option<TSpin> {
+    pub fn can_lock(&self, fp: &FallingPiece) -> bool { self.can_put(fp) && !self.can_drop(fp) }
+    pub fn check_tspin(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> Option<TSpin> {
         debug_assert!(self.can_lock(fp));
         debug_assert_eq!(TSpinJudgementMode::PuyoPuyoTetris, mode);
         if fp.piece != Piece::T || !fp.is_last_move_rotation() {
@@ -974,11 +1093,11 @@ impl Playfield {
             for dx in &[0, 2] {
                 let dx = *dx;
                 let dy = *dy;
-                let pos = (fp.pos.0 + dx, fp.pos.1 + dy);
+                let pos = (fp.loc.pos.0 + dx, fp.loc.pos.1 + dy);
                 let is_wall = pos.0 < 0 || pos.1 < 0;
                 if is_wall || self.grid.has_cell((pos.0 as UPosX, pos.1 as UPosY)) {
                     num_corners += 1;
-                    if match fp.orientation {
+                    if match fp.loc.orientation {
                         ORIENTATION_0 => { (dx, dy) == (0, 2) || (dx, dy) == (2, 2) }
                         ORIENTATION_1 => { (dx, dy) == (2, 0) || (dx, dy) == (2, 2) }
                         ORIENTATION_2 => { (dx, dy) == (0, 0) || (dx, dy) == (2, 0) }
@@ -1014,38 +1133,36 @@ impl Playfield {
             _ => None,
         }
     }
-    fn check_line_clear(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> LineClear {
+    pub fn check_line_clear(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> LineClear {
         debug_assert!(self.can_lock(fp));
         let mut tmp_grid = self.grid.clone();
-        tmp_grid.put_fast(fp.pos, &fp.grid().bit_grid);
+        tmp_grid.put_fast(fp.loc.pos, &fp.grid().bit_grid);
         LineClear::new(tmp_grid.num_filled_rows(), self.check_tspin(fp, mode))
     }
-    fn lock(&mut self, fp: &FallingPiece, mode: TSpinJudgementMode) -> Option<LineClear> {
+    pub fn lock(&mut self, fp: &FallingPiece, mode: TSpinJudgementMode) -> Option<LineClear> {
         if !self.can_lock(fp) {
             return None;
         }
         let tspin = self.check_tspin(fp, mode);
-        self.grid.put_fast(fp.pos, &fp.grid().bit_grid);
+        self.grid.put_fast(fp.loc.pos, &fp.grid().bit_grid);
         let num_cleared_line = self.grid.drop_filled_rows();
         Some(LineClear::new(num_cleared_line, tspin))
     }
-    fn search_route(&self, fp: &FallingPiece, dst: (Orientation, Pos), mode: RotationMode) -> Option<MoveLog> {
-        None
-    }
-    fn search_droppable_routes(&self, fp: &FallingPiece, mode: RotationMode) -> Vec<FallingPiece> {
+    // The return locations can include unreachable locations.
+    pub fn search_lockable_locations(&self, piece: Piece) -> Vec<PieceLocation> {
         let yend = (self.grid.height() - self.grid.top_padding()) as PosY;
-        let spec = PieceSpec::of(fp.piece);
+        let spec = PieceSpec::of(piece);
         let sub_bit_grids = [
-            &spec.grids[ORIENTATION_0.value() as usize].bit_grid,
-            &spec.grids[ORIENTATION_1.value() as usize].bit_grid,
-            &spec.grids[ORIENTATION_2.value() as usize].bit_grid,
-            &spec.grids[ORIENTATION_3.value() as usize].bit_grid,
+            &spec.grids[ORIENTATION_0.id() as usize].bit_grid,
+            &spec.grids[ORIENTATION_1.id() as usize].bit_grid,
+            &spec.grids[ORIENTATION_2.id() as usize].bit_grid,
+            &spec.grids[ORIENTATION_3.id() as usize].bit_grid,
         ];
-        let mut r: Vec<FallingPiece> = Vec::new();
+        let mut r: Vec<PieceLocation> = Vec::new();
         for y in -1..yend {
             for x in -1..(self.grid.width() as PosX - 1) {
                 for o in &ORIENTATIONS {
-                    let g = sub_bit_grids[o.value() as usize];
+                    let g = sub_bit_grids[o.id() as usize];
                     let can_put = self.grid.bit_grid.can_put_fast((x, y), g);
                     if !can_put {
                         continue;
@@ -1054,18 +1171,195 @@ impl Playfield {
                     if can_drop {
                         continue;
                     }
-                    if let Some(mut move_log) = self.search_route(fp, (*o, (x, y)), mode) {
-                        let mut fp = fp.clone();
-                        fp.orientation = *o;
-                        fp.pos = (x, y);
-                        fp.move_log.items.append(&mut move_log.items);
-                        r.push(fp);
-                    }
+                    r.push(PieceLocation::new(*o, (x, y)));
                 }
             }
         }
         r
     }
+}
+
+// mod basic_route_finder_aaa {
+//     use super::*;
+//     use std::collections::{HashMap, HashSet};
+//
+//     macro_rules! debug_println {
+//         ($self:ident, $e:expr $(, $es:expr)*) => {
+//             if $self.debug {
+//                 if $self.depth > 0 {
+//                     print!("{}", "│".repeat($self.depth));
+//                 }
+//                 println!($e $(, $es)*);
+//             }
+//         }
+//     }
+//
+//     // [1] horizontal move
+//     // [2] rotation
+//     // [3] drop to bottom
+//     // [4] rotation
+//     // first search: horizontally -> rotation -> vertically -> rotation
+//     // rest searches: vertical (depth-first) -> horizontal -> rotation
+//
+//     pub struct BasicRouteFinder<'a> {
+//         pf: &'a Playfield,
+//         piece: Piece,
+//         src: PieceLocation,
+//         dsts: HashSet<PieceLocation>,
+//         mode: RotationMode,
+//         debug: bool,
+//         checked: HashMap<PieceLocation, MoveLogItem>,
+//         all_checked: HashSet<PieceLocation>,
+//         depth: usize,
+//         results: Vec<Option<MoveLog>>,
+//         move_order: [Move; 5],
+//     }
+//
+//     impl<'a> BasicRouteFinder<'a> {
+//         pub fn new(pf: &'a Playfield, piece: Piece, src: PieceLocation, mode: RotationMode, debug: bool) -> Self {
+//             Self {
+//                 pf,
+//                 piece,
+//                 src,
+//                 dsts: HashSet::new(),
+//                 mode,
+//                 debug,
+//                 checked: HashMap::new(),
+//                 all_checked: HashSet::new(),
+//                 depth: 0,
+//                 results: vec![None; dsts.len()],
+//                 move_order: [Move::Shift(1), Move::Drop(1), Move::Rotate(1), Move::Rotate(-1), Move::Shift(-1)],
+//             }
+//         }
+//         pub fn find(&mut self, dsts: HashSet<PieceLocation>) -> Vec<Option<MoveLog>> {
+//             self.dsts = dsts;
+//             self.depth = 0;
+//             self.results.clear();
+//
+//             // let mut pos = dst;
+//             // let mut items = vec![];
+//             // loop {
+//             //     let target = &PieceLocation::new(self.src.orientation, pos);
+//             //     if let Some(item) = self.check_sheet.get(&target) {
+//             //         items.push(item);
+//             //         if item.pos == self.src.pos {
+//             //             return Some(log);
+//             //         }
+//             //         pos = item.pos;
+//             //     } else {
+//             //         break;
+//             //     }
+//             // }
+//             self.search_all(&FallingPiece::new(self.piece, self.src));
+//
+//             let mut r: Vec<Option<MoveLog>> = Vec::new();
+//             r.append(&mut self.results);
+//             r
+//         }
+//         fn search_all(&mut self, fp: &FallingPiece) -> Option<MoveLog> {
+//             debug_println!(self, "search_all: {:?} ({}, {})", fp.loc.orientation, fp.loc.pos.0, fp.loc.pos.1);
+//             if self.all_checked.contains(&fp.loc) {
+//                 debug_println!(self, "=> already checked.");
+//                 return None;
+//             }
+//             self.last_checked = Some(fp.loc.clone());
+//             let ok = self.check_sheet.insert(fp.loc);
+//             debug_assert!(ok);
+//
+//             let mut fp = fp.clone();
+//             if self.dsts.remove(&fp.loc) {
+//                 debug_println!(self, "=> found!");
+//                 return Some(MoveLog::new(fp.loc.pos));
+//             }
+//
+//             for mv in &self.move_order {
+//                 let mv_str = format!("{:?}", mv);
+//                 debug_println!(self, "├ {:?}", mv);
+//                 if fp.apply_move(*mv, self.pf, self.mode) {
+//                     self.depth += 1;
+//                     let search_fp = FallingPiece::new(fp.piece, fp.loc);
+//                     if let Some(hereafter) = self.search_all(&search_fp) {
+//                         fp.move_log.append(&hereafter);
+//                         self.depth -= 1;
+//                         return Some(fp.move_log);
+//                     }
+//                     fp.rollback();
+//                     self.depth -= 1;
+//                 }
+//             }
+//
+//             debug_println!(self, "=> not found.");
+//             None
+//         }
+//     }
+// }
+
+struct SearchMovableLocationsResult {
+    found: HashMap<PieceLocation, MoveLogItem>,
+}
+
+impl SearchMovableLocationsResult {
+    fn get(&self, dst: &PieceLocation) -> Option<MoveLog> {
+        None
+    }
+}
+
+fn search_movable_locations(pf: &Playfield, piece: Piece, src: PieceLocation, mode: RotationMode,
+                            debug: bool) -> SearchMovableLocationsResult {
+    struct Configuration<'a> {
+        pf: &'a Playfield,
+        mode: RotationMode,
+        debug: bool,
+        move_order: [Move; 5],
+    }
+
+    let mut conf = Configuration {
+        pf,
+        mode,
+        debug,
+        move_order: [Move::Shift(1), Move::Drop(1), Move::Rotate(1), Move::Rotate(-1), Move::Shift(-1)],
+    };
+
+    type Found = HashMap<PieceLocation, MoveLogItem>;
+    let mut found: Found = HashMap::new();
+
+    fn search(conf: &Configuration, fp: &FallingPiece, depth: usize, found: &mut Found) {
+        macro_rules! debug_println {
+            ($e:expr $(, $es:expr)*) => {
+                if conf.debug {
+                    if depth > 0 {
+                        print!("{}", "│".repeat(depth));
+                    }
+                    println!($e $(, $es)*);
+                }
+            }
+        }
+
+        debug_println!("search_all: {:?} ({}, {})", fp.loc.orientation, fp.loc.pos.0, fp.loc.pos.1);
+        if found.contains_key(&fp.loc) {
+            debug_println!("=> already checked.");
+            return;
+        }
+        if let Some(last) = fp.move_log.items.last() {
+            let v = found.insert(fp.loc, *last);
+            debug_assert!(v.is_none());
+        }
+
+        let mut fp = FallingPiece::new(fp.piece, fp.loc);
+        for mv in &conf.move_order {
+            debug_println!("├ {:?}", mv);
+            if fp.apply_move(*mv, conf.pf, conf.mode) {
+                search(conf, &fp, depth + 1, found);
+                fp.rollback();
+            }
+        }
+
+        debug_println!("=> checked.");
+    };
+
+    search(&mut conf, &FallingPiece::new(piece, src), 0, &mut found);
+
+    SearchMovableLocationsResult { found }
 }
 
 //---
@@ -1094,5 +1388,46 @@ mod tests {
         grid.put_fast((1, 0), &grid2);
         assert!(grid.has_cell((2, 0)));
         assert!(grid.has_cell((3, 0)));
+    }
+
+    #[test]
+    fn test_search_droppable_routes() {
+        let mut pf = Playfield::new();
+        pf.set_rows((0, 0), &[
+            "          ",
+            "          ",
+            "@@        ",
+            "@         ",
+            "@ @@@@    ",
+            "@   @@    ",
+            "@    @    ",
+            "@    @    ",
+            "@@  @     ",
+            "@   @     ",
+            "@ @@@     ",
+            "@  @@     ",
+            "@   @     ",
+            "@@@ @     ",
+            "@@  @     ",
+            "@   @     ",
+            "@ @@@     ",
+            "@  @@     ",
+            "@   @     ",
+            "@@ @@@    ",
+        ]);
+        let fp = FallingPiece::spawn(Piece::T);
+        let r = search_movable_locations(&pf, fp.piece, fp.loc, RotationMode::Srs, false);
+        let move_log = r.get(&PieceLocation::new(ORIENTATION_3, (1, 0)));
+        assert!(move_log.is_some());
+        // let finder = BasicRouteFinder::new(RotationMode::Srs);
+        // let routes = pf.search_droppable_routes(&fp, &finder);
+        // let mut found = false;
+        // for route in routes {
+        //     if route.orientation == ORIENTATION_3 && route.pos == (1, 0) {
+        //         found = true;
+        //         break;
+        //     }
+        // }
+        // assert!(found);
     }
 }
