@@ -688,24 +688,24 @@ impl Move {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct MoveLogItem {
+pub struct MoveRecordItem {
     pub by: Move,
     pub placement: Placement,
 }
 
-impl MoveLogItem {
+impl MoveRecordItem {
     fn new(by: Move, placement: Placement) -> Self {
         Self { by, placement }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct MoveLog {
+pub struct MoveRecord {
     pub initial_placement: Placement,
-    pub items: Vec<MoveLogItem>,
+    pub items: Vec<MoveRecordItem>,
 }
 
-impl MoveLog {
+impl MoveRecord {
     pub fn new(initial_placement: Placement) -> Self {
         Self {
             initial_placement,
@@ -713,18 +713,18 @@ impl MoveLog {
         }
     }
     pub fn len(&self) -> usize { self.items.len() }
-    pub fn push(&mut self, item: MoveLogItem) { self.items.push(item); }
-    pub fn pop(&mut self) -> Option<MoveLogItem> { self.items.pop() }
-    pub fn get(&self, i: usize) -> Option<&MoveLogItem> { self.items.get(i) }
-    pub fn get_mut(&mut self, i: usize) -> Option<&mut MoveLogItem> { self.items.get_mut(i) }
-    pub fn last(&self) -> Option<&MoveLogItem> { self.items.last() }
-    pub fn append(&mut self, other: &MoveLog) {
+    pub fn push(&mut self, item: MoveRecordItem) { self.items.push(item); }
+    pub fn pop(&mut self) -> Option<MoveRecordItem> { self.items.pop() }
+    pub fn get(&self, i: usize) -> Option<&MoveRecordItem> { self.items.get(i) }
+    pub fn get_mut(&mut self, i: usize) -> Option<&mut MoveRecordItem> { self.items.get_mut(i) }
+    pub fn last(&self) -> Option<&MoveRecordItem> { self.items.last() }
+    pub fn append(&mut self, other: &MoveRecord) {
         if let Some(item) = self.items.last() {
             debug_assert_eq!(item.placement, other.initial_placement);
         }
         self.items.extend(&other.items);
     }
-    pub fn merge_or_push(&mut self, item: MoveLogItem) {
+    pub fn merge_or_push(&mut self, item: MoveRecordItem) {
         if let Some(last) = self.items.last_mut() {
             if let Some(mv) = last.by.merge(item.by) {
                 last.by = mv;
@@ -1026,12 +1026,12 @@ lazy_static! {
 pub struct FallingPiece {
     pub piece: Piece,
     pub placement: Placement,
-    pub move_log: MoveLog,
+    pub move_record: MoveRecord,
 }
 
 impl FallingPiece {
     pub fn new(piece: Piece, placement: Placement) -> Self {
-        Self { piece, placement, move_log: MoveLog::new(placement) }
+        Self { piece, placement, move_record: MoveRecord::new(placement) }
     }
     pub fn spawn(piece: Piece, pf: Option<&Playfield>) -> Self {
         let spec = PieceSpec::of(piece);
@@ -1039,7 +1039,7 @@ impl FallingPiece {
         if let Some(pf) = pf {
             if !pf.can_put(&fp) {
                 fp.placement.pos.0 -= 1;
-                fp.move_log.initial_placement.pos.0 -= 1;
+                fp.move_record.initial_placement.pos.0 -= 1;
             }
             debug_assert!(pf.can_put(&fp));
         }
@@ -1075,20 +1075,20 @@ impl FallingPiece {
                 }
             }
         }
-        self.move_log.push(MoveLogItem::new(mv, self.placement));
+        self.move_record.push(MoveRecordItem::new(mv, self.placement));
         true
     }
     pub fn rollback(&mut self) -> bool {
-        if let Some(_) = self.move_log.pop() {
-            self.placement = self.move_log.last()
-                .map_or(self.move_log.initial_placement, |item| { item.placement });
+        if let Some(_) = self.move_record.pop() {
+            self.placement = self.move_record.last()
+                .map_or(self.move_record.initial_placement, |item| { item.placement });
             true
         } else {
             false
         }
     }
     pub fn is_last_move_rotation(&self) -> bool {
-        if let Some(item) = self.move_log.items.last() {
+        if let Some(item) = self.move_record.items.last() {
             if let Move::Rotate(_) = item.by {
                 return true;
             }
@@ -1096,13 +1096,13 @@ impl FallingPiece {
         false
     }
     pub fn last_two_placements(&self) -> Option<(Placement, Placement)> {
-        let len = self.move_log.items.len();
+        let len = self.move_record.items.len();
         if len < 2 {
             return None;
         }
         Some((
-            self.move_log.get(len - 2).unwrap().placement,
-            self.move_log.get(len - 1).unwrap().placement,
+            self.move_record.get(len - 2).unwrap().placement,
+            self.move_record.get(len - 1).unwrap().placement,
         ))
     }
 }
@@ -1274,15 +1274,15 @@ impl Playfield {
     }
 }
 
-struct SearchMovablePlacementsResult {
+struct SearchReachablePlacementsResult {
     src: Placement,
-    found: HashMap<Placement, MoveLogItem>,
+    found: HashMap<Placement, MoveRecordItem>,
 }
 
-impl SearchMovablePlacementsResult {
-    fn get(&self, dst: &Placement) -> Option<MoveLog> {
+impl SearchReachablePlacementsResult {
+    fn get(&self, dst: &Placement) -> Option<MoveRecord> {
         let mut placement = *dst;
-        let mut items: Vec<MoveLogItem> = Vec::new();
+        let mut items: Vec<MoveRecordItem> = Vec::new();
         while let Some(item) = self.found.get(&placement) {
             items.push(*item);
             placement = item.placement;
@@ -1290,17 +1290,17 @@ impl SearchMovablePlacementsResult {
         if items.is_empty() {
             return None;
         }
-        let mut log = MoveLog::new(self.src);
+        let mut record = MoveRecord::new(self.src);
         for item in items.iter().rev() {
-            log.merge_or_push(*item);
+            record.merge_or_push(*item);
         }
-        Some(log)
+        Some(record)
     }
     fn len(&self) -> usize { self.found.len() }
 }
 
-fn search_movable_placements(pf: &Playfield, piece: Piece, src: Placement, mode: RotationMode,
-                             debug: bool) -> SearchMovablePlacementsResult {
+fn search_reachable_placements(pf: &Playfield, piece: Piece, src: Placement, mode: RotationMode,
+                               debug: bool) -> SearchReachablePlacementsResult {
     struct Configuration<'a> {
         pf: &'a Playfield,
         src: Placement,
@@ -1317,7 +1317,7 @@ fn search_movable_placements(pf: &Playfield, piece: Piece, src: Placement, mode:
         move_order: [Move::Shift(1), Move::Drop(1), Move::Shift(-1), Move::Rotate(1), Move::Rotate(-1)],
     };
 
-    type Found = HashMap<Placement, MoveLogItem>;
+    type Found = HashMap<Placement, MoveRecordItem>;
     let mut found: Found = HashMap::new();
 
     fn search(conf: &Configuration, fp: &FallingPiece, depth: usize, found: &mut Found) {
@@ -1341,9 +1341,9 @@ fn search_movable_placements(pf: &Playfield, piece: Piece, src: Placement, mode:
             debug_println!("=> already checked.");
             return;
         }
-        debug_assert!(fp.move_log.len() <= 1);
-        if let Some(last) = fp.move_log.last() {
-            let from = MoveLogItem::new(last.by, fp.move_log.initial_placement);
+        debug_assert!(fp.move_record.len() <= 1);
+        if let Some(last) = fp.move_record.last() {
+            let from = MoveRecordItem::new(last.by, fp.move_record.initial_placement);
             let v = found.insert(fp.placement, from);
             debug_assert!(v.is_none());
         }
@@ -1362,7 +1362,7 @@ fn search_movable_placements(pf: &Playfield, piece: Piece, src: Placement, mode:
 
     search(&mut conf, &FallingPiece::new(piece, src), 0, &mut found);
 
-    SearchMovablePlacementsResult { src, found }
+    SearchReachablePlacementsResult { src, found }
 }
 
 //---
@@ -1422,16 +1422,16 @@ mod tests {
         let placement_to_be_found = Placement::new(ORIENTATION_3, (1, 0).into());
         let lockable = pf.search_lockable_placements(fp.piece);
         assert!(lockable.iter().any(|p| { *p == placement_to_be_found }));
-        let movable = search_movable_placements(&pf, fp.piece, fp.placement, RotationMode::Srs, false);
-        assert!(movable.get(&placement_to_be_found).is_some());
+        let reachable = search_reachable_placements(&pf, fp.piece, fp.placement, RotationMode::Srs, false);
+        assert!(reachable.get(&placement_to_be_found).is_some());
         {
-            let mut moves: Vec<MoveLog> = Vec::new();
+            let mut moves: Vec<MoveRecord> = Vec::new();
             for p in &lockable {
-                if let Some(log) = movable.get(p) {
-                    moves.push(log);
+                if let Some(record) = reachable.get(p) {
+                    moves.push(record);
                 }
             }
-            assert!(movable.len() > moves.len());
+            assert!(reachable.len() > moves.len());
         }
     }
 }
