@@ -1243,7 +1243,7 @@ impl Playfield {
         let num_cleared_line = self.grid.drop_filled_rows();
         Some(LineClear::new(num_cleared_line, tspin))
     }
-    // The return locations can include unreachable locations.
+    // The return placements can include unreachable placements.
     pub fn search_lockable_placements(&self, piece: Piece) -> Vec<Placement> {
         let yend = (self.grid.height() - self.grid.top_padding()) as PosY;
         let spec = PieceSpec::of(piece);
@@ -1274,13 +1274,27 @@ impl Playfield {
     }
 }
 
-struct SearchReachablePlacementsResult {
+//---
+
+// struct MoveSearchConfiguration<'a> {
+//     pf: &'a Playfield,
+//     src: Placement,
+//     mode: RotationMode,
+//     debug: bool,
+// }
+//
+// trait MoveSearchDirector {
+//     fn next(&mut self, conf: &MoveSearchConfiguration, fp: &FallingPiece, num_steps: usize) -> Option<Move>;
+// }
+
+pub struct SearchMovesResult {
     src: Placement,
     found: HashMap<Placement, MoveRecordItem>,
 }
 
-impl SearchReachablePlacementsResult {
-    fn get(&self, dst: &Placement) -> Option<MoveRecord> {
+impl SearchMovesResult {
+    pub fn contains(&self, dst: &Placement) -> bool { self.found.contains_key(dst) }
+    pub fn get(&self, dst: &Placement) -> Option<MoveRecord> {
         let mut placement = *dst;
         let mut items: Vec<MoveRecordItem> = Vec::new();
         while let Some(item) = self.found.get(&placement) {
@@ -1299,14 +1313,15 @@ impl SearchReachablePlacementsResult {
     fn len(&self) -> usize { self.found.len() }
 }
 
-fn search_reachable_placements(pf: &Playfield, piece: Piece, src: Placement, mode: RotationMode,
-                               debug: bool) -> SearchReachablePlacementsResult {
+pub fn search_moves(pf: &Playfield, piece: Piece, src: Placement, mode: RotationMode,
+                    moves: Vec<Vec<Move>>, max_depth: Option<usize>, debug: bool) -> SearchMovesResult {
     struct Configuration<'a> {
         pf: &'a Playfield,
         src: Placement,
         mode: RotationMode,
         debug: bool,
-        move_order: [Move; 5],
+        moves: &'a Vec<Vec<Move>>,
+        max_depth: Option<usize>,
     }
 
     let mut conf = Configuration {
@@ -1314,7 +1329,8 @@ fn search_reachable_placements(pf: &Playfield, piece: Piece, src: Placement, mod
         src,
         mode,
         debug,
-        move_order: [Move::Shift(1), Move::Drop(1), Move::Shift(-1), Move::Rotate(1), Move::Rotate(-1)],
+        moves: &moves,
+        max_depth,
     };
 
     type Found = HashMap<Placement, MoveRecordItem>;
@@ -1333,6 +1349,12 @@ fn search_reachable_placements(pf: &Playfield, piece: Piece, src: Placement, mod
         }
 
         debug_println!("search_all: {:?} {}", fp.placement.orientation, fp.placement.pos);
+        if let Some(max_depth) = conf.max_depth {
+            if depth > max_depth {
+                debug_println!("=> over max depth.");
+                return;
+            }
+        }
         if depth > 0 && fp.placement == conf.src {
             debug_println!("=> initial placement.");
             return;
@@ -1349,7 +1371,12 @@ fn search_reachable_placements(pf: &Playfield, piece: Piece, src: Placement, mod
         }
 
         let mut fp = FallingPiece::new(fp.piece, fp.placement);
-        for mv in &conf.move_order {
+        let n = if conf.moves.len() <= depth {
+            conf.moves.len() - 1
+        } else {
+            depth
+        };
+        for mv in &conf.moves[n] {
             debug_println!("├ {:?}", mv);
             if fp.apply_move(*mv, conf.pf, conf.mode) {
                 search(conf, &fp, depth + 1, found);
@@ -1362,8 +1389,92 @@ fn search_reachable_placements(pf: &Playfield, piece: Piece, src: Placement, mod
 
     search(&mut conf, &FallingPiece::new(piece, src), 0, &mut found);
 
-    SearchReachablePlacementsResult { src, found }
+    SearchMovesResult { src, found }
 }
+
+pub fn search_moves_to_reachable_placements(
+    pf: &Playfield, piece: Piece, src: Placement, mode: RotationMode, debug: bool) -> SearchMovesResult {
+    search_moves(pf, piece, src, mode,
+                 vec![vec![Move::Shift(1), Move::Drop(1), Move::Shift(-1), Move::Rotate(1), Move::Rotate(-1)]],
+                 None, debug)
+}
+
+pub fn search_optimized_moves(
+    pf: &Playfield, piece: Piece, src: Placement, mode: RotationMode, debug: bool) -> SearchMovesResult {
+    search_moves(pf, piece, src, mode,
+                 vec![
+                     vec![Move::Shift(0), Move::Shift(1), Move::Shift(-1)],
+                     vec![Move::Drop(1), Move::Rotate(1), Move::Rotate(-1)],
+                     vec![Move::Rotate(1), Move::Rotate(-1)]
+                 ], 5, debug)
+}
+
+//---
+
+// struct SearchOptimizedMovesResult {
+//     found: HashMap<Placement, MoveRecordItem>,
+// }
+//
+// // [1] Move horizontally.
+// // [2] Rotate 0, 1, -1, then 2.
+// // [3] Firm drop.
+// // [4] Rotate 0, 1, -1, 2, 3, -2, then -3.
+// fn search_optimized_moves(pf: &Playfield, piece: Piece, src: Placement, mode: RotationMode) -> SearchOptimizedMovesResult {
+//     struct Configuration<'a> {
+//         pf: &'a Playfield,
+//         src: Placement,
+//         mode: RotationMode,
+//         debug: bool,
+//         move_order: [Move; 5],
+//     }
+//
+//     let mut conf = Configuration {
+//         pf,
+//         src,
+//         mode,
+//         debug,
+//         move_order: [Move::Shift(1), Move::Drop(1), Move::Shift(-1), Move::Rotate(1), Move::Rotate(-1)],
+//     };
+//
+//     type Found = HashMap<Placement, MoveRecordItem>;
+//     let mut found: Found = HashMap::new();
+//
+//     fn search(conf: &Configuration, fp: &FallingPiece, depth: usize, found: &mut Found) {
+//         debug_println!("search_all: {:?} {}", fp.placement.orientation, fp.placement.pos);
+//         if depth > 0 && fp.placement == conf.src {
+//             debug_println!("=> initial placement.");
+//             return;
+//         }
+//         if found.contains_key(&fp.placement) {
+//             debug_println!("=> already checked.");
+//             return;
+//         }
+//         debug_assert!(fp.move_record.len() <= 1);
+//         if let Some(last) = fp.move_record.last() {
+//             let from = MoveRecordItem::new(last.by, fp.move_record.initial_placement);
+//             let v = found.insert(fp.placement, from);
+//             debug_assert!(v.is_none());
+//         }
+//
+//         let mut fp = FallingPiece::new(fp.piece, fp.placement);
+//         for mv in &conf.move_order {
+//             debug_println!("├ {:?}", mv);
+//             if fp.apply_move(*mv, conf.pf, conf.mode) {
+//                 search(conf, &fp, depth + 1, found);
+//                 fp.rollback();
+//             }
+//         }
+//
+//         debug_println!("=> checked.");
+//     };
+//
+//     search(&mut conf, &FallingPiece::new(piece, src), 0, &mut found);
+//
+//     panic!();
+// }
+
+// TODO
+// fn search_moves_by_a_star() {}
 
 //---
 
@@ -1422,16 +1533,17 @@ mod tests {
         let placement_to_be_found = Placement::new(ORIENTATION_3, (1, 0).into());
         let lockable = pf.search_lockable_placements(fp.piece);
         assert!(lockable.iter().any(|p| { *p == placement_to_be_found }));
-        let reachable = search_reachable_placements(&pf, fp.piece, fp.placement, RotationMode::Srs, false);
-        assert!(reachable.get(&placement_to_be_found).is_some());
+        let search_result = search_moves_to_reachable_placements(
+            &pf, fp.piece, fp.placement, RotationMode::Srs, true);
+        assert!(search_result.get(&placement_to_be_found).is_some());
         {
             let mut moves: Vec<MoveRecord> = Vec::new();
             for p in &lockable {
-                if let Some(record) = reachable.get(p) {
+                if let Some(record) = search_result.get(p) {
                     moves.push(record);
                 }
             }
-            assert!(reachable.len() > moves.len());
+            assert!(search_result.len() > moves.len());
         }
     }
 }
