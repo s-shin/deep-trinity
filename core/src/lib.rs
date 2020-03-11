@@ -1,10 +1,12 @@
 #[macro_use]
 extern crate lazy_static;
+extern crate rand;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops;
+use rand::seq::SliceRandom;
 
 //---
 
@@ -803,6 +805,8 @@ pub enum Piece {
     O,
 }
 
+const PIECES: [Piece; 7] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
+
 impl Into<CellType> for Piece {
     fn into(self) -> CellType { CellType(2 + (self as u8)) }
 }
@@ -1108,18 +1112,17 @@ impl FallingPiece {
 
 //---
 
-pub const PLAYFIELD_SIZE: Size = size!(10, 40);
-pub const PLAYFIELD_VISIBLE_HEIGHT: SizeY = 20;
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Playfield {
     pub grid: HybridGrid,
+    pub visible_height: SizeY,
 }
 
 impl Playfield {
-    pub fn new() -> Self {
+    pub fn new(size: Size, visible_height: SizeY) -> Self {
         Self {
-            grid: HybridGrid::new(PLAYFIELD_SIZE),
+            grid: HybridGrid::new(size),
+            visible_height,
         }
     }
     pub fn set_rows(&mut self, pos: UPos, rows: &[&'static str]) {
@@ -1273,6 +1276,15 @@ impl Playfield {
     }
 }
 
+pub const DEFAULT_PLAYFIELD_SIZE: Size = size!(10, 40);
+pub const DEFAULT_PLAYFIELD_VISIBLE_HEIGHT: SizeY = 20;
+
+impl Default for Playfield {
+    fn default() -> Self {
+        Self::new(DEFAULT_PLAYFIELD_SIZE, DEFAULT_PLAYFIELD_VISIBLE_HEIGHT)
+    }
+}
+
 //---
 
 pub struct MoveSearchConfiguration<'a> {
@@ -1397,6 +1409,58 @@ impl MoveSearchDirector for AStarMoveSearchDirector {
 
 //---
 
+pub const DEFAULT_NUM_VISIBLE_NEXT_PIECES: usize = 5;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct NextPieces {
+    pieces: VecDeque<Piece>,
+    visible_num: usize,
+}
+
+impl NextPieces {
+    pub fn new(visible_num: usize) -> Self {
+        Self { pieces: VecDeque::new(), visible_num }
+    }
+    pub fn is_empty(&self) -> bool { self.pieces.is_empty() }
+    pub fn len(&self) -> usize { self.pieces.len() }
+    pub fn iter(&self) -> std::collections::vec_deque::Iter<Piece> { self.pieces.iter() }
+    pub fn pop(&mut self) -> Option<Piece> { self.pieces.pop_front() }
+    pub fn supply(&mut self, ps: &[Piece]) { self.pieces.extend(ps) }
+    pub fn should_supply(&self) -> bool { self.len() <= self.visible_num }
+}
+
+impl Default for NextPieces {
+    fn default() -> Self { Self::new(DEFAULT_NUM_VISIBLE_NEXT_PIECES) }
+}
+
+#[derive(Clone, Debug)]
+pub struct RandomPieceGenerator<R: rand::Rng + ?Sized = rand::rngs::StdRng> {
+    rng: R,
+}
+
+impl<R: rand::Rng + Sized> RandomPieceGenerator<R> {
+    pub fn new(rng: R) -> Self {
+        Self { rng }
+    }
+    pub fn generate(&mut self) -> [Piece; 7] {
+        let mut ps = PIECES.clone();
+        ps.shuffle(&mut self.rng);
+        ps
+    }
+}
+
+//---
+
+// TODO
+pub struct Statistics {}
+
+//---
+
+// TODO
+pub struct GameState {}
+
+//---
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1425,7 +1489,7 @@ mod tests {
 
     #[test]
     fn test_search_moves() {
-        let mut pf = Playfield::new();
+        let mut pf = Playfield::default();
         pf.set_rows((0, 0).into(), &[
             "          ",
             "          ",
