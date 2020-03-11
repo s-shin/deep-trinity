@@ -1041,7 +1041,6 @@ impl FallingPiece {
                 fp.placement.pos.0 -= 1;
                 fp.move_record.initial_placement.pos.0 -= 1;
             }
-            debug_assert!(pf.can_put(&fp));
         }
         fp
     }
