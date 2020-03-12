@@ -2,7 +2,7 @@
 extern crate lazy_static;
 extern crate rand;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque, BTreeMap};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops;
@@ -240,7 +240,7 @@ trait Grid: Clone + fmt::Display {
             self.set_cell(upos!(x, y2), c1);
         }
     }
-    fn set_row(&mut self, y: UPosY, cell: Cell) {
+    fn set_cell_to_row(&mut self, y: UPosY, cell: Cell) {
         debug_assert!(y < self.height());
         for x in 0..self.width() {
             self.set_cell(upos!(x, y), cell);
@@ -259,13 +259,31 @@ trait Grid: Clone + fmt::Display {
         let mut n = 0;
         for y in 0..self.height() {
             if self.is_row_filled(y) {
-                self.set_row(y, Cell::Empty);
+                self.set_cell_to_row(y, Cell::Empty);
                 n += 1
             } else if n > 0 {
                 self.swap_rows(y - n, y);
             }
         }
         n
+    }
+    // `false` will be returned if any non-empty cells are disposed.
+    fn insert_cell_to_rows(&mut self, y: UPosY, cell: Cell, n: SizeY, force: bool) -> bool {
+        debug_assert!(self.height() >= y + n);
+        let mut are_cells_disposed = false;
+        for y in (self.height() - n)..self.height() {
+            if !self.is_row_empty(y) {
+                if !force {
+                    return false;
+                }
+                are_cells_disposed = true;
+                self.set_cell_to_row(y, cell);
+            }
+        }
+        for y in (0..(self.height() - n)).rev() {
+            self.swap_rows(y, y + n);
+        }
+        !are_cells_disposed
     }
     fn num_droppable_rows<G: Grid>(&self, pos: Pos, sub: &G) -> SizeY {
         if !self.can_put(pos, sub) {
@@ -514,7 +532,7 @@ impl Grid for BitGrid {
         self.rows[y1 as usize] = self.rows[y2 as usize];
         self.rows[y2 as usize] = r1;
     }
-    fn set_row(&mut self, y: UPosY, cell: Cell) {
+    fn set_cell_to_row(&mut self, y: UPosY, cell: Cell) {
         let row = match cell {
             Cell::Empty => 0,
             _ => self.row_mask,
@@ -581,9 +599,9 @@ impl Grid for HybridGrid {
         self.basic_grid.swap_rows(y1, y2);
         self.bit_grid.swap_rows(y1, y2);
     }
-    fn set_row(&mut self, y: UPosY, cell: Cell) {
-        self.basic_grid.set_row(y, cell);
-        self.bit_grid.set_row(y, cell);
+    fn set_cell_to_row(&mut self, y: UPosY, cell: Cell) {
+        self.basic_grid.set_cell_to_row(y, cell);
+        self.bit_grid.set_cell_to_row(y, cell);
     }
 }
 
@@ -645,7 +663,7 @@ impl Placement {
 
 //---
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Move {
     Shift(i8),
     Drop(i8),
@@ -689,7 +707,7 @@ impl Move {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MoveRecordItem {
     pub by: Move,
     pub placement: Placement,
@@ -701,7 +719,7 @@ impl MoveRecordItem {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MoveRecord {
     pub initial_placement: Placement,
     pub items: Vec<MoveRecordItem>,
@@ -740,13 +758,13 @@ impl MoveRecord {
 
 //---
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TSpin {
     Standard,
     Mini,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LineClear {
     pub num_lines: u8,
     pub tspin: Option<TSpin>,
@@ -776,14 +794,20 @@ impl LineClear {
 
 //---
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RotationMode {
     Srs,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TSpinJudgementMode {
     PuyoPuyoTetris,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LockOutType {
+    LockOut,
+    PartialLockOut,
 }
 
 //---
@@ -1026,7 +1050,7 @@ lazy_static! {
 
 //---
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FallingPiece {
     pub piece: Piece,
     pub placement: Placement,
@@ -1140,6 +1164,15 @@ impl Playfield {
             }
         }
     }
+    // If garbage out, `true` will be returned.
+    pub fn append_garbage(&mut self, gap_x_list: &[UPosX]) -> bool {
+        let ok = self.grid.insert_cell_to_rows(0, Cell::Block(Block::Garbage),
+                                               gap_x_list.len() as SizeY, true);
+        for (y, x) in gap_x_list.iter().enumerate() {
+            self.grid.set_cell((*x, y as UPosY).into(), Cell::Empty);
+        }
+        !ok
+    }
     pub fn can_put(&self, fp: &FallingPiece) -> bool {
         self.grid.bit_grid.can_put(fp.placement.pos, &fp.grid().bit_grid)
     }
@@ -1177,6 +1210,7 @@ impl Playfield {
         }
         None
     }
+    // This method doesn't consider whether the game is over or not.
     pub fn can_lock(&self, fp: &FallingPiece) -> bool { self.can_put(fp) && !self.can_drop(fp) }
     pub fn check_tspin(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> Option<TSpin> {
         debug_assert!(self.can_lock(fp));
@@ -1235,6 +1269,17 @@ impl Playfield {
         let mut tmp_grid = self.grid.clone();
         tmp_grid.put_fast(fp.placement.pos, &fp.grid().bit_grid);
         LineClear::new(tmp_grid.num_filled_rows(), self.check_tspin(fp, mode))
+    }
+    pub fn check_lock_out(&self, fp: &FallingPiece) -> Option<LockOutType> {
+        let bottom = fp.placement.pos.1 + fp.grid().bottom_padding() as PosY;
+        if bottom >= self.visible_height as PosY {
+            return Some(LockOutType::LockOut);
+        }
+        let top = fp.placement.pos.1 + fp.grid().height() as PosY - fp.grid().top_padding() as PosY;
+        if top >= self.visible_height as PosY {
+            return Some(LockOutType::PartialLockOut);
+        }
+        None
     }
     pub fn lock(&mut self, fp: &FallingPiece, mode: TSpinJudgementMode) -> Option<LineClear> {
         if !self.can_lock(fp) {
@@ -1328,7 +1373,7 @@ impl MoveSearchResult {
         }
         Some(record)
     }
-    fn len(&self) -> usize { self.found.len() }
+    pub fn len(&self) -> usize { self.found.len() }
 }
 
 pub fn search_moves(conf: &MoveSearchConfiguration, director: &mut impl MoveSearchDirector) -> MoveSearchResult {
@@ -1391,6 +1436,7 @@ impl MoveSearchDirector for BruteForceMoveSearchDirector {
     }
 }
 
+// TODO
 pub struct HumanlyOptimizedMoveSearchDirector {}
 
 impl MoveSearchDirector for HumanlyOptimizedMoveSearchDirector {
@@ -1399,6 +1445,7 @@ impl MoveSearchDirector for HumanlyOptimizedMoveSearchDirector {
     }
 }
 
+// TODO
 pub struct AStarMoveSearchDirector {}
 
 impl MoveSearchDirector for AStarMoveSearchDirector {
@@ -1418,9 +1465,7 @@ pub struct NextPieces {
 }
 
 impl NextPieces {
-    pub fn new(visible_num: usize) -> Self {
-        Self { pieces: VecDeque::new(), visible_num }
-    }
+    pub fn new(visible_num: usize) -> Self { Self { pieces: VecDeque::new(), visible_num } }
     pub fn is_empty(&self) -> bool { self.pieces.is_empty() }
     pub fn len(&self) -> usize { self.pieces.len() }
     pub fn iter(&self) -> std::collections::vec_deque::Iter<Piece> { self.pieces.iter() }
@@ -1433,31 +1478,199 @@ impl Default for NextPieces {
     fn default() -> Self { Self::new(DEFAULT_NUM_VISIBLE_NEXT_PIECES) }
 }
 
+//---
+
+pub type StatisticsCount = u32;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LineClearCounter {
+    pub data: HashMap<LineClear, StatisticsCount>,
+}
+
+impl LineClearCounter {
+    pub fn add(&mut self, lc: &LineClear, n: StatisticsCount) {
+        if let Some(c) = self.data.get_mut(lc) {
+            *c += n;
+        } else {
+            self.data.insert(*lc, n);
+        }
+    }
+    pub fn get(&self, lc: &LineClear) -> StatisticsCount {
+        self.data.get(lc).copied().unwrap_or(0)
+    }
+}
+
+impl ops::Sub for LineClearCounter {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        let mut r = Self::default();
+        for (lc, count) in self.data.iter() {
+            r.add(lc, *count - other.get(lc));
+        }
+        r
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ContinuousCountCounter {
+    pub data: BTreeMap<StatisticsCount, StatisticsCount>,
+}
+
+impl ContinuousCountCounter {
+    pub fn add(&mut self, cont_count: StatisticsCount, n: StatisticsCount) {
+        if let Some(c) = self.data.get_mut(&cont_count) {
+            *c += n;
+        } else {
+            self.data.insert(cont_count, n);
+        }
+    }
+    pub fn get(&self, cont_count: StatisticsCount) -> StatisticsCount {
+        self.data.get(&cont_count).copied().unwrap_or(0)
+    }
+    pub fn max(&self) -> StatisticsCount {
+        self.data.iter().next_back().map_or(0, |v| { *v.0 })
+    }
+}
+
+impl ops::Sub for ContinuousCountCounter {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        let mut r = Self::default();
+        for (cont_count, count) in self.data.iter() {
+            r.add(*cont_count, *count - other.get(*cont_count));
+        }
+        r
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Statistics {
+    pub line_clear: LineClearCounter,
+    pub combo: ContinuousCountCounter,
+    pub btb: ContinuousCountCounter,
+    pub perfect_clear: StatisticsCount,
+    pub hold: StatisticsCount,
+}
+
+impl ops::Sub for Statistics {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        Self {
+            line_clear: self.line_clear - other.line_clear,
+            combo: self.combo - other.combo,
+            btb: self.btb - other.btb,
+            perfect_clear: self.perfect_clear - other.perfect_clear,
+            hold: self.hold - other.hold,
+        }
+    }
+}
+
+//---
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GameState {
+    playfield: Playfield,
+    next_pieces: NextPieces,
+    falling_piece: Option<FallingPiece>,
+    hold_piece: Option<Piece>,
+    can_hold: bool,
+    num_continuous_combos: StatisticsCount,
+    num_continuous_btbs: StatisticsCount,
+    is_game_over: bool,
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        Self {
+            playfield: Playfield::default(),
+            next_pieces: NextPieces::default(),
+            falling_piece: None,
+            hold_piece: None,
+            can_hold: true,
+            num_continuous_combos: 0,
+            num_continuous_btbs: 0,
+            is_game_over: false,
+        }
+    }
+}
+
+//---
+
+pub trait PieceGenerator {
+    fn generate(&mut self) -> Vec<Piece>;
+}
+
 #[derive(Clone, Debug)]
 pub struct RandomPieceGenerator<R: rand::Rng + ?Sized = rand::rngs::StdRng> {
     rng: R,
 }
 
 impl<R: rand::Rng + Sized> RandomPieceGenerator<R> {
-    pub fn new(rng: R) -> Self {
-        Self { rng }
-    }
-    pub fn generate(&mut self) -> [Piece; 7] {
+    pub fn new(rng: R) -> Self { Self { rng } }
+}
+
+impl<R: rand::Rng + Sized> PieceGenerator for RandomPieceGenerator<R> {
+    fn generate(&mut self) -> Vec<Piece> {
         let mut ps = PIECES.clone();
         ps.shuffle(&mut self.rng);
-        ps
+        ps.to_vec()
     }
 }
 
 //---
 
-// TODO
-pub struct Statistics {}
+// The standard implementation of game management.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Game<PG: PieceGenerator> {
+    pub state: GameState,
+    pub stats: Statistics,
+    pub piece_gen: PG,
+    pub rotation_mode: RotationMode,
+    pub tspin_judgement_mode: TSpinJudgementMode,
+}
 
-//---
+impl<PG: PieceGenerator> Game<PG> {
+    pub fn new(piece_gen: PG) -> Self {
+        Self {
+            state: Default::default(),
+            stats: Default::default(),
+            piece_gen,
+            rotation_mode: Default::default(),
+            tspin_judgement_mode: Default::default(),
+        }
+    }
+    // This method should be called right after `new()` until returns true.
+    fn setup(&mut self) -> bool {
+        let s = &mut self.state;
 
-// TODO
-pub struct GameState {}
+        if s.next_pieces.is_empty() {
+            s.next_pieces.supply(&self.piece_gen.generate());
+        }
+        if s.next_pieces.is_empty() {
+            return false;
+        }
+
+        if s.falling_piece.is_none() {
+            s.falling_piece = Some(
+                FallingPiece::spawn(s.next_pieces.pop().unwrap(), Some(&s.playfield)));
+        }
+
+        true
+    }
+    pub fn do_move(&mut self, mv: Move) -> bool {
+        if let Some(fp) = &mut self.state.falling_piece {
+            fp.apply_move(mv, &self.state.playfield, self.rotation_mode)
+        } else {
+            false
+        }
+    }
+    pub fn lock(&mut self) {
+        // TODO
+    }
+    pub fn hold(&mut self) {
+        // TODO
+    }
+}
 
 //---
 
