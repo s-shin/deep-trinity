@@ -1,4 +1,6 @@
 #[macro_use]
+extern crate bitflags;
+#[macro_use]
 extern crate lazy_static;
 extern crate rand;
 
@@ -113,6 +115,7 @@ trait Grid: Clone + fmt::Display {
     fn get_cell(&self, pos: UPos) -> Cell;
     fn set_cell(&mut self, pos: UPos, cell: Cell);
     fn has_cell(&self, pos: UPos) -> bool { !self.get_cell(pos).is_empty() }
+    fn is_empty(&self) -> bool { self.bottom_padding() == self.height() }
     fn put<G: Grid>(&mut self, pos: Pos, sub: &G) -> bool {
         let mut dirty = false;
         for sub_y in 0..sub.height() {
@@ -154,6 +157,16 @@ trait Grid: Clone + fmt::Display {
             }
         }
         true
+    }
+    fn get_last_pos<G: Grid>(&self, pos: Pos, sub: &G, delta: Pos) -> Pos {
+        let mut p = pos;
+        loop {
+            let pp = p + delta;
+            if !self.can_put(pp, sub) {
+                return p;
+            }
+            p = pp;
+        }
     }
     fn is_row_filled(&self, y: UPosY) -> bool {
         for x in 0..self.width() {
@@ -299,16 +312,12 @@ trait Grid: Clone + fmt::Display {
         for y in (0..self.height()).rev() {
             for x in 0..self.width() {
                 let c = self.get_cell(upos!(x, y)).char();
-                if let Err(e) = write!(f, "{}", c) {
-                    return Err(e);
-                }
+                write!(f, "{}", c)?;
             }
             if y == 0 {
                 break;
             }
-            if let Err(e) = write!(f, "\n") {
-                return Err(e);
-            }
+            write!(f, "\n")?;
         }
         Ok(())
     }
@@ -415,7 +424,14 @@ impl BitGrid {
                     }
                 }
             }
-            let y = pos.1 as usize + sub_y as usize;
+            let y = pos.1 + sub_y as PosY;
+            if y < 0 || self.height() as PosY <= y {
+                if row != 0 {
+                    dirty = true;
+                }
+                continue;
+            }
+            let y = y as usize;
             if !dirty && self.rows[y] & row != 0 {
                 dirty = true;
             }
@@ -580,9 +596,9 @@ impl HybridGrid {
             bit_grid,
         }
     }
-    pub fn put_fast(&mut self, pos: Pos, sub: &BitGrid) {
-        self.basic_grid.put(pos, sub);
-        self.bit_grid.put_fast(pos, sub);
+    pub fn put_fast(&mut self, pos: Pos, sub: &HybridGrid) {
+        self.basic_grid.put(pos, &sub.basic_grid);
+        self.bit_grid.put_fast(pos, &sub.bit_grid);
     }
 }
 
@@ -799,15 +815,38 @@ pub enum RotationMode {
     Srs,
 }
 
+impl Default for RotationMode {
+    fn default() -> Self { Self::Srs }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TSpinJudgementMode {
     PuyoPuyoTetris,
+}
+
+impl Default for TSpinJudgementMode {
+    fn default() -> Self { Self::PuyoPuyoTetris }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LockOutType {
     LockOut,
     PartialLockOut,
+}
+
+bitflags! {
+    pub struct LossConditions: u8 {
+        const BLOCK_OUT        = 0b0001;
+        const LOCK_OUT         = 0b0110;  // LOCK_OUT includes PARTIAL_LOCK_OUT.
+        const PARTIAL_LOCK_OUT = 0b0100;
+        const GARBAGE_OUT      = 0b1000;
+    }
+}
+
+impl Default for LossConditions {
+    fn default() -> Self {
+        Self::BLOCK_OUT | Self::LOCK_OUT | Self::GARBAGE_OUT
+    }
 }
 
 //---
@@ -1022,7 +1061,7 @@ impl PieceSpec {
     }
     fn piece_o() -> Self {
         Self::new(
-            Piece::T,
+            Piece::O,
             (3, 3),
             vec![(1, 1), (1, 2), (2, 1), (2, 2)],
             (3, 18),
@@ -1149,6 +1188,9 @@ impl Playfield {
             visible_height,
         }
     }
+    pub fn width(&self) -> SizeX { self.grid.width() }
+    pub fn height(&self) -> SizeX { self.grid.height() }
+    pub fn is_empty(&self) -> bool { self.grid.is_empty() }
     pub fn set_rows(&mut self, pos: UPos, rows: &[&'static str]) {
         for (dy, row) in rows.iter().rev().enumerate() {
             let y = pos.1 + dy as UPosY;
@@ -1179,6 +1221,13 @@ impl Playfield {
     pub fn num_droppable_rows(&self, fp: &FallingPiece) -> SizeY {
         self.grid.bit_grid.num_droppable_rows_fast(fp.placement.pos, &fp.grid().bit_grid)
     }
+    pub fn num_shiftable_cols(&self, fp: &FallingPiece, to_right: bool) -> SizeX {
+        let p = self.grid.bit_grid.get_last_pos(fp.placement.pos, &fp.grid().bit_grid,
+                                                if to_right { (1, 0) } else { (-1, 0) }.into());
+        let r = if to_right { p.0 - fp.placement.pos.0 } else { fp.placement.pos.0 - p.0 };
+        debug_assert!(r >= 0);
+        r as SizeX
+    }
     pub fn can_drop(&self, fp: &FallingPiece) -> bool {
         self.grid.bit_grid.can_put(fp.placement.pos + pos!(0, -1), &fp.grid().bit_grid)
     }
@@ -1188,7 +1237,7 @@ impl Playfield {
     pub fn can_move_horizontally(&self, fp: &FallingPiece, n: PosX) -> bool {
         let to_right = n > 0;
         let end = if to_right { n } else { -n };
-        for dx in 0..end {
+        for dx in 1..=end {
             let x = fp.placement.pos.0 + if to_right { dx } else { -dx };
             if !self.grid.bit_grid.can_put_fast(pos!(x, fp.placement.pos.1), &fp.grid().bit_grid) {
                 return false;
@@ -1267,7 +1316,7 @@ impl Playfield {
     pub fn check_line_clear(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> LineClear {
         debug_assert!(self.can_lock(fp));
         let mut tmp_grid = self.grid.clone();
-        tmp_grid.put_fast(fp.placement.pos, &fp.grid().bit_grid);
+        tmp_grid.put_fast(fp.placement.pos, fp.grid());
         LineClear::new(tmp_grid.num_filled_rows(), self.check_tspin(fp, mode))
     }
     pub fn check_lock_out(&self, fp: &FallingPiece) -> Option<LockOutType> {
@@ -1286,7 +1335,7 @@ impl Playfield {
             return None;
         }
         let tspin = self.check_tspin(fp, mode);
-        self.grid.put_fast(fp.placement.pos, &fp.grid().bit_grid);
+        self.grid.put_fast(fp.placement.pos, fp.grid());
         let num_cleared_line = self.grid.drop_filled_rows();
         Some(LineClear::new(num_cleared_line, tspin))
     }
@@ -1437,22 +1486,22 @@ impl MoveSearchDirector for BruteForceMoveSearchDirector {
 }
 
 // TODO
-pub struct HumanlyOptimizedMoveSearchDirector {}
-
-impl MoveSearchDirector for HumanlyOptimizedMoveSearchDirector {
-    fn next(&mut self, _conf: &MoveSearchConfiguration, _fp: &FallingPiece, _depth: usize, _num_moved: usize) -> Option<Move> {
-        panic!("TODO");
-    }
-}
+// pub struct HumanlyOptimizedMoveSearchDirector {}
+//
+// impl MoveSearchDirector for HumanlyOptimizedMoveSearchDirector {
+//     fn next(&mut self, _conf: &MoveSearchConfiguration, _fp: &FallingPiece, _depth: usize, _num_moved: usize) -> Option<Move> {
+//         panic!("TODO");
+//     }
+// }
 
 // TODO
-pub struct AStarMoveSearchDirector {}
-
-impl MoveSearchDirector for AStarMoveSearchDirector {
-    fn next(&mut self, _conf: &MoveSearchConfiguration, _fp: &FallingPiece, _depth: usize, _num_moved: usize) -> Option<Move> {
-        panic!("TODO");
-    }
-}
+// pub struct AStarMoveSearchDirector {}
+//
+// impl MoveSearchDirector for AStarMoveSearchDirector {
+//     fn next(&mut self, _conf: &MoveSearchConfiguration, _fp: &FallingPiece, _depth: usize, _num_moved: usize) -> Option<Move> {
+//         panic!("TODO");
+//     }
+// }
 
 //---
 
@@ -1476,6 +1525,18 @@ impl NextPieces {
 
 impl Default for NextPieces {
     fn default() -> Self { Self::new(DEFAULT_NUM_VISIBLE_NEXT_PIECES) }
+}
+
+impl fmt::Display for NextPieces {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (i, p) in self.iter().enumerate() {
+            if i >= self.visible_num {
+                break;
+            }
+            write!(f, "{}", Cell::Block(Block::Piece(*p)).char())?;
+        }
+        Ok(())
+    }
 }
 
 //---
@@ -1567,35 +1628,6 @@ impl ops::Sub for Statistics {
 
 //---
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct GameState {
-    playfield: Playfield,
-    next_pieces: NextPieces,
-    falling_piece: Option<FallingPiece>,
-    hold_piece: Option<Piece>,
-    can_hold: bool,
-    num_continuous_combos: StatisticsCount,
-    num_continuous_btbs: StatisticsCount,
-    is_game_over: bool,
-}
-
-impl Default for GameState {
-    fn default() -> Self {
-        Self {
-            playfield: Playfield::default(),
-            next_pieces: NextPieces::default(),
-            falling_piece: None,
-            hold_piece: None,
-            can_hold: true,
-            num_continuous_combos: 0,
-            num_continuous_btbs: 0,
-            is_game_over: false,
-        }
-    }
-}
-
-//---
-
 pub trait PieceGenerator {
     fn generate(&mut self) -> Vec<Piece>;
 }
@@ -1617,6 +1649,66 @@ impl<R: rand::Rng + Sized> PieceGenerator for RandomPieceGenerator<R> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct StaticPieceGenerator {
+    pieces: VecDeque<Piece>,
+    num_per_gen: usize,
+}
+
+impl StaticPieceGenerator {
+    pub fn len(&self) -> usize { self.pieces.len() }
+    pub fn append(&mut self, pieces: &[Piece]) { self.pieces.extend(pieces) }
+}
+
+impl Default for StaticPieceGenerator {
+    fn default() -> Self {
+        Self {
+            pieces: VecDeque::new(),
+            num_per_gen: 7,
+        }
+    }
+}
+
+impl PieceGenerator for StaticPieceGenerator {
+    fn generate(&mut self) -> Vec<Piece> {
+        let n = std::cmp::min(self.len(), self.num_per_gen);
+        self.pieces.drain(0..n).collect()
+    }
+}
+
+//---
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GameState {
+    playfield: Playfield,
+    next_pieces: NextPieces,
+    falling_piece: Option<FallingPiece>,
+    hold_piece: Option<Piece>,
+    can_hold: bool,
+    num_combos: Option<StatisticsCount>,
+    num_btbs: Option<StatisticsCount>,
+    game_over_reason: LossConditions,
+}
+
+impl GameState {
+    pub fn is_game_over(&self) -> bool { !self.game_over_reason.is_empty() }
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        Self {
+            playfield: Playfield::default(),
+            next_pieces: NextPieces::default(),
+            falling_piece: None,
+            hold_piece: None,
+            can_hold: true,
+            num_combos: None,
+            num_btbs: None,
+            game_over_reason: LossConditions::empty(),
+        }
+    }
+}
+
 //---
 
 // The standard implementation of game management.
@@ -1627,6 +1719,7 @@ pub struct Game<PG: PieceGenerator> {
     pub piece_gen: PG,
     pub rotation_mode: RotationMode,
     pub tspin_judgement_mode: TSpinJudgementMode,
+    pub loss_conds: LossConditions,
 }
 
 impl<PG: PieceGenerator> Game<PG> {
@@ -1637,38 +1730,182 @@ impl<PG: PieceGenerator> Game<PG> {
             piece_gen,
             rotation_mode: Default::default(),
             tspin_judgement_mode: Default::default(),
+            loss_conds: Default::default(),
         }
     }
-    // This method should be called right after `new()` until returns true.
-    fn setup(&mut self) -> bool {
+    // This method should be called right after `new()`.
+    // `true` will be returned when there are no next pieces.
+    pub fn setup_falling_piece(&mut self, next: Option<Piece>) -> Result<(), &'static str> {
         let s = &mut self.state;
 
-        if s.next_pieces.is_empty() {
-            s.next_pieces.supply(&self.piece_gen.generate());
-        }
-        if s.next_pieces.is_empty() {
-            return false;
+        if s.falling_piece.is_some() {
+            return Err("falling piece already exists");
         }
 
-        if s.falling_piece.is_none() {
-            s.falling_piece = Some(
-                FallingPiece::spawn(s.next_pieces.pop().unwrap(), Some(&s.playfield)));
-        }
-
-        true
-    }
-    pub fn do_move(&mut self, mv: Move) -> bool {
-        if let Some(fp) = &mut self.state.falling_piece {
-            fp.apply_move(mv, &self.state.playfield, self.rotation_mode)
+        let p = if let Some(next) = next {
+            next
         } else {
-            false
+            if s.next_pieces.is_empty() {
+                s.next_pieces.supply(&self.piece_gen.generate());
+            }
+            if s.next_pieces.is_empty() {
+                return Err("no next pieces");
+            }
+            s.next_pieces.pop().unwrap()
+        };
+
+        let fp = FallingPiece::spawn(p, Some(&s.playfield));
+        if !s.playfield.can_put(&fp) {
+            s.game_over_reason |= LossConditions::BLOCK_OUT;
+        }
+        s.falling_piece = Some(fp);
+        s.can_hold = true;
+        Ok(())
+    }
+    // `Err` will be returned when an invalid move was specified.
+    pub fn do_move(&mut self, mv: Move) -> Result<(), &'static str> {
+        if self.state.falling_piece.is_none() {
+            return Err("no falling piece");
+        }
+        let fp = self.state.falling_piece.as_mut().unwrap();
+        if fp.apply_move(mv, &self.state.playfield, self.rotation_mode) {
+            Ok(())
+        } else {
+            Err("invalid move specified")
         }
     }
-    pub fn lock(&mut self) {
-        // TODO
+    pub fn firm_drop(&mut self) -> Result<(), &'static str> {
+        let s = &mut self.state;
+        if s.falling_piece.is_none() {
+            return Err("no falling piece");
+        }
+        let n = s.playfield.num_droppable_rows(s.falling_piece.as_ref().unwrap()) as i8;
+        if n == 0 {
+            return Ok(());
+        }
+        self.do_move(Move::Drop(n))
     }
-    pub fn hold(&mut self) {
-        // TODO
+    pub fn shift(&mut self, n: i8, to_end: bool) -> Result<(), &'static str> {
+        let s = &mut self.state;
+        if s.falling_piece.is_none() {
+            return Err("no falling piece");
+        }
+        if n == 0 {
+            return Ok(());
+        }
+        let to_right = n > 0;
+        let n = if to_end {
+            let n = s.playfield.num_shiftable_cols(s.falling_piece.as_ref().unwrap(), to_right) as i8;
+            if to_right { n } else { -n }
+        } else {
+            n
+        };
+        self.do_move(Move::Shift(n))
+    }
+    pub fn rotate(&mut self, n: i8) -> Result<(), &'static str> {
+        self.do_move(Move::Rotate(n))
+    }
+    // `Ok(true)` will be returned if the process is totally succeeded.
+    // If `Ok(false)` was returned, you should supply next pieces then call `setup_next_piece()`.
+    // `Err` will be returned when the process fails.
+    pub fn lock(&mut self) -> Result<bool, &'static str> {
+        let s = &mut self.state;
+        if s.falling_piece.is_none() {
+            return Err("falling_piece is none");
+        }
+        let fp = s.falling_piece.as_mut().unwrap();
+        let pf = &mut s.playfield;
+        if !pf.can_lock(fp) {
+            return Err("cannot lock");
+        }
+        if let Some(lock_out_type) = pf.check_lock_out(fp) {
+            match lock_out_type {
+                LockOutType::LockOut => {
+                    if self.loss_conds.contains(LossConditions::LOCK_OUT) {
+                        s.game_over_reason |= LossConditions::LOCK_OUT;
+                    }
+                }
+                LockOutType::PartialLockOut => {
+                    if self.loss_conds.contains(LossConditions::PARTIAL_LOCK_OUT) {
+                        s.game_over_reason |= LossConditions::PARTIAL_LOCK_OUT;
+                    }
+                }
+            }
+        }
+        let line_clear = pf.lock(fp, self.tspin_judgement_mode);
+        s.falling_piece = None;
+        debug_assert!(line_clear.is_some());
+        let line_clear = line_clear.unwrap();
+        self.stats.line_clear.add(&line_clear, 1);
+        if line_clear.num_lines > 0 {
+            s.num_combos = Some(s.num_combos.map_or(0, |n| { n + 1 }));
+            self.stats.combo.add(s.num_combos.unwrap(), 1);
+            if pf.is_empty() {
+                self.stats.perfect_clear += 1;
+            }
+            if line_clear.is_tetris() || line_clear.is_tspin() || line_clear.is_tspin_mini() {
+                s.num_btbs = Some(s.num_btbs.map_or(0, |n| { n + 1 }));
+                self.stats.btb.add(s.num_btbs.unwrap(), 1);
+            } else {
+                s.num_btbs = None;
+            }
+        } else {
+            s.num_btbs = None;
+            s.num_combos = None;
+        }
+        Ok(self.setup_falling_piece(None).is_ok())
+    }
+    // `Ok(true)` will be returned if the process is totally succeeded.
+    // If `Ok(false)` was returned, you should supply next pieces then call `setup_next_piece()`.
+    // `Err` will be returned when the process fails.
+    pub fn hold(&mut self) -> Result<bool, &'static str> {
+        let s = &mut self.state;
+        if s.falling_piece.is_none() {
+            return Err("no falling piece");
+        }
+        if !s.can_hold {
+            return Err("already held once");
+        }
+        let p = s.falling_piece.as_ref().unwrap().piece;
+        s.falling_piece = None;
+        let r = self.setup_falling_piece(self.state.hold_piece);
+        self.state.hold_piece = Some(p);
+        self.state.can_hold = false;
+        self.stats.hold += 1;
+        Ok(r.is_ok())
+    }
+}
+
+impl<PG: PieceGenerator> fmt::Display for Game<PG> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = &self.state;
+        let w = self.state.playfield.width() as usize;
+        let h = self.state.playfield.visible_height as usize;
+        let num_next = self.state.next_pieces.visible_num;
+        write!(f, "[{}]", s.hold_piece.map_or(
+            Cell::Empty, |p| { Cell::Block(Block::Piece(p)) }).char(),
+        )?;
+        write!(f, "{}", " ".repeat(w - num_next - 3));
+        write!(f, "({})", s.falling_piece.as_ref().map_or(
+            Cell::Empty, |fp| { Cell::Block(Block::Piece(fp.piece)) }).char(),
+        )?;
+        writeln!(f, "{}", s.next_pieces)?;
+        writeln!(f, "--+{}+", "-".repeat(w))?;
+        for y in (0..h).rev() {
+            write!(f, "{:02}|", y)?;
+            for x in 0..w {
+                write!(f, "{}", s.playfield.grid.get_cell((x as UPosX, y as UPosY).into()).char())?;
+            }
+            write!(f, "|")?;
+            writeln!(f)?;
+        }
+        writeln!(f, "--+{}+", "-".repeat(w))?;
+        write!(f, "##|")?;
+        for x in 0..w {
+            write!(f, "{}", x % 10);
+        }
+        write!(f, "|")?;
+        Ok(())
     }
 }
 
@@ -1677,6 +1914,15 @@ impl<PG: PieceGenerator> Game<PG> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    macro_rules! assert_ok {
+        ($r:expr) => {
+            match $r {
+                Ok(v) => v,
+                Err(e) => panic!("assertion failed: Err({:?})", e),
+            }
+        }
+    }
 
     #[test]
     fn test_bit_grid() {
@@ -1743,5 +1989,62 @@ mod tests {
             }
             assert!(search_result.len() > moves.len());
         }
+    }
+
+    #[test]
+    fn test_game() {
+        let mut game = Game::new(StaticPieceGenerator::default());
+        game.piece_gen.append(&[
+            Piece::O, Piece::T, Piece::I, Piece::J, Piece::L, Piece::S, Piece::Z,
+            Piece::O, Piece::T, Piece::I, Piece::J, Piece::L, Piece::S, Piece::Z,
+        ]);
+        assert_ok!(game.setup_falling_piece(None));
+        // Test simple TSD opener.
+        // O
+        assert_eq!(Piece::O, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_ok!(game.shift(-1, true));
+        assert_ok!(game.firm_drop());
+        assert_ok!(game.lock());
+        // T
+        assert_eq!(Piece::T, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_ok!(game.hold());
+        // I
+        assert_eq!(Piece::I, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_ok!(game.shift(-1, false));
+        assert_ok!(game.firm_drop());
+        assert_ok!(game.lock());
+        // J
+        assert_eq!(Piece::J, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_ok!(game.rotate(-1));
+        assert_ok!(game.shift(1, true));
+        assert_ok!(game.firm_drop());
+        assert_ok!(game.lock());
+        // L
+        assert_eq!(Piece::L, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_ok!(game.rotate(1));
+        assert_ok!(game.shift(-1, true));
+        assert_ok!(game.firm_drop());
+        assert_ok!(game.lock());
+        // S
+        assert_eq!(Piece::S, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_ok!(game.shift(1, false));
+        assert_ok!(game.firm_drop());
+        assert_ok!(game.lock());
+        // Z
+        assert_eq!(Piece::Z, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_ok!(game.shift(-2, false));
+        assert_ok!(game.rotate(1));
+        assert_ok!(game.firm_drop());
+        assert_ok!(game.lock());
+        // O
+        assert_eq!(Piece::O, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_ok!(game.hold());
+        // T
+        assert_ok!(game.shift(1, true));
+        assert_ok!(game.rotate(-1));
+        assert_ok!(game.firm_drop());
+        assert_ok!(game.rotate(-1));
+        assert_ok!(game.lock());
+        println!("{}", game);
     }
 }
