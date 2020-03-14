@@ -116,6 +116,9 @@ trait Grid: Clone + fmt::Display {
     fn set_cell(&mut self, pos: UPos, cell: Cell);
     fn has_cell(&self, pos: UPos) -> bool { !self.get_cell(pos).is_empty() }
     fn is_empty(&self) -> bool { self.bottom_padding() == self.height() }
+    fn is_valid_pos(&self, pos: Pos) -> bool {
+        0 <= pos.0 && pos.0 < self.width() as PosX && 0 <= pos.1 && pos.1 < self.height() as PosY
+    }
     fn put<G: Grid>(&mut self, pos: Pos, sub: &G) -> bool {
         let mut dirty = false;
         for sub_y in 0..sub.height() {
@@ -126,7 +129,7 @@ trait Grid: Clone + fmt::Display {
                     continue;
                 }
                 let p = pos + sub_pos;
-                if p.0 < 0 || self.width() as i8 <= p.0 || p.1 < 0 || self.height() as i8 <= p.1 {
+                if !self.is_valid_pos(p) {
                     dirty = true;
                     continue;
                 }
@@ -148,7 +151,7 @@ trait Grid: Clone + fmt::Display {
                     continue;
                 }
                 let p = pos + sub_pos;
-                if p.0 < 0 || self.width() as i8 <= p.0 || p.1 < 0 || self.height() as i8 <= p.1 {
+                if !self.is_valid_pos(p) {
                     return false;
                 }
                 if self.has_cell(p.into()) {
@@ -805,6 +808,35 @@ impl LineClear {
         } else {
             false
         }
+    }
+}
+
+impl fmt::Display for LineClear {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let n = self.num_lines as usize;
+        if self.is_normal() {
+            static STRS: [&'static str; 5] = ["zero", "single", "double", "triple", "tetris"];
+            if n < STRS.len() {
+                write!(f, "{}", STRS[n])?;
+            } else {
+                write!(f, "{}", n)?;
+            }
+        } else if self.is_tspin() {
+            static STRS: [&'static str; 4] = ["tsz", "tss", "tsd", "tst"];
+            if n < STRS.len() {
+                write!(f, "{}", STRS[n])?;
+            } else {
+                write!(f, "ts{}", n)?;
+            }
+        } else if self.is_tspin_mini() {
+            static STRS: [&'static str; 3] = ["tsmz", "tsms", "tsmd"];
+            if n < STRS.len() {
+                write!(f, "{}", STRS[n])?;
+            } else {
+                write!(f, "tsm{}", n)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1541,22 +1573,22 @@ impl fmt::Display for NextPieces {
 
 //---
 
-pub type StatisticsCount = u32;
+pub type Count = u32;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LineClearCounter {
-    pub data: HashMap<LineClear, StatisticsCount>,
+    pub data: HashMap<LineClear, Count>,
 }
 
 impl LineClearCounter {
-    pub fn add(&mut self, lc: &LineClear, n: StatisticsCount) {
+    pub fn add(&mut self, lc: &LineClear, n: Count) {
         if let Some(c) = self.data.get_mut(lc) {
             *c += n;
         } else {
             self.data.insert(*lc, n);
         }
     }
-    pub fn get(&self, lc: &LineClear) -> StatisticsCount {
+    pub fn get(&self, lc: &LineClear) -> Count {
         self.data.get(lc).copied().unwrap_or(0)
     }
 }
@@ -1573,27 +1605,27 @@ impl ops::Sub for LineClearCounter {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ContinuousCountCounter {
-    pub data: BTreeMap<StatisticsCount, StatisticsCount>,
+pub struct ConsecutiveCountCounter {
+    pub data: BTreeMap<Count, Count>,
 }
 
-impl ContinuousCountCounter {
-    pub fn add(&mut self, cont_count: StatisticsCount, n: StatisticsCount) {
+impl ConsecutiveCountCounter {
+    pub fn add(&mut self, cont_count: Count, n: Count) {
         if let Some(c) = self.data.get_mut(&cont_count) {
             *c += n;
         } else {
             self.data.insert(cont_count, n);
         }
     }
-    pub fn get(&self, cont_count: StatisticsCount) -> StatisticsCount {
+    pub fn get(&self, cont_count: Count) -> Count {
         self.data.get(&cont_count).copied().unwrap_or(0)
     }
-    pub fn max(&self) -> StatisticsCount {
+    pub fn max(&self) -> Count {
         self.data.iter().next_back().map_or(0, |v| { *v.0 })
     }
 }
 
-impl ops::Sub for ContinuousCountCounter {
+impl ops::Sub for ConsecutiveCountCounter {
     type Output = Self;
     fn sub(self, other: Self) -> Self {
         let mut r = Self::default();
@@ -1604,13 +1636,56 @@ impl ops::Sub for ContinuousCountCounter {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum StatisticsEntryType {
+    LineClear(LineClear),
+    Combo(Count),
+    MaxCombo,
+    Btb(Count),
+    MaxBtb,
+    PerfectClear,
+    Hold,
+    Lock,
+}
+
+impl fmt::Display for StatisticsEntryType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            StatisticsEntryType::LineClear(lc) => write!(f, "{}", lc),
+            StatisticsEntryType::Combo(n) => write!(f, "combo[{}]", n),
+            StatisticsEntryType::MaxCombo => write!(f, "max combo"),
+            StatisticsEntryType::Btb(n) => write!(f, "btb[{}]", n),
+            StatisticsEntryType::MaxBtb => write!(f, "max btb"),
+            StatisticsEntryType::PerfectClear => write!(f, "pc"),
+            StatisticsEntryType::Hold => write!(f, "hold"),
+            StatisticsEntryType::Lock => write!(f, "lock"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Statistics {
     pub line_clear: LineClearCounter,
-    pub combo: ContinuousCountCounter,
-    pub btb: ContinuousCountCounter,
-    pub perfect_clear: StatisticsCount,
-    pub hold: StatisticsCount,
+    pub combo: ConsecutiveCountCounter,
+    pub btb: ConsecutiveCountCounter,
+    pub perfect_clear: Count,
+    pub hold: Count,
+    pub lock: Count,
+}
+
+impl Statistics {
+    fn get(&self, t: StatisticsEntryType) -> Count {
+        match t {
+            StatisticsEntryType::LineClear(lc) => self.line_clear.get(&lc),
+            StatisticsEntryType::Combo(n) => self.combo.get(n),
+            StatisticsEntryType::MaxCombo => self.combo.max(),
+            StatisticsEntryType::Btb(n) => self.btb.get(n),
+            StatisticsEntryType::MaxBtb => self.btb.max(),
+            StatisticsEntryType::PerfectClear => self.perfect_clear,
+            StatisticsEntryType::Hold => self.hold,
+            StatisticsEntryType::Lock => self.lock,
+        }
+    }
 }
 
 impl ops::Sub for Statistics {
@@ -1622,6 +1697,7 @@ impl ops::Sub for Statistics {
             btb: self.btb - other.btb,
             perfect_clear: self.perfect_clear - other.perfect_clear,
             hold: self.hold - other.hold,
+            lock: self.lock - other.lock,
         }
     }
 }
@@ -1685,8 +1761,8 @@ pub struct GameState {
     falling_piece: Option<FallingPiece>,
     hold_piece: Option<Piece>,
     can_hold: bool,
-    num_combos: Option<StatisticsCount>,
-    num_btbs: Option<StatisticsCount>,
+    num_combos: Option<Count>,
+    num_btbs: Option<Count>,
     game_over_reason: LossConditions,
 }
 
@@ -1836,6 +1912,7 @@ impl<PG: PieceGenerator> Game<PG> {
         s.falling_piece = None;
         debug_assert!(line_clear.is_some());
         let line_clear = line_clear.unwrap();
+        self.stats.lock += 1;
         self.stats.line_clear.add(&line_clear, 1);
         if line_clear.num_lines > 0 {
             s.num_combos = Some(s.num_combos.map_or(0, |n| { n + 1 }));
@@ -1885,24 +1962,67 @@ impl<PG: PieceGenerator> fmt::Display for Game<PG> {
         write!(f, "[{}]", s.hold_piece.map_or(
             Cell::Empty, |p| { Cell::Block(Block::Piece(p)) }).char(),
         )?;
-        write!(f, "{}", " ".repeat(w - num_next - 3));
+        write!(f, "{}", " ".repeat(w - num_next - 3))?;
         write!(f, "({})", s.falling_piece.as_ref().map_or(
             Cell::Empty, |fp| { Cell::Block(Block::Piece(fp.piece)) }).char(),
         )?;
         writeln!(f, "{}", s.next_pieces)?;
         writeln!(f, "--+{}+", "-".repeat(w))?;
-        for y in (0..h).rev() {
+        for i in 0..h {
+            let y = h - 1 - i;
             write!(f, "{:02}|", y)?;
             for x in 0..w {
-                write!(f, "{}", s.playfield.grid.get_cell((x as UPosX, y as UPosY).into()).char())?;
+                let pos = pos!(x as PosX, y as PosX);
+                let mut cell = if let Some(fp) = s.falling_piece.as_ref() {
+                    let grid = fp.grid();
+                    let grid_pos = pos - fp.placement.pos;
+                    if grid.is_valid_pos(grid_pos) {
+                        grid.get_cell(grid_pos.into())
+                    } else {
+                        Cell::Empty
+                    }
+                } else {
+                    Cell::Empty
+                };
+                if cell == Cell::Empty {
+                    cell = s.playfield.grid.get_cell(pos.into());
+                }
+                write!(f, "{}", cell.char())?;
             }
             write!(f, "|")?;
+            match i {
+                0 | 1 | 2 | 3 => {
+                    let t = StatisticsEntryType::LineClear(LineClear::new(i as u8 + 1, None));
+                    write!(f, "  {:6}  {}", format!("{}", t).to_ascii_uppercase(), self.stats.get(t))?;
+                }
+                4 | 5 | 6 => {
+                    let t = StatisticsEntryType::LineClear(LineClear::new(7 - i as u8, Some(TSpin::Standard)));
+                    write!(f, "  {:6}  {}", format!("{}", t).to_ascii_uppercase(), self.stats.get(t))?;
+                }
+                7 | 8 => {
+                    let t = StatisticsEntryType::LineClear(LineClear::new(9 - i as u8, Some(TSpin::Mini)));
+                    write!(f, "  {:6}  {}", format!("{}", t).to_ascii_uppercase(), self.stats.get(t))?;
+                }
+                9 => {
+                    write!(f, "  {:6}  {}/{}", "COMBO", s.num_combos.unwrap_or(0), self.stats.get(StatisticsEntryType::MaxCombo))?;
+                }
+                10 => {
+                    write!(f, "  {:6}  {}/{}", "BTB", s.num_combos.unwrap_or(0), self.stats.get(StatisticsEntryType::MaxBtb))?;
+                }
+                11 => {
+                    write!(f, "  {:6}  {}", "HOLD", self.stats.get(StatisticsEntryType::Hold))?;
+                }
+                12 => {
+                    write!(f, "  {:6}  {}", "LOCK", self.stats.get(StatisticsEntryType::Lock))?;
+                }
+                _ => {}
+            }
             writeln!(f)?;
         }
         writeln!(f, "--+{}+", "-".repeat(w))?;
         write!(f, "##|")?;
         for x in 0..w {
-            write!(f, "{}", x % 10);
+            write!(f, "{}", x % 10)?;
         }
         write!(f, "|")?;
         Ok(())
@@ -2045,6 +2165,30 @@ mod tests {
         assert_ok!(game.firm_drop());
         assert_ok!(game.rotate(-1));
         assert_ok!(game.lock());
-        println!("{}", game);
+
+        assert_eq!(r#"[O]  (T)IJLSZ
+--+----------+
+19|   TTT    |  SINGLE  0
+18|          |  DOUBLE  0
+17|          |  TRIPLE  0
+16|          |  TETRIS  0
+15|          |  TST     0
+14|          |  TSD     1
+13|          |  TSS     0
+12|          |  TSMD    0
+11|          |  TSMS    0
+10|          |  COMBO   0/0
+09|          |  BTB     0/0
+08|          |  HOLD    2
+07|          |  LOCK    7
+06|          |
+05|          |
+04|          |
+03|          |
+02|L         |
+01|L         |
+00|LL Z SS  J|
+--+----------+
+##|0123456789|"#, format!("{}", game));
     }
 }
