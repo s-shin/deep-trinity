@@ -76,7 +76,7 @@ macro_rules! size {
     ($x:expr, $y:expr) => { UPos($x, $y) }
 }
 
-// Pos -> UPos
+/// Pos -> UPos
 impl From<Pos> for UPos {
     fn from(pos: Pos) -> Self {
         debug_assert!(pos.0 >= 0);
@@ -85,7 +85,7 @@ impl From<Pos> for UPos {
     }
 }
 
-// UPos -> Pos
+/// UPos -> Pos
 impl From<UPos> for Pos {
     fn from(pos: UPos) -> Self {
         debug_assert!(pos.0 <= PosX::max_value() as UPosX);
@@ -94,13 +94,13 @@ impl From<UPos> for Pos {
     }
 }
 
-// UPos + Pos -> UPos
+/// UPos + Pos -> UPos
 impl ops::Add<Pos> for UPos {
     type Output = Self;
     fn add(self, other: Pos) -> Self { Self::from(Pos::from(self) + other) }
 }
 
-// Pos + UPos -> Pos
+/// Pos + UPos -> Pos
 impl ops::Add<UPos> for Pos {
     type Output = Self;
     fn add(self, other: UPos) -> Self { self + Self::from(other) }
@@ -283,7 +283,7 @@ trait Grid: Clone + fmt::Display {
         }
         n
     }
-    // `false` will be returned if any non-empty cells are disposed.
+    /// `false` will be returned if any non-empty cells are disposed.
     fn insert_cell_to_rows(&mut self, y: UPosY, cell: Cell, n: SizeY, force: bool) -> bool {
         debug_assert!(self.height() >= y + n);
         let mut are_cells_disposed = false;
@@ -629,11 +629,11 @@ impl fmt::Display for HybridGrid {
 }
 
 impl PartialEq for HybridGrid {
-    fn eq(&self, other: &Self) -> bool { self.bit_grid == other.bit_grid }
+    fn eq(&self, other: &Self) -> bool { self.basic_grid == other.basic_grid }
 }
 
 impl Hash for HybridGrid {
-    fn hash<H: Hasher>(&self, state: &mut H) { self.bit_grid.hash(state); }
+    fn hash<H: Hasher>(&self, state: &mut H) { self.basic_grid.hash(state); }
 }
 
 //---
@@ -883,10 +883,10 @@ impl Default for LossConditions {
 
 //---
 
-// 0: Empty
-// 1: Any
-// 2-8: S, Z, L, J, I, T, O
-// 9: Garbage
+/// 0: Empty
+/// 1: Any
+/// 2-8: S, Z, L, J, I, T, O
+/// 9: Garbage
 pub struct CellType(u8);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -1000,10 +1000,10 @@ fn srs_offset_data_others() -> Vec<Vec<(PosX, PosY)>> {
 }
 
 pub struct PieceSpec {
-    // The index of Vec is orientation.
+    /// The index of Vec is orientation.
     grids: Vec<HybridGrid>,
     initial_placement: Placement,
-    // The index of outer Vec is orientation.
+    /// The index of outer Vec is orientation.
     srs_offset_data: Vec<Vec<(PosX, PosY)>>,
 }
 
@@ -1787,7 +1787,7 @@ impl Default for GameState {
 
 //---
 
-// The standard implementation of game management.
+/// The standard implementation of game management.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Game<PG: PieceGenerator> {
     pub state: GameState,
@@ -1809,8 +1809,8 @@ impl<PG: PieceGenerator> Game<PG> {
             loss_conds: Default::default(),
         }
     }
-    // This method should be called right after `new()`.
-    // `true` will be returned when there are no next pieces.
+    /// This method should be called right after `new()`.
+    /// `true` will be returned when there are no next pieces.
     pub fn setup_falling_piece(&mut self, next: Option<Piece>) -> Result<(), &'static str> {
         let s = &mut self.state;
 
@@ -1838,7 +1838,7 @@ impl<PG: PieceGenerator> Game<PG> {
         s.can_hold = true;
         Ok(())
     }
-    // `Err` will be returned when an invalid move was specified.
+    /// `Err` will be returned when an invalid move was specified.
     pub fn do_move(&mut self, mv: Move) -> Result<(), &'static str> {
         if self.state.falling_piece.is_none() {
             return Err("no falling piece");
@@ -1881,9 +1881,9 @@ impl<PG: PieceGenerator> Game<PG> {
     pub fn rotate(&mut self, n: i8) -> Result<(), &'static str> {
         self.do_move(Move::Rotate(n))
     }
-    // `Ok(true)` will be returned if the process is totally succeeded.
-    // If `Ok(false)` was returned, you should supply next pieces then call `setup_next_piece()`.
-    // `Err` will be returned when the process fails.
+    /// `Ok(true)` will be returned if the process is totally succeeded.
+    /// If `Ok(false)` was returned, you should supply next pieces then call `setup_next_piece()`.
+    /// `Err` will be returned when the process fails.
     pub fn lock(&mut self) -> Result<bool, &'static str> {
         let s = &mut self.state;
         if s.falling_piece.is_none() {
@@ -1932,9 +1932,9 @@ impl<PG: PieceGenerator> Game<PG> {
         }
         Ok(self.setup_falling_piece(None).is_ok())
     }
-    // `Ok(true)` will be returned if the process is totally succeeded.
-    // If `Ok(false)` was returned, you should supply next pieces then call `setup_next_piece()`.
-    // `Err` will be returned when the process fails.
+    /// `Ok(true)` will be returned if the process is totally succeeded.
+    /// If `Ok(false)` was returned, you should supply next pieces then call `setup_next_piece()`.
+    /// `Err` will be returned when the process fails.
     pub fn hold(&mut self) -> Result<bool, &'static str> {
         let s = &mut self.state;
         if s.falling_piece.is_none() {
