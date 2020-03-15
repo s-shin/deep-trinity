@@ -16,10 +16,11 @@ pub type PosX = i8;
 pub type PosY = i8;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Pos(PosX, PosY);
+pub struct Pos(pub PosX, pub PosY);
 
+#[macro_export]
 macro_rules! pos {
-    ($x:expr, $y:expr) => { Pos($x, $y) }
+    ($x:expr, $y:expr) => { $crate::Pos($x, $y) }
 }
 
 impl fmt::Display for Pos {
@@ -44,10 +45,11 @@ pub type UPosX = u8;
 pub type UPosY = u8;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct UPos(SizeX, SizeY);
+pub struct UPos(pub SizeX, pub SizeY);
 
+#[macro_export]
 macro_rules! upos {
-    ($x:expr, $y:expr) => { UPos($x, $y) }
+    ($x:expr, $y:expr) => { $crate::UPos($x, $y) }
 }
 
 impl fmt::Display for UPos {
@@ -72,8 +74,9 @@ pub type SizeX = UPosX;
 pub type SizeY = UPosY;
 pub type Size = UPos;
 
+#[macro_export]
 macro_rules! size {
-    ($x:expr, $y:expr) => { UPos($x, $y) }
+    ($x:expr, $y:expr) => { $crate::UPos($x, $y) }
 }
 
 /// Pos -> UPos
@@ -108,7 +111,7 @@ impl ops::Add<UPos> for Pos {
 
 //---
 
-trait Grid: Clone + fmt::Display {
+pub trait Grid: Clone + fmt::Display {
     fn size(&self) -> Size;
     fn width(&self) -> SizeX { self.size().0 }
     fn height(&self) -> SizeY { self.size().1 }
@@ -670,8 +673,8 @@ impl Orientation {
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Placement {
-    orientation: Orientation,
-    pos: Pos,
+    pub orientation: Orientation,
+    pub pos: Pos,
 }
 
 impl Placement {
@@ -887,7 +890,7 @@ impl Default for LossConditions {
 /// 1: Any
 /// 2-8: S, Z, L, J, I, T, O
 /// 9: Garbage
-pub struct CellType(u8);
+pub struct CellTypeId(pub u8);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Piece {
@@ -902,8 +905,15 @@ pub enum Piece {
 
 const PIECES: [Piece; 7] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
 
-impl Into<CellType> for Piece {
-    fn into(self) -> CellType { CellType(2 + (self as u8)) }
+impl From<usize> for Piece {
+    fn from(n: usize) -> Self {
+        assert!(n < 7);
+        PIECES[n]
+    }
+}
+
+impl Into<CellTypeId> for Piece {
+    fn into(self) -> CellTypeId { CellTypeId(2 + (self as u8)) }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -913,12 +923,12 @@ pub enum Block {
     Garbage,
 }
 
-impl Into<CellType> for Block {
-    fn into(self) -> CellType {
+impl Into<CellTypeId> for Block {
+    fn into(self) -> CellTypeId {
         match self {
-            Block::Any => CellType(1),
+            Block::Any => CellTypeId(1),
             Block::Piece(p) => p.into(),
-            Block::Garbage => CellType(9),
+            Block::Garbage => CellTypeId(9),
         }
     }
 }
@@ -927,15 +937,6 @@ impl Into<CellType> for Block {
 pub enum Cell {
     Empty,
     Block(Block),
-}
-
-impl Into<CellType> for Cell {
-    fn into(self) -> CellType {
-        match self {
-            Cell::Empty => CellType(0),
-            Cell::Block(b) => b.into(),
-        }
-    }
 }
 
 pub const CELL_CHARS: &'static str = " @SZLJITO#";
@@ -948,8 +949,17 @@ impl Cell {
         }
     }
     pub fn char(self) -> char {
-        let id: CellType = self.into();
+        let id: CellTypeId = self.into();
         CELL_CHARS.chars().nth(id.0 as usize).unwrap()
+    }
+}
+
+impl From<Cell> for CellTypeId {
+    fn from(c: Cell) -> Self {
+        match c {
+            Cell::Empty => Self(0),
+            Cell::Block(b) => b.into(),
+        }
     }
 }
 
@@ -1078,7 +1088,7 @@ impl PieceSpec {
             Piece::I,
             (5, 5),
             vec![(1, 2), (2, 2), (3, 2), (4, 2)],
-            (3, 17),
+            (2, 17),
             srs_offset_data_i(),
         )
     }
@@ -1756,14 +1766,14 @@ impl PieceGenerator for StaticPieceGenerator {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GameState {
-    playfield: Playfield,
-    next_pieces: NextPieces,
-    falling_piece: Option<FallingPiece>,
-    hold_piece: Option<Piece>,
-    can_hold: bool,
-    num_combos: Option<Count>,
-    num_btbs: Option<Count>,
-    game_over_reason: LossConditions,
+    pub playfield: Playfield,
+    pub next_pieces: NextPieces,
+    pub falling_piece: Option<FallingPiece>,
+    pub hold_piece: Option<Piece>,
+    pub can_hold: bool,
+    pub num_combos: Option<Count>,
+    pub num_btbs: Option<Count>,
+    pub game_over_reason: LossConditions,
 }
 
 impl GameState {
@@ -1809,6 +1819,24 @@ impl<PG: PieceGenerator> Game<PG> {
             loss_conds: Default::default(),
         }
     }
+    pub fn get_cell(&self, pos: UPos) -> Cell {
+        let s = &self.state;
+        let mut cell = if let Some(fp) = s.falling_piece.as_ref() {
+            let grid = fp.grid();
+            let grid_pos = Pos::from(pos) - fp.placement.pos;
+            if grid.is_valid_pos(grid_pos) {
+                grid.get_cell(grid_pos.into())
+            } else {
+                Cell::Empty
+            }
+        } else {
+            Cell::Empty
+        };
+        if cell == Cell::Empty {
+            cell = s.playfield.grid.get_cell(pos.into());
+        }
+        cell
+    }
     /// This method should be called right after `new()`.
     /// `true` will be returned when there are no next pieces.
     pub fn setup_falling_piece(&mut self, next: Option<Piece>) -> Result<(), &'static str> {
@@ -1850,12 +1878,22 @@ impl<PG: PieceGenerator> Game<PG> {
             Err("invalid move specified")
         }
     }
+    pub fn drop(&mut self, n: i8) -> Result<(), &'static str> {
+        self.drop_internal(n, false)
+    }
     pub fn firm_drop(&mut self) -> Result<(), &'static str> {
+        self.drop_internal(0, true)
+    }
+    fn drop_internal(&mut self, n: i8, is_firm: bool) -> Result<(), &'static str> {
         let s = &mut self.state;
         if s.falling_piece.is_none() {
             return Err("no falling piece");
         }
-        let n = s.playfield.num_droppable_rows(s.falling_piece.as_ref().unwrap()) as i8;
+        let n = if is_firm {
+            s.playfield.num_droppable_rows(s.falling_piece.as_ref().unwrap()) as i8
+        } else {
+            n
+        };
         if n == 0 {
             return Ok(());
         }
@@ -1972,21 +2010,7 @@ impl<PG: PieceGenerator> fmt::Display for Game<PG> {
             let y = h - 1 - i;
             write!(f, "{:02}|", y)?;
             for x in 0..w {
-                let pos = pos!(x as PosX, y as PosX);
-                let mut cell = if let Some(fp) = s.falling_piece.as_ref() {
-                    let grid = fp.grid();
-                    let grid_pos = pos - fp.placement.pos;
-                    if grid.is_valid_pos(grid_pos) {
-                        grid.get_cell(grid_pos.into())
-                    } else {
-                        Cell::Empty
-                    }
-                } else {
-                    Cell::Empty
-                };
-                if cell == Cell::Empty {
-                    cell = s.playfield.grid.get_cell(pos.into());
-                }
+                let cell = self.get_cell(upos!(x as UPosX, y as UPosY));
                 write!(f, "{}", cell.char())?;
             }
             write!(f, "|")?;
@@ -2130,7 +2154,6 @@ mod tests {
         assert_ok!(game.hold());
         // I
         assert_eq!(Piece::I, game.state.falling_piece.as_ref().unwrap().piece);
-        assert_ok!(game.shift(-1, false));
         assert_ok!(game.firm_drop());
         assert_ok!(game.lock());
         // J
