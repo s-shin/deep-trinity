@@ -61,6 +61,12 @@ impl Game {
             game: core::Game::new(Default::default()),
         }
     }
+    #[wasm_bindgen]
+    pub fn width(&self) -> core::SizeX { self.game.state.playfield.width() }
+    #[wasm_bindgen]
+    pub fn height(&self) -> core::SizeY { self.game.state.playfield.height() }
+    #[wasm_bindgen]
+    pub fn visible_height(&self) -> core::SizeY { self.game.state.playfield.visible_height }
     #[wasm_bindgen(js_name = getCell)]
     pub fn get_cell(&self, x: u8, y: u8) -> Cell {
         self.game.get_cell((x, y).into()).into()

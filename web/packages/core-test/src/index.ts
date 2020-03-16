@@ -1,7 +1,6 @@
 import * as core from "@deep-trinity/core-wasm";
 
-const elApp = document.createElement("main");
-document.body.appendChild(elApp);
+const elApp = document.querySelector("main")!;
 
 const elPre = document.createElement("pre");
 elApp.appendChild(elPre);

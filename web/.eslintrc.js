@@ -11,12 +11,14 @@ module.exports = {
   plugins: ["@typescript-eslint"],
   extends: [
     "eslint:recommended",
+    "plugin:react/recommended",
     "plugin:@typescript-eslint/eslint-recommended",
     "plugin:@typescript-eslint/recommended",
     "prettier",
     "prettier/@typescript-eslint",
   ],
   rules: {
+    "react/prop-types": "off",
     "@typescript-eslint/explicit-function-return-type": ["error", { allowExpressions: true, allowTypedFunctionExpressions: true, allowHigherOrderFunctions: true }],
   },
 };
