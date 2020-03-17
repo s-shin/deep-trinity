@@ -1551,8 +1551,8 @@ pub const DEFAULT_NUM_VISIBLE_NEXT_PIECES: usize = 5;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NextPieces {
-    pieces: VecDeque<Piece>,
-    visible_num: usize,
+    pub pieces: VecDeque<Piece>,
+    pub visible_num: usize,
 }
 
 impl NextPieces {
@@ -1849,7 +1849,7 @@ impl<PG: PieceGenerator> Game<PG> {
         let p = if let Some(next) = next {
             next
         } else {
-            if s.next_pieces.is_empty() {
+            if s.next_pieces.should_supply() {
                 s.next_pieces.supply(&self.piece_gen.generate());
             }
             if s.next_pieces.is_empty() {

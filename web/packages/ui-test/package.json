@@ -29,7 +29,7 @@
     }
   },
   "dependencies": {
-    "@deep-trinity/core-wasm":  "^0.1.0",
+    "@deep-trinity/core-wasm": "^0.1.0",
     "@deep-trinity/ui": "^0.1.0",
     "@emotion/core": "^10.0.28",
     "@emotion/styled": "^10.0.27",

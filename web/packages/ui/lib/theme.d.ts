@@ -1,9 +1,14 @@
-export declare const DEFAULT_THEME: {
+export declare type Theme = {
+    gridGap: string;
+    cellSize: string;
+    cellBorderStyle: string;
+    nonEmptyCellBorderStyle?: string;
+    pieceCellBorderStyle?: string;
     cellColors: {
-        [x: number]: string;
+        [cell: number]: string;
     };
 };
-export declare type Theme = typeof DEFAULT_THEME;
+export declare const DEFAULT_THEME: Theme;
 export declare type StyledProps = {
     theme: Theme;
 };

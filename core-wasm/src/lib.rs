@@ -53,7 +53,7 @@ pub struct Game {
     game: core::Game<core::StaticPieceGenerator>,
 }
 
-#[wasm_bindgen()]
+#[wasm_bindgen]
 impl Game {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
@@ -61,11 +61,9 @@ impl Game {
             game: core::Game::new(Default::default()),
         }
     }
-    #[wasm_bindgen]
     pub fn width(&self) -> core::SizeX { self.game.state.playfield.width() }
-    #[wasm_bindgen]
     pub fn height(&self) -> core::SizeY { self.game.state.playfield.height() }
-    #[wasm_bindgen]
+    #[wasm_bindgen(js_name = visibleHeight)]
     pub fn visible_height(&self) -> core::SizeY { self.game.state.playfield.visible_height }
     #[wasm_bindgen(js_name = getCell)]
     pub fn get_cell(&self, x: u8, y: u8) -> Cell {
@@ -78,6 +76,15 @@ impl Game {
             ps.push((*p as usize).into());
         }
         self.game.piece_gen.append(&ps);
+    }
+    #[wasm_bindgen(js_name = getNextPieces)]
+    pub fn get_next_pieces(&self) -> Box<[u8]> {
+        let np = &self.game.state.next_pieces;
+        np.iter()
+            .take(np.visible_num)
+            .map(|p| { *p as u8 })
+            .collect::<Vec<u8>>()
+            .into_boxed_slice()
     }
     #[wasm_bindgen(js_name = setupFallingPiece)]
     pub fn setup_falling_piece(&mut self) -> Result<JsValue, JsValue> {
@@ -124,7 +131,7 @@ impl Game {
         }
     }
     #[wasm_bindgen(js_name = toString)]
-    pub fn to_string(&mut self) -> String {
+    pub fn to_string(&self) -> String {
         self.game.to_string()
     }
 }
