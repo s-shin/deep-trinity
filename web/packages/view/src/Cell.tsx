@@ -1,8 +1,7 @@
 import React from "react";
 import styled from "@emotion/styled";
-import { useTheme } from "emotion-theming";
 import * as core from "@deep-trinity/core-wasm";
-import { Theme } from "./theme";
+import { useTheme } from "./theme";
 
 type CellElementProps = {
   color: string,
@@ -23,7 +22,7 @@ export type CellProps = {
 };
 
 export const Cell: React.FC<CellProps> = props => {
-  const theme = useTheme<Theme>();
+  const theme = useTheme();
   return (
     <CellElement
       color={theme.cellColors[props.cell]}

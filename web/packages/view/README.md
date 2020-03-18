@@ -1,1 +1,1 @@
-# @deep-trinity/ui
+# @deep-trinity/view

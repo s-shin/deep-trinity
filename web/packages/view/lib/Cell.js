@@ -12,8 +12,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const react_1 = __importDefault(require("react"));
 const styled_1 = __importDefault(require("@emotion/styled"));
-const emotion_theming_1 = require("emotion-theming");
 const core = __importStar(require("@deep-trinity/core-wasm"));
+const theme_1 = require("./theme");
 const CellElement = styled_1.default.div `
   width: 100%;
   height: 100%;
@@ -22,7 +22,7 @@ const CellElement = styled_1.default.div `
   border: ${(props) => props.borderStyle};
 `;
 exports.Cell = props => {
-    const theme = emotion_theming_1.useTheme();
+    const theme = theme_1.useTheme();
     return (react_1.default.createElement(CellElement, { color: theme.cellColors[props.cell], borderStyle: props.borderStyle
             || props.cell != core.Cell.EMPTY && theme.nonEmptyCellBorderStyle
             || theme.cellBorderStyle }));
