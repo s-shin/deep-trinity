@@ -1650,9 +1650,9 @@ impl ops::Sub for ConsecutiveCountCounter {
 pub enum StatisticsEntryType {
     LineClear(LineClear),
     Combo(Count),
-    MaxCombo,
+    MaxCombos,
     Btb(Count),
-    MaxBtb,
+    MaxBtbs,
     PerfectClear,
     Hold,
     Lock,
@@ -1663,9 +1663,9 @@ impl fmt::Display for StatisticsEntryType {
         match self {
             StatisticsEntryType::LineClear(lc) => write!(f, "{}", lc),
             StatisticsEntryType::Combo(n) => write!(f, "combo[{}]", n),
-            StatisticsEntryType::MaxCombo => write!(f, "max combo"),
+            StatisticsEntryType::MaxCombos => write!(f, "max combos"),
             StatisticsEntryType::Btb(n) => write!(f, "btb[{}]", n),
-            StatisticsEntryType::MaxBtb => write!(f, "max btb"),
+            StatisticsEntryType::MaxBtbs => write!(f, "max btbs"),
             StatisticsEntryType::PerfectClear => write!(f, "pc"),
             StatisticsEntryType::Hold => write!(f, "hold"),
             StatisticsEntryType::Lock => write!(f, "lock"),
@@ -1684,13 +1684,13 @@ pub struct Statistics {
 }
 
 impl Statistics {
-    fn get(&self, t: StatisticsEntryType) -> Count {
+    pub fn get(&self, t: StatisticsEntryType) -> Count {
         match t {
             StatisticsEntryType::LineClear(lc) => self.line_clear.get(&lc),
             StatisticsEntryType::Combo(n) => self.combo.get(n),
-            StatisticsEntryType::MaxCombo => self.combo.max(),
+            StatisticsEntryType::MaxCombos => self.combo.max(),
             StatisticsEntryType::Btb(n) => self.btb.get(n),
-            StatisticsEntryType::MaxBtb => self.btb.max(),
+            StatisticsEntryType::MaxBtbs => self.btb.max(),
             StatisticsEntryType::PerfectClear => self.perfect_clear,
             StatisticsEntryType::Hold => self.hold,
             StatisticsEntryType::Lock => self.lock,
@@ -2028,10 +2028,10 @@ impl<PG: PieceGenerator> fmt::Display for Game<PG> {
                     write!(f, "  {:6}  {}", format!("{}", t).to_ascii_uppercase(), self.stats.get(t))?;
                 }
                 9 => {
-                    write!(f, "  {:6}  {}/{}", "COMBO", s.num_combos.unwrap_or(0), self.stats.get(StatisticsEntryType::MaxCombo))?;
+                    write!(f, "  {:6}  {}/{}", "COMBO", s.num_combos.unwrap_or(0), self.stats.get(StatisticsEntryType::MaxCombos))?;
                 }
                 10 => {
-                    write!(f, "  {:6}  {}/{}", "BTB", s.num_combos.unwrap_or(0), self.stats.get(StatisticsEntryType::MaxBtb))?;
+                    write!(f, "  {:6}  {}/{}", "BTB", s.num_combos.unwrap_or(0), self.stats.get(StatisticsEntryType::MaxBtbs))?;
                 }
                 11 => {
                     write!(f, "  {:6}  {}", "HOLD", self.stats.get(StatisticsEntryType::Hold))?;

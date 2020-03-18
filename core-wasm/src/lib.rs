@@ -25,6 +25,7 @@ pub enum Piece {
 
 #[wasm_bindgen]
 #[derive(Copy, Clone)]
+#[allow(non_camel_case_types)]
 pub enum Cell {
     EMPTY,
     ANY,
@@ -44,9 +45,25 @@ impl From<core::Cell> for Cell {
     fn from(c: core::Cell) -> Self { CELLS[core::CellTypeId::from(c).0 as usize] }
 }
 
-// impl From<Cell> for core::Cell {
-//     fn from(p: Piece) -> Self { (p as usize).into() }
-// }
+#[wasm_bindgen]
+#[derive(Copy, Clone)]
+#[allow(non_camel_case_types)]
+pub enum StatisticsEntryType {
+    SINGLE,
+    DOUBLE,
+    TRIPLE,
+    TETRIS,
+    TST,
+    TSD,
+    TSS,
+    TSMD,
+    TSMS,
+    MAX_COMBOS,
+    MAX_BTBS,
+    PERFECT_CLEAR,
+    HOLD,
+    LOCK,
+}
 
 #[wasm_bindgen]
 pub struct Game {
@@ -66,16 +83,10 @@ impl Game {
     #[wasm_bindgen(js_name = visibleHeight)]
     pub fn visible_height(&self) -> core::SizeY { self.game.state.playfield.visible_height }
     #[wasm_bindgen(js_name = getCell)]
-    pub fn get_cell(&self, x: u8, y: u8) -> Cell {
-        self.game.get_cell((x, y).into()).into()
-    }
-    #[wasm_bindgen(js_name = appendNextPiece)]
-    pub fn append_next_pieces(&mut self, pieces: &[u8]) {
-        let mut ps: Vec<core::Piece> = Vec::new();
-        for p in pieces.iter() {
-            ps.push((*p as usize).into());
-        }
-        self.game.piece_gen.append(&ps);
+    pub fn get_cell(&self, x: u8, y: u8) -> Cell { self.game.get_cell((x, y).into()).into() }
+    #[wasm_bindgen(js_name = getHoldPiece)]
+    pub fn get_hold_piece(&self) -> Option<u8> {
+        self.game.state.hold_piece.map(|p| { p as u8 })
     }
     #[wasm_bindgen(js_name = getNextPieces)]
     pub fn get_next_pieces(&self) -> Box<[u8]> {
@@ -85,6 +96,37 @@ impl Game {
             .map(|p| { *p as u8 })
             .collect::<Vec<u8>>()
             .into_boxed_slice()
+    }
+    #[wasm_bindgen(js_name = getCurrentNumCombos)]
+    pub fn get_current_num_combos(&self) -> Option<core::Count> { self.game.state.num_combos }
+    #[wasm_bindgen(js_name = getCurrentNumBTBs)]
+    pub fn get_current_num_btbs(&self) -> Option<core::Count> { self.game.state.num_btbs }
+    #[wasm_bindgen(js_name = getStatsCount)]
+    pub fn get_stats_count(&self, t: StatisticsEntryType) -> core::Count {
+        self.game.stats.get(match t {
+            StatisticsEntryType::SINGLE => core::StatisticsEntryType::LineClear(core::LineClear::new(1, None)),
+            StatisticsEntryType::DOUBLE => core::StatisticsEntryType::LineClear(core::LineClear::new(2, None)),
+            StatisticsEntryType::TRIPLE => core::StatisticsEntryType::LineClear(core::LineClear::new(3, None)),
+            StatisticsEntryType::TETRIS => core::StatisticsEntryType::LineClear(core::LineClear::new(4, None)),
+            StatisticsEntryType::TST => core::StatisticsEntryType::LineClear(core::LineClear::new(3, Some(core::TSpin::Standard))),
+            StatisticsEntryType::TSD => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Standard))),
+            StatisticsEntryType::TSS => core::StatisticsEntryType::LineClear(core::LineClear::new(1, Some(core::TSpin::Standard))),
+            StatisticsEntryType::TSMD => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
+            StatisticsEntryType::TSMS => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
+            StatisticsEntryType::MAX_COMBOS => core::StatisticsEntryType::MaxCombos,
+            StatisticsEntryType::MAX_BTBS => core::StatisticsEntryType::MaxBtbs,
+            StatisticsEntryType::PERFECT_CLEAR => core::StatisticsEntryType::PerfectClear,
+            StatisticsEntryType::HOLD => core::StatisticsEntryType::Hold,
+            StatisticsEntryType::LOCK => core::StatisticsEntryType::Lock,
+        })
+    }
+    #[wasm_bindgen(js_name = appendNextPieces)]
+    pub fn append_next_pieces(&mut self, pieces: &[u8]) {
+        let mut ps: Vec<core::Piece> = Vec::new();
+        for p in pieces.iter() {
+            ps.push((*p as usize).into());
+        }
+        self.game.piece_gen.append(&ps);
     }
     #[wasm_bindgen(js_name = setupFallingPiece)]
     pub fn setup_falling_piece(&mut self) -> Result<JsValue, JsValue> {

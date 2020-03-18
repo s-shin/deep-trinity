@@ -13,7 +13,7 @@ async function run(): Promise<void> {
   core.setPanicHook();
 
   const game = new core.Game();
-  game.appendNextPiece(
+  game.appendNextPieces(
     new Uint8Array([
       core.Piece.O,
       core.Piece.T,
