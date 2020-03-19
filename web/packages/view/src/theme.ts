@@ -1,4 +1,4 @@
-import * as core from "@deep-trinity/core-wasm";
+import * as core from "@deep-trinity/web-core";
 import * as theming from "emotion-theming";
 
 export type Theme = {

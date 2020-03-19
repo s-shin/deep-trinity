@@ -1,4 +1,4 @@
-import * as core from "@deep-trinity/core-wasm";
+import * as core from "@deep-trinity/web-core";
 
 const elApp = document.querySelector("main")!;
 

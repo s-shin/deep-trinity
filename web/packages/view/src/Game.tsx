@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "@emotion/styled";
-import * as core from "@deep-trinity/core-wasm";
+import * as core from "@deep-trinity/web-core";
 import NextPieces from "./NextPieces";
 import Playfield from "./Playfield";
 import PieceContainer from "./PieceContainer";

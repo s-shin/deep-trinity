@@ -7,7 +7,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const core = __importStar(require("@deep-trinity/core-wasm"));
+const core = __importStar(require("@deep-trinity/web-core"));
 const theming = __importStar(require("emotion-theming"));
 exports.DEFAULT_THEME = {
     gridGap: "2px",

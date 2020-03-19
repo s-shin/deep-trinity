@@ -3,7 +3,7 @@ import ReactDOM from "react-dom";
 import { Global, css } from "@emotion/core";
 import styled from "@emotion/styled";
 import { ThemeProvider } from "emotion-theming";
-import * as core from "@deep-trinity/core-wasm";
+import * as core from "@deep-trinity/web-core";
 import * as view from "@deep-trinity/view";
 
 const game = new core.Game();

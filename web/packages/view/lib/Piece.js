@@ -11,7 +11,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const react_1 = __importDefault(require("react"));
-const core = __importStar(require("@deep-trinity/core-wasm"));
+const core = __importStar(require("@deep-trinity/web-core"));
 const theme_1 = require("./theme");
 const Grid_1 = __importDefault(require("./Grid"));
 const pieceSpecs = {

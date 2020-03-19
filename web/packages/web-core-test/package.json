@@ -1,5 +1,5 @@
 {
-  "name": "@deep-trinity/core-test",
+  "name": "@deep-trinity/web-core-test",
   "version": "0.1.0",
   "license": "MIT",
   "files": [
@@ -29,6 +29,6 @@
     }
   },
   "dependencies": {
-    "@deep-trinity/core-wasm": "^0.1.0"
+    "@deep-trinity/web-core": "^0.1.0"
   }
 }
