@@ -7,7 +7,7 @@ import * as core from "@deep-trinity/core-wasm";
 import * as view from "@deep-trinity/view";
 
 const game = new core.Game();
-game.appendNextPieces(new Uint8Array([
+game.supplyNextPieces(new Uint8Array([
   core.Piece.L, core.Piece.J, core.Piece.I, core.Piece.O, core.Piece.T, core.Piece.S, core.Piece.Z,
   core.Piece.L, core.Piece.J, core.Piece.I, core.Piece.O, core.Piece.T, core.Piece.S, core.Piece.Z,
 ]));

@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "core",
-  "core-wasm"
+  "core-wasm",
+  "bot",
 ]
 

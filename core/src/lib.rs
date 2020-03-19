@@ -760,6 +760,7 @@ impl MoveRecord {
     pub fn get(&self, i: usize) -> Option<&MoveRecordItem> { self.items.get(i) }
     pub fn get_mut(&mut self, i: usize) -> Option<&mut MoveRecordItem> { self.items.get_mut(i) }
     pub fn last(&self) -> Option<&MoveRecordItem> { self.items.last() }
+    pub fn iter(&self) -> std::slice::Iter<MoveRecordItem> { self.items.iter() }
     pub fn append(&mut self, other: &MoveRecord) {
         if let Some(item) = self.items.last() {
             debug_assert_eq!(item.placement, other.initial_placement);
@@ -775,6 +776,13 @@ impl MoveRecord {
             }
         }
         self.items.push(item);
+    }
+    pub fn normalize(&self) -> Self {
+        let mut r = Self::new(self.initial_placement);
+        for item in self.iter() {
+            r.merge_or_push(*item);
+        }
+        r
     }
 }
 
@@ -1459,7 +1467,7 @@ impl MoveSearchResult {
         let mut placement = *dst;
         let mut items: Vec<MoveRecordItem> = Vec::new();
         while let Some(item) = self.found.get(&placement) {
-            items.push(*item);
+            items.push(MoveRecordItem::new(item.by, placement));
             placement = item.placement;
         }
         if items.is_empty() {
@@ -1525,7 +1533,8 @@ pub fn search_moves(conf: &MoveSearchConfiguration, director: &mut impl MoveSear
     MoveSearchResult { src: conf.src, found }
 }
 
-pub struct BruteForceMoveSearchDirector();
+#[derive(Clone, Debug, Default)]
+pub struct BruteForceMoveSearchDirector {}
 
 impl MoveSearchDirector for BruteForceMoveSearchDirector {
     fn next(&mut self, _conf: &MoveSearchConfiguration, _fp: &FallingPiece, _depth: usize, num_moved: usize) -> Option<Move> {
@@ -1585,6 +1594,20 @@ impl fmt::Display for NextPieces {
             write!(f, "{}", Cell::Block(Block::Piece(*p)).char())?;
         }
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RandomPieceGenerator<R: rand::Rng + ?Sized> {
+    rng: R,
+}
+
+impl<R: rand::Rng + Sized> RandomPieceGenerator<R> {
+    pub fn new(rng: R) -> Self { Self { rng } }
+    pub fn generate(&mut self) -> Vec<Piece> {
+        let mut ps = PIECES.clone();
+        ps.shuffle(&mut self.rng);
+        ps.to_vec()
     }
 }
 
@@ -1721,56 +1744,6 @@ impl ops::Sub for Statistics {
 
 //---
 
-pub trait PieceGenerator {
-    fn generate(&mut self) -> Vec<Piece>;
-}
-
-#[derive(Clone, Debug)]
-pub struct RandomPieceGenerator<R: rand::Rng + ?Sized = rand::rngs::StdRng> {
-    rng: R,
-}
-
-impl<R: rand::Rng + Sized> RandomPieceGenerator<R> {
-    pub fn new(rng: R) -> Self { Self { rng } }
-}
-
-impl<R: rand::Rng + Sized> PieceGenerator for RandomPieceGenerator<R> {
-    fn generate(&mut self) -> Vec<Piece> {
-        let mut ps = PIECES.clone();
-        ps.shuffle(&mut self.rng);
-        ps.to_vec()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct StaticPieceGenerator {
-    pieces: VecDeque<Piece>,
-    num_per_gen: usize,
-}
-
-impl StaticPieceGenerator {
-    pub fn len(&self) -> usize { self.pieces.len() }
-    pub fn append(&mut self, pieces: &[Piece]) { self.pieces.extend(pieces) }
-}
-
-impl Default for StaticPieceGenerator {
-    fn default() -> Self {
-        Self {
-            pieces: VecDeque::new(),
-            num_per_gen: 7,
-        }
-    }
-}
-
-impl PieceGenerator for StaticPieceGenerator {
-    fn generate(&mut self) -> Vec<Piece> {
-        let n = std::cmp::min(self.len(), self.num_per_gen);
-        self.pieces.drain(0..n).collect()
-    }
-}
-
-//---
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GameState {
     pub playfield: Playfield,
@@ -1804,22 +1777,19 @@ impl Default for GameState {
 
 //---
 
-/// The standard implementation of game management.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Game<PG: PieceGenerator> {
+pub struct Game {
     pub rules: GameRules,
     pub state: GameState,
     pub stats: Statistics,
-    pub piece_gen: PG,
 }
 
-impl<PG: PieceGenerator> Game<PG> {
-    pub fn new(piece_gen: PG) -> Self {
+impl Game {
+    pub fn new(rules: GameRules) -> Self {
         Self {
-            rules: Default::default(),
+            rules,
             state: Default::default(),
             stats: Default::default(),
-            piece_gen,
         }
     }
     pub fn get_cell(&self, pos: UPos) -> Cell {
@@ -1840,6 +1810,12 @@ impl<PG: PieceGenerator> Game<PG> {
         }
         cell
     }
+    pub fn should_supply_next_pieces(&self) -> bool {
+        self.state.next_pieces.should_supply()
+    }
+    pub fn supply_next_pieces(&mut self, pieces: &[Piece]) {
+        self.state.next_pieces.supply(pieces);
+    }
     /// This method should be called right after `new()`.
     /// `true` will be returned when there are no next pieces.
     pub fn setup_falling_piece(&mut self, next: Option<Piece>) -> Result<(), &'static str> {
@@ -1852,9 +1828,6 @@ impl<PG: PieceGenerator> Game<PG> {
         let p = if let Some(next) = next {
             next
         } else {
-            if s.next_pieces.should_supply() {
-                s.next_pieces.supply(&self.piece_gen.generate());
-            }
             if s.next_pieces.is_empty() {
                 return Err("no next pieces");
             }
@@ -1992,9 +1965,22 @@ impl<PG: PieceGenerator> Game<PG> {
         self.stats.hold += 1;
         Ok(r.is_ok())
     }
+    pub fn search_moves(&self, director: &mut impl MoveSearchDirector, debug: bool) -> Result<MoveSearchResult, &'static str> {
+        let s = &self.state;
+        if s.falling_piece.is_none() {
+            return Err("no falling piece");
+        }
+        let fp = s.falling_piece.as_ref().unwrap();
+        let pf = &s.playfield;
+        let r = search_moves(
+            &MoveSearchConfiguration::new(pf, fp.piece, fp.placement, self.rules.rotation_mode, debug),
+            director,
+        );
+        Ok(r)
+    }
 }
 
-impl<PG: PieceGenerator> fmt::Display for Game<PG> {
+impl fmt::Display for Game {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = &self.state;
         let w = self.state.playfield.width() as usize;
@@ -2058,6 +2044,42 @@ impl<PG: PieceGenerator> fmt::Display for Game<PG> {
 
 //---
 
+pub struct MovePlayer {
+    record: MoveRecord,
+    i: usize,
+}
+
+impl MovePlayer {
+    pub fn new(record: MoveRecord) -> Self {
+        Self { record, i: 0 }
+    }
+    pub fn is_end(&self) -> bool { self.i >= self.record.len() }
+    pub fn step(&mut self, game: &mut Game) -> Result<bool, &'static str> {
+        if self.is_end() {
+            return Err("end of record");
+        }
+        if game.state.falling_piece.is_none() {
+            return Err("no falling piece");
+        }
+        let fp = game.state.falling_piece.as_ref().unwrap();
+        let placement = if self.i == 0 {
+            self.record.initial_placement
+        } else {
+            self.record.items[self.i - 1].placement
+        };
+        if fp.placement != placement {
+            return Err("invalid placement");
+        }
+        let item = self.record.items[self.i];
+        game.do_move(item.by)?;
+        debug_assert_eq!(item.placement, game.state.falling_piece.as_ref().unwrap().placement);
+        self.i += 1;
+        Ok(!self.is_end())
+    }
+}
+
+//---
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2094,6 +2116,33 @@ mod tests {
     }
 
     #[test]
+    fn test_falling_piece() {
+        let pf = Playfield::default();
+        let mut fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        assert!(fp.apply_move(Move::Shift(1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Shift(1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Drop(1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Drop(1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Rotate(-1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Rotate(-1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Shift(-1), &pf, RotationMode::Srs));
+        assert!(fp.apply_move(Move::Shift(-1), &pf, RotationMode::Srs));
+        let rec = fp.move_record.normalize();
+        assert_eq!(Placement::new(ORIENTATION_0, pos!(3, 18)), rec.initial_placement);
+        assert_eq!(vec![
+            MoveRecordItem::new(Move::Shift(2), Placement::new(ORIENTATION_0, pos!(5, 18))),
+            MoveRecordItem::new(Move::Rotate(1), Placement::new(ORIENTATION_1, pos!(5, 19))),
+            MoveRecordItem::new(Move::Rotate(1), Placement::new(ORIENTATION_2, pos!(6, 19))),
+            MoveRecordItem::new(Move::Drop(2), Placement::new(ORIENTATION_2, pos!(6, 17))),
+            MoveRecordItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_1, pos!(5, 17))),
+            MoveRecordItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_0, pos!(5, 16))),
+            MoveRecordItem::new(Move::Shift(-2), Placement::new(ORIENTATION_0, pos!(3, 16))),
+        ], rec.items);
+    }
+
+    #[test]
     fn test_search_moves() {
         let mut pf = Playfield::default();
         pf.set_rows((0, 0).into(), &[
@@ -2124,7 +2173,7 @@ mod tests {
         assert!(lockable.iter().any(|p| { *p == placement_to_be_found }));
         let search_result = search_moves(
             &MoveSearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs, false),
-            &mut BruteForceMoveSearchDirector(),
+            &mut BruteForceMoveSearchDirector::default(),
         );
         assert!(search_result.get(&placement_to_be_found).is_some());
         {
@@ -2140,11 +2189,13 @@ mod tests {
 
     #[test]
     fn test_game() {
-        let mut game = Game::new(StaticPieceGenerator::default());
-        game.piece_gen.append(&[
+        let pieces = [
             Piece::O, Piece::T, Piece::I, Piece::J, Piece::L, Piece::S, Piece::Z,
             Piece::O, Piece::T, Piece::I, Piece::J, Piece::L, Piece::S, Piece::Z,
-        ]);
+        ];
+
+        let mut game = Game::default();
+        game.supply_next_pieces(&pieces);
         assert_ok!(game.setup_falling_piece(None));
         // Test simple TSD opener.
         // O
@@ -2216,5 +2267,29 @@ mod tests {
 00|LL Z SS  J|
 --+----------+
 ##|0123456789|"#, format!("{}", game));
+    }
+
+    #[test]
+    fn test_move_player() {
+        let mut game = Game::default();
+        game.supply_next_pieces(&[Piece::O]);
+        assert_ok!(game.setup_falling_piece(None));
+
+        let pf = &game.state.playfield;
+        let fp = game.state.falling_piece.as_ref().unwrap();
+
+        let placements = game.state.playfield.search_lockable_placements(fp.piece);
+        let search_result = search_moves(
+            &MoveSearchConfiguration::new(&pf, fp.piece, fp.placement, game.rules.rotation_mode, false),
+            &mut BruteForceMoveSearchDirector::default(),
+        );
+        let dst = placements[0];
+        let mr = search_result.get(&dst).unwrap();
+
+        let mut player = MovePlayer::new(mr);
+        while !player.is_end() {
+            assert_ok!(player.step(&mut game));
+        }
+        assert_eq!(dst, game.state.falling_piece.as_ref().unwrap().placement);
     }
 }

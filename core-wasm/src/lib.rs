@@ -67,7 +67,7 @@ pub enum StatisticsEntryType {
 
 #[wasm_bindgen]
 pub struct Game {
-    game: core::Game<core::StaticPieceGenerator>,
+    game: core::Game,
 }
 
 #[wasm_bindgen]
@@ -120,13 +120,13 @@ impl Game {
             StatisticsEntryType::LOCK => core::StatisticsEntryType::Lock,
         })
     }
-    #[wasm_bindgen(js_name = appendNextPieces)]
-    pub fn append_next_pieces(&mut self, pieces: &[u8]) {
+    #[wasm_bindgen(js_name = supplyNextPieces)]
+    pub fn supply_next_pieces(&mut self, pieces: &[u8]) {
         let mut ps: Vec<core::Piece> = Vec::new();
         for p in pieces.iter() {
             ps.push((*p as usize).into());
         }
-        self.game.piece_gen.append(&ps);
+        self.game.supply_next_pieces(&ps);
     }
     #[wasm_bindgen(js_name = setupFallingPiece)]
     pub fn setup_falling_piece(&mut self) -> Result<JsValue, JsValue> {
