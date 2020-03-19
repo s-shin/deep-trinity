@@ -884,6 +884,13 @@ impl Default for LossConditions {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct GameRules {
+    pub rotation_mode: RotationMode,
+    pub tspin_judgement_mode: TSpinJudgementMode,
+    pub loss_conds: LossConditions,
+}
+
 //---
 
 /// 0: Empty
@@ -1800,23 +1807,19 @@ impl Default for GameState {
 /// The standard implementation of game management.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Game<PG: PieceGenerator> {
+    pub rules: GameRules,
     pub state: GameState,
     pub stats: Statistics,
     pub piece_gen: PG,
-    pub rotation_mode: RotationMode,
-    pub tspin_judgement_mode: TSpinJudgementMode,
-    pub loss_conds: LossConditions,
 }
 
 impl<PG: PieceGenerator> Game<PG> {
     pub fn new(piece_gen: PG) -> Self {
         Self {
+            rules: Default::default(),
             state: Default::default(),
             stats: Default::default(),
             piece_gen,
-            rotation_mode: Default::default(),
-            tspin_judgement_mode: Default::default(),
-            loss_conds: Default::default(),
         }
     }
     pub fn get_cell(&self, pos: UPos) -> Cell {
@@ -1872,7 +1875,7 @@ impl<PG: PieceGenerator> Game<PG> {
             return Err("no falling piece");
         }
         let fp = self.state.falling_piece.as_mut().unwrap();
-        if fp.apply_move(mv, &self.state.playfield, self.rotation_mode) {
+        if fp.apply_move(mv, &self.state.playfield, self.rules.rotation_mode) {
             Ok(())
         } else {
             Err("invalid move specified")
@@ -1935,18 +1938,18 @@ impl<PG: PieceGenerator> Game<PG> {
         if let Some(lock_out_type) = pf.check_lock_out(fp) {
             match lock_out_type {
                 LockOutType::LockOut => {
-                    if self.loss_conds.contains(LossConditions::LOCK_OUT) {
+                    if self.rules.loss_conds.contains(LossConditions::LOCK_OUT) {
                         s.game_over_reason |= LossConditions::LOCK_OUT;
                     }
                 }
                 LockOutType::PartialLockOut => {
-                    if self.loss_conds.contains(LossConditions::PARTIAL_LOCK_OUT) {
+                    if self.rules.loss_conds.contains(LossConditions::PARTIAL_LOCK_OUT) {
                         s.game_over_reason |= LossConditions::PARTIAL_LOCK_OUT;
                     }
                 }
             }
         }
-        let line_clear = pf.lock(fp, self.tspin_judgement_mode);
+        let line_clear = pf.lock(fp, self.rules.tspin_judgement_mode);
         s.falling_piece = None;
         debug_assert!(line_clear.is_some());
         let line_clear = line_clear.unwrap();
