@@ -151,6 +151,8 @@ impl Game {
     }
     #[wasm_bindgen(js_name = shouldSupplyNextPieces)]
     pub fn should_supply_next_pieces(&self) -> bool { self.game.should_supply_next_pieces() }
+    #[wasm_bindgen(js_name = isGameOver)]
+    pub fn is_game_over(&self) -> bool { self.game.state.is_game_over() }
     #[wasm_bindgen(js_name = setupFallingPiece)]
     pub fn setup_falling_piece(&mut self) -> Result<JsValue, JsValue> {
         match self.game.setup_falling_piece(None) {

@@ -30,7 +30,9 @@
   },
   "dependencies": {
     "@deep-trinity/web-core": "^0.1.0",
+    "@deep-trinity/web-core-helper": "^0.1.0",
     "@deep-trinity/view": "^0.1.0",
+    "@deep-trinity/model": "^0.1.0",
     "@emotion/core": "^10.0.28",
     "@emotion/styled": "^10.0.27",
     "emotion-theming": "^10.0.27",
