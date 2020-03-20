@@ -28,7 +28,7 @@ const pieceSpecs = {
     [model.Piece.J]: define(model.Piece.J, 3, 2, [[0, 0], [1, 0], [2, 0], [0, 1]]),
     [model.Piece.I]: define(model.Piece.I, 4, 1, [[0, 0], [1, 0], [2, 0], [3, 0]]),
     [model.Piece.T]: define(model.Piece.T, 3, 2, [[0, 0], [1, 0], [2, 0], [1, 1]]),
-    [model.Piece.O]: define(model.Piece.O, 2, 2, [[0, 0], [1, 0], [1, 0], [1, 1]]),
+    [model.Piece.O]: define(model.Piece.O, 2, 2, [[0, 0], [1, 0], [0, 1], [1, 1]]),
 };
 exports.Piece = props => {
     const theme = theme_1.useTheme();
