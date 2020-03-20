@@ -12,4 +12,5 @@ __export(require("./PieceContainer"));
 __export(require("./NextPieces"));
 __export(require("./Statistics"));
 __export(require("./Game"));
+__export(require("./SimpleFullScreenSinglePlay"));
 //# sourceMappingURL=index.js.map

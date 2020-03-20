@@ -21,9 +21,9 @@ const GameRootInner = styled_1.default.div `
 exports.Game = props => {
     return (react_1.default.createElement(GameRoot, null,
         react_1.default.createElement(GameRootInner, null,
-            react_1.default.createElement(PieceContainer_1.default, { piece: props.game.getHoldPiece() }),
+            react_1.default.createElement(PieceContainer_1.default, { piece: props.game.holdPiece }),
             react_1.default.createElement(Playfield_1.default, { game: props.game }),
-            react_1.default.createElement(NextPieces_1.default, { pieces: [...props.game.getNextPieces()] }))));
+            react_1.default.createElement(NextPieces_1.default, { pieces: props.game.nextPieces }))));
 };
 exports.default = exports.Game;
 //# sourceMappingURL=Game.js.map

@@ -1,60 +1,30 @@
 import React from "react";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 import { useTheme } from "./theme";
 import Grid, { GridProps } from "./Grid";
 
+const define = (piece: model.Piece, width: number, height: number, nonEmptyPositions: [number, number][]): GridProps => {
+  const cells = Array(width * height).fill(model.Cell.Empty);
+  for (const pos of nonEmptyPositions) {
+    cells[model.getIndex(width, pos[0], pos[1])] = model.pieceToCell(piece);
+  }
+  return { width, height, cells };
+};
+
 const pieceSpecs: {
-  [piece: number]: GridProps,
+  [piece in model.Piece]: GridProps;
 } = {
-  [core.Piece.S]: {
-    width: 3,
-    height: 2,
-    cellGetter: (x, y) =>
-      ((x == 0 && y == 0) || (x == 1 && y == 0) || (x == 1 && y == 1) || (x == 2 && y == 1))
-        ? core.Cell.S : core.Cell.EMPTY,
-  },
-  [core.Piece.Z]: {
-    width: 3,
-    height: 2,
-    cellGetter: (x, y) =>
-      ((x == 0 && y == 1) || (x == 1 && y == 0) || (x == 1 && y == 1) || (x == 2 && y == 0))
-        ? core.Cell.Z : core.Cell.EMPTY,
-  },
-  [core.Piece.L]: {
-    width: 3,
-    height: 2,
-    cellGetter: (x, y) =>
-      ((x == 0 && y == 0) || (x == 1 && y == 0) || (x == 2 && y == 0) || (x == 2 && y == 1))
-        ? core.Cell.L : core.Cell.EMPTY,
-  },
-  [core.Piece.J]: {
-    width: 3,
-    height: 2,
-    cellGetter: (x, y) =>
-      ((x == 0 && y == 0) || (x == 1 && y == 0) || (x == 2 && y == 0) || (x == 0 && y == 1))
-        ? core.Cell.J : core.Cell.EMPTY,
-  },
-  [core.Piece.I]: {
-    width: 4,
-    height: 1,
-    cellGetter: () => core.Cell.I,
-  },
-  [core.Piece.T]: {
-    width: 3,
-    height: 2,
-    cellGetter: (x, y) =>
-      ((x == 0 && y == 0) || (x == 1 && y == 0) || (x == 2 && y == 0) || (x == 1 && y == 1))
-        ? core.Cell.T : core.Cell.EMPTY,
-  },
-  [core.Piece.O]: {
-    width: 2,
-    height: 2,
-    cellGetter: () => core.Cell.O,
-  },
+  [model.Piece.S]: define(model.Piece.S, 3, 2, [[0, 0], [1, 0], [1, 1], [2, 1]]),
+  [model.Piece.Z]: define(model.Piece.Z, 3, 2, [[0, 1], [1, 0], [1, 1], [2, 0]]),
+  [model.Piece.L]: define(model.Piece.L, 3, 2, [[0, 0], [1, 0], [2, 0], [2, 1]]),
+  [model.Piece.J]: define(model.Piece.J, 3, 2, [[0, 0], [1, 0], [2, 0], [0, 1]]),
+  [model.Piece.I]: define(model.Piece.I, 4, 1, [[0, 0], [1, 0], [2, 0], [3, 0]]),
+  [model.Piece.T]: define(model.Piece.T, 3, 2, [[0, 0], [1, 0], [2, 0], [1, 1]]),
+  [model.Piece.O]: define(model.Piece.O, 2, 2, [[0, 0], [1, 0], [1, 0], [1, 1]]),
 };
 
 export type PieceProps = {
-  piece: core.Piece,
+  piece: model.Piece,
 };
 
 export const Piece: React.FC<PieceProps> = props => {

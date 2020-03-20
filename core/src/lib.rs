@@ -678,7 +678,7 @@ pub struct Placement {
 }
 
 impl Placement {
-    fn new(orientation: Orientation, pos: Pos) -> Self {
+    pub fn new(orientation: Orientation, pos: Pos) -> Self {
         Self { orientation, pos }
     }
 }

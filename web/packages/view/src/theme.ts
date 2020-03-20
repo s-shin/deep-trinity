@@ -1,4 +1,4 @@
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 import * as theming from "emotion-theming";
 
 export type Theme = {
@@ -19,16 +19,16 @@ export const DEFAULT_THEME: Theme = {
   nonEmptyCellBorderStyle: "none",
   pieceCellBorderStyle: "none",
   cellColors: {
-    [core.Cell.EMPTY]: "rgba(0, 0, 0, 0)",
-    [core.Cell.ANY]: "darkslategray",
-    [core.Cell.S]: "darkolivegreen",
-    [core.Cell.Z]: "sienna",
-    [core.Cell.L]: "darkorange",
-    [core.Cell.J]: "darkblue",
-    [core.Cell.I]: "turquoise",
-    [core.Cell.T]: "purple",
-    [core.Cell.O]: "gold",
-    [core.Cell.GARBAGE]: "gray"
+    [model.Cell.Empty]: "rgba(0, 0, 0, 0)",
+    [model.Cell.Any]: "darkslategray",
+    [model.Cell.S]: "darkolivegreen",
+    [model.Cell.Z]: "sienna",
+    [model.Cell.L]: "darkorange",
+    [model.Cell.J]: "darkblue",
+    [model.Cell.I]: "turquoise",
+    [model.Cell.T]: "purple",
+    [model.Cell.O]: "gold",
+    [model.Cell.Garbage]: "gray"
   },
   pieceContainerMargin: "2.5vmin 2vmin",
   pieceContainerSize: { width: "17vmin", height: "9vmin" },

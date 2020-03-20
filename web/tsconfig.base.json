@@ -11,5 +11,8 @@
     "noUnusedLocals": true,
     "noFallthroughCasesInSwitch": true,
     "jsx": "react"
-  }
+  },
+  "exclude": [
+    "templates/**/*"
+  ]
 }

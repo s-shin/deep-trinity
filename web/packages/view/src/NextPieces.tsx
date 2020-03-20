@@ -1,12 +1,12 @@
 import React from "react";
 import styled from "@emotion/styled";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 import PieceContainer from "./PieceContainer";
 
 const NextPiecesRoot = styled.div``;
 
 export type NextPiecesProps = {
-  pieces: core.Piece[],
+  pieces: ArrayLike<model.Piece>,
 };
 
 export const NextPieces: React.FC<NextPiecesProps> = props => {

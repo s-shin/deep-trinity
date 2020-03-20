@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "@emotion/styled";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 import NextPieces from "./NextPieces";
 import Playfield from "./Playfield";
 import PieceContainer from "./PieceContainer";
@@ -18,16 +18,16 @@ const GameRootInner = styled.div`
 `;
 
 export type GameProps = {
-  game: core.Game,
+  game: model.Game,
 };
 
 export const Game: React.FC<GameProps> = props => {
   return (
     <GameRoot>
       <GameRootInner>
-        <PieceContainer piece={props.game.getHoldPiece()}/>
+        <PieceContainer piece={props.game.holdPiece}/>
         <Playfield game={props.game}/>
-        <NextPieces pieces={[...props.game.getNextPieces()]}/>
+        <NextPieces pieces={props.game.nextPieces}/>
       </GameRootInner>
     </GameRoot>
   )

@@ -1,7 +1,7 @@
 import React from "react";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 export declare type PieceProps = {
-    piece: core.Piece;
+    piece: model.Piece;
 };
 export declare const Piece: React.FC<PieceProps>;
 export default Piece;

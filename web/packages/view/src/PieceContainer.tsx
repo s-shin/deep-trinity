@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "@emotion/styled";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 import { useTheme } from "./theme";
 import Piece from "./Piece";
 
@@ -16,7 +16,7 @@ const PieceContainerRoot = styled.div`
 `;
 
 export type PieceContainerProps = {
-  piece?: core.Piece,
+  piece?: model.Piece,
 };
 
 export const PieceContainer: React.FC<PieceContainerProps> = props => {

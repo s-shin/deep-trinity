@@ -1,8 +1,8 @@
 import React from "react";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 export declare type StatisticsProps = {
-    game: core.Game;
-    types: core.StatisticsEntryType[];
+    game: model.Game;
+    types: model.StatisticsEntryType[];
 };
 export declare const Statistics: React.FC<StatisticsProps>;
 export default Statistics;

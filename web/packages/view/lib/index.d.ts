@@ -7,3 +7,4 @@ export * from "./PieceContainer";
 export * from "./NextPieces";
 export * from "./Statistics";
 export * from "./Game";
+export * from "./SimpleFullScreenSinglePlay";

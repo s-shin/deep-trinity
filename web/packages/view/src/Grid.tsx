@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "@emotion/styled";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 import { useTheme } from "./theme";
 import Cell from "./Cell";
 
@@ -21,7 +21,7 @@ const GridRoot = styled.div`
 export type GridProps = {
   width: number,
   height: number,
-  cellGetter: (x: number, y: number) => core.Cell,
+  cells: ArrayLike<model.Cell>,
   borderStyle?: string,
 };
 
@@ -33,7 +33,7 @@ export const Grid: React.FC<GridProps> = props => {
       cells.push(
         <Cell
           key={`${x}-${y}`}
-          cell={props.cellGetter(x, y)}
+          cell={props.cells[model.getIndex(props.width, x, y)] || model.Cell.Empty}
           borderStyle={props.borderStyle}
         />,
       );

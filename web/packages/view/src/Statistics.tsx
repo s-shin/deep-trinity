@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "@emotion/styled";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 
 const Key = styled.div`
   padding: 0 0.5em;
@@ -12,8 +12,8 @@ const Value = styled.div`
 `;
 
 export type StatisticsProps = {
-  game: core.Game,
-  types: core.StatisticsEntryType[],
+  game: model.Game,
+  types: model.StatisticsEntryType[],
 };
 
 const STRS = [
@@ -37,7 +37,7 @@ export const Statistics: React.FC<StatisticsProps> = props => {
   const rows = props.types.map(t => (
     <tr key={t}>
       <td><Key>{STRS[t]}</Key></td>
-      <td><Value>{props.game.getStatsCount(t)}</Value></td>
+      <td><Value>{props.game.stats[t]}</Value></td>
     </tr>
   ));
   return (

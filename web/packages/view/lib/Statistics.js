@@ -33,7 +33,7 @@ exports.Statistics = props => {
         react_1.default.createElement("td", null,
             react_1.default.createElement(Key, null, STRS[t])),
         react_1.default.createElement("td", null,
-            react_1.default.createElement(Value, null, props.game.getStatsCount(t))))));
+            react_1.default.createElement(Value, null, props.game.stats[t])))));
     return (react_1.default.createElement("div", null,
         react_1.default.createElement("table", null,
             react_1.default.createElement("tbody", null, rows))));

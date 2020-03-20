@@ -1,6 +1,6 @@
 import React from "react";
 import styled from "@emotion/styled";
-import * as core from "@deep-trinity/web-core";
+import * as model from "@deep-trinity/model";
 import { useTheme } from "./theme";
 
 type CellElementProps = {
@@ -17,7 +17,7 @@ const CellElement = styled.div`
 `;
 
 export type CellProps = {
-  cell: core.Cell,
+  cell: model.Cell,
   borderStyle?: string,
 };
 
@@ -28,7 +28,7 @@ export const Cell: React.FC<CellProps> = props => {
       color={theme.cellColors[props.cell]}
       borderStyle={
         props.borderStyle
-        || props.cell != core.Cell.EMPTY && theme.nonEmptyCellBorderStyle
+        || props.cell != model.Cell.Empty && theme.nonEmptyCellBorderStyle
         || theme.cellBorderStyle
       }
     />

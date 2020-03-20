@@ -7,7 +7,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const core = __importStar(require("@deep-trinity/web-core"));
+const model = __importStar(require("@deep-trinity/model"));
 const theming = __importStar(require("emotion-theming"));
 exports.DEFAULT_THEME = {
     gridGap: "2px",
@@ -16,16 +16,16 @@ exports.DEFAULT_THEME = {
     nonEmptyCellBorderStyle: "none",
     pieceCellBorderStyle: "none",
     cellColors: {
-        [core.Cell.EMPTY]: "rgba(0, 0, 0, 0)",
-        [core.Cell.ANY]: "darkslategray",
-        [core.Cell.S]: "darkolivegreen",
-        [core.Cell.Z]: "sienna",
-        [core.Cell.L]: "darkorange",
-        [core.Cell.J]: "darkblue",
-        [core.Cell.I]: "turquoise",
-        [core.Cell.T]: "purple",
-        [core.Cell.O]: "gold",
-        [core.Cell.GARBAGE]: "gray"
+        [model.Cell.Empty]: "rgba(0, 0, 0, 0)",
+        [model.Cell.Any]: "darkslategray",
+        [model.Cell.S]: "darkolivegreen",
+        [model.Cell.Z]: "sienna",
+        [model.Cell.L]: "darkorange",
+        [model.Cell.J]: "darkblue",
+        [model.Cell.I]: "turquoise",
+        [model.Cell.T]: "purple",
+        [model.Cell.O]: "gold",
+        [model.Cell.Garbage]: "gray"
     },
     pieceContainerMargin: "2.5vmin 2vmin",
     pieceContainerSize: { width: "17vmin", height: "9vmin" },

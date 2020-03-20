@@ -1,8 +1,12 @@
 extern crate wasm_bindgen;
-extern crate core;
 extern crate console_error_panic_hook;
+extern crate rand;
+extern crate core;
+extern crate bot;
 
 use wasm_bindgen::prelude::*;
+use rand::SeedableRng;
+use bot::Bot;
 
 #[wasm_bindgen(js_name = setPanicHook)]
 pub fn set_panic_hook() {
@@ -25,10 +29,9 @@ pub enum Piece {
 
 #[wasm_bindgen]
 #[derive(Copy, Clone)]
-#[allow(non_camel_case_types)]
 pub enum Cell {
-    EMPTY,
-    ANY,
+    Empty,
+    Any,
     S,
     Z,
     L,
@@ -36,10 +39,10 @@ pub enum Cell {
     I,
     T,
     O,
-    GARBAGE,
+    Garbage,
 }
 
-static CELLS: [Cell; 10] = [Cell::EMPTY, Cell::ANY, Cell::S, Cell::Z, Cell::L, Cell::J, Cell::I, Cell::T, Cell::O, Cell::GARBAGE];
+static CELLS: [Cell; 10] = [Cell::Empty, Cell::Any, Cell::S, Cell::Z, Cell::L, Cell::J, Cell::I, Cell::T, Cell::O, Cell::Garbage];
 
 impl From<core::Cell> for Cell {
     fn from(c: core::Cell) -> Self { CELLS[core::CellTypeId::from(c).0 as usize] }
@@ -47,22 +50,40 @@ impl From<core::Cell> for Cell {
 
 #[wasm_bindgen]
 #[derive(Copy, Clone)]
-#[allow(non_camel_case_types)]
 pub enum StatisticsEntryType {
-    SINGLE,
-    DOUBLE,
-    TRIPLE,
-    TETRIS,
-    TST,
-    TSD,
-    TSS,
-    TSMD,
-    TSMS,
-    MAX_COMBOS,
-    MAX_BTBS,
-    PERFECT_CLEAR,
-    HOLD,
-    LOCK,
+    Single,
+    Double,
+    Triple,
+    Tetris,
+    Tst,
+    Tsd,
+    Tss,
+    Tsmd,
+    Tsms,
+    MaxCombos,
+    MaxBtbs,
+    PerfectClear,
+    Hold,
+    Lock,
+}
+
+#[wasm_bindgen]
+pub struct Placement {
+    pub orientation: u8,
+    pub x: i8,
+    pub y: i8,
+}
+
+impl Into<core::Placement> for Placement {
+    fn into(self) -> core::Placement {
+        core::Placement::new(core::Orientation::new(self.orientation), core::Pos(self.x, self.y))
+    }
+}
+
+impl From<core::Placement> for Placement {
+    fn from(p: core::Placement) -> Self {
+        Self { orientation: p.orientation.id(), x: p.pos.0, y: p.pos.1 }
+    }
 }
 
 #[wasm_bindgen]
@@ -89,10 +110,10 @@ impl Game {
         self.game.state.hold_piece.map(|p| { p as u8 })
     }
     #[wasm_bindgen(js_name = getNextPieces)]
-    pub fn get_next_pieces(&self) -> Box<[u8]> {
+    pub fn get_next_pieces(&self, visible: bool) -> Box<[u8]> {
         let np = &self.game.state.next_pieces;
         np.iter()
-            .take(np.visible_num)
+            .take(if visible { np.visible_num } else { np.len() })
             .map(|p| { *p as u8 })
             .collect::<Vec<u8>>()
             .into_boxed_slice()
@@ -104,20 +125,20 @@ impl Game {
     #[wasm_bindgen(js_name = getStatsCount)]
     pub fn get_stats_count(&self, t: StatisticsEntryType) -> core::Count {
         self.game.stats.get(match t {
-            StatisticsEntryType::SINGLE => core::StatisticsEntryType::LineClear(core::LineClear::new(1, None)),
-            StatisticsEntryType::DOUBLE => core::StatisticsEntryType::LineClear(core::LineClear::new(2, None)),
-            StatisticsEntryType::TRIPLE => core::StatisticsEntryType::LineClear(core::LineClear::new(3, None)),
-            StatisticsEntryType::TETRIS => core::StatisticsEntryType::LineClear(core::LineClear::new(4, None)),
-            StatisticsEntryType::TST => core::StatisticsEntryType::LineClear(core::LineClear::new(3, Some(core::TSpin::Standard))),
-            StatisticsEntryType::TSD => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Standard))),
-            StatisticsEntryType::TSS => core::StatisticsEntryType::LineClear(core::LineClear::new(1, Some(core::TSpin::Standard))),
-            StatisticsEntryType::TSMD => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
-            StatisticsEntryType::TSMS => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
-            StatisticsEntryType::MAX_COMBOS => core::StatisticsEntryType::MaxCombos,
-            StatisticsEntryType::MAX_BTBS => core::StatisticsEntryType::MaxBtbs,
-            StatisticsEntryType::PERFECT_CLEAR => core::StatisticsEntryType::PerfectClear,
-            StatisticsEntryType::HOLD => core::StatisticsEntryType::Hold,
-            StatisticsEntryType::LOCK => core::StatisticsEntryType::Lock,
+            StatisticsEntryType::Single => core::StatisticsEntryType::LineClear(core::LineClear::new(1, None)),
+            StatisticsEntryType::Double => core::StatisticsEntryType::LineClear(core::LineClear::new(2, None)),
+            StatisticsEntryType::Triple => core::StatisticsEntryType::LineClear(core::LineClear::new(3, None)),
+            StatisticsEntryType::Tetris => core::StatisticsEntryType::LineClear(core::LineClear::new(4, None)),
+            StatisticsEntryType::Tst => core::StatisticsEntryType::LineClear(core::LineClear::new(3, Some(core::TSpin::Standard))),
+            StatisticsEntryType::Tsd => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Standard))),
+            StatisticsEntryType::Tss => core::StatisticsEntryType::LineClear(core::LineClear::new(1, Some(core::TSpin::Standard))),
+            StatisticsEntryType::Tsmd => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
+            StatisticsEntryType::Tsms => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
+            StatisticsEntryType::MaxCombos => core::StatisticsEntryType::MaxCombos,
+            StatisticsEntryType::MaxBtbs => core::StatisticsEntryType::MaxBtbs,
+            StatisticsEntryType::PerfectClear => core::StatisticsEntryType::PerfectClear,
+            StatisticsEntryType::Hold => core::StatisticsEntryType::Hold,
+            StatisticsEntryType::Lock => core::StatisticsEntryType::Lock,
         })
     }
     #[wasm_bindgen(js_name = supplyNextPieces)]
@@ -128,6 +149,8 @@ impl Game {
         }
         self.game.supply_next_pieces(&ps);
     }
+    #[wasm_bindgen(js_name = shouldSupplyNextPieces)]
+    pub fn should_supply_next_pieces(&self) -> bool { self.game.should_supply_next_pieces() }
     #[wasm_bindgen(js_name = setupFallingPiece)]
     pub fn setup_falling_piece(&mut self) -> Result<JsValue, JsValue> {
         match self.game.setup_falling_piece(None) {
@@ -176,4 +199,69 @@ impl Game {
     pub fn to_string(&self) -> String {
         self.game.to_string()
     }
+}
+
+#[wasm_bindgen]
+pub struct RandomPieceGenerator {
+    gen: core::RandomPieceGenerator<rand::rngs::StdRng>,
+}
+
+#[wasm_bindgen]
+impl RandomPieceGenerator {
+    #[wasm_bindgen(constructor)]
+    pub fn new(seed: u64) -> Self {
+        Self {
+            gen: core::RandomPieceGenerator::new(rand::rngs::StdRng::seed_from_u64(seed))
+        }
+    }
+    pub fn generate(&mut self) -> Box<[u8]> {
+        self.gen.generate()
+            .iter()
+            .map(|p| { (*p as usize) as u8 })
+            .collect::<Vec<u8>>()
+            .into_boxed_slice()
+    }
+}
+
+
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct SimpleBot {
+    bot: bot::SimpleBot,
+}
+
+#[wasm_bindgen]
+impl SimpleBot {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self { Default::default() }
+    pub fn think(&mut self, game: &Game) -> Option<Placement> {
+        self.bot.think(&game.game).map(|p| { p.into() })
+    }
+}
+
+#[wasm_bindgen]
+pub struct MovePlayer {
+    move_player: core::MovePlayer,
+}
+
+#[wasm_bindgen]
+impl MovePlayer {
+    pub fn from(game: &Game, dst: Placement) -> Result<MovePlayer, JsValue> {
+        // TODO: replace with better director
+        let r = match game.game.search_moves(&mut core::BruteForceMoveSearchDirector::default(), false) {
+            Ok(r) => r,
+            Err(e) => { return Err(e.into()); }
+        };
+        let rec = if let Some(rec) = r.get(&dst.into()) { rec } else {
+            return Err("cannot move to".into());
+        };
+        Ok(Self {
+            move_player: core::MovePlayer::new(rec),
+        })
+    }
+    pub fn step(&mut self, game: &mut Game) -> Result<bool, JsValue> {
+        self.move_player.step(&mut game.game).map_err(|e| { e.into() })
+    }
+    #[wasm_bindgen(js_name = isEnd)]
+    pub fn is_end(&self) -> bool { self.move_player.is_end() }
 }
