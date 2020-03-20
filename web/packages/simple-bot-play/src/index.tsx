@@ -21,7 +21,7 @@ class BotRunner {
   constructor() {
     this.state = BotRunnerState.Think;
     this.game = new core.Game();
-    this.pg = new core.RandomPieceGenerator(BigInt(3));
+    this.pg = new core.RandomPieceGenerator(BigInt(5));
     this.bot = new core.SimpleBot();
 
     this.game.supplyNextPieces(this.pg.generate());
@@ -70,7 +70,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     (async () => {
-      for (let i = 0; i < 1000; i++) {
+      for (let i = 0; i < 2000; i++) {
         await new Promise(resolve => setTimeout(resolve, 10));
         botRunner.update();
         setGameModel(botRunner.getGameModel());

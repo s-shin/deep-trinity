@@ -296,8 +296,8 @@ pub trait Grid: Clone + fmt::Display {
                     return false;
                 }
                 are_cells_disposed = true;
-                self.set_cell_to_row(y, cell);
             }
+            self.set_cell_to_row(y, cell);
         }
         for y in (0..(self.height() - n)).rev() {
             self.swap_rows(y, y + n);
@@ -880,7 +880,7 @@ pub enum LockOutType {
 bitflags! {
     pub struct LossConditions: u8 {
         const BLOCK_OUT        = 0b0001;
-        const LOCK_OUT         = 0b0110;  // LOCK_OUT includes PARTIAL_LOCK_OUT.
+        const LOCK_OUT         = 0b0110; // LOCK_OUT always includes PARTIAL_LOCK_OUT.
         const PARTIAL_LOCK_OUT = 0b0100;
         const GARBAGE_OUT      = 0b1000;
     }
@@ -1162,8 +1162,8 @@ impl FallingPiece {
         let mut fp = Self::new(piece, spec.initial_placement);
         if let Some(pf) = pf {
             if !pf.can_put(&fp) {
-                fp.placement.pos.0 -= 1;
-                fp.move_record.initial_placement.pos.0 -= 1;
+                fp.placement.pos.1 += 1;
+                fp.move_record.initial_placement.pos.1 += 1;
             }
         }
         fp
@@ -1381,7 +1381,7 @@ impl Playfield {
         if bottom >= self.visible_height as PosY {
             return Some(LockOutType::LockOut);
         }
-        let top = fp.placement.pos.1 + fp.grid().height() as PosY - fp.grid().top_padding() as PosY;
+        let top = fp.placement.pos.1 + fp.grid().height() as PosY - fp.grid().top_padding() as PosY - 1;
         if top >= self.visible_height as PosY {
             return Some(LockOutType::PartialLockOut);
         }
@@ -2140,6 +2140,32 @@ mod tests {
             MoveRecordItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_0, pos!(5, 16))),
             MoveRecordItem::new(Move::Shift(-2), Placement::new(ORIENTATION_0, pos!(3, 16))),
         ], rec.items);
+    }
+
+    #[test]
+    fn test_spawn_and_lock_out() {
+        let mut pf = Playfield::default();
+        pf.append_garbage(&[0].repeat(18));
+        let mut fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        assert_eq!(18, fp.placement.pos.1);
+        assert!(!pf.can_lock(&fp));
+        assert!(fp.apply_move(Move::Drop(1), &pf, RotationMode::Srs));
+        assert!(pf.can_lock(&fp));
+        assert_eq!(None, pf.check_lock_out(&fp));
+        pf.append_garbage(&[0]);
+        let fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        assert_eq!(18, fp.placement.pos.1);
+        assert!(pf.can_lock(&fp));
+        assert_eq!(Some(LockOutType::PartialLockOut), pf.check_lock_out(&fp));
+        pf.append_garbage(&[0]);
+        let fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        assert_eq!(19, fp.placement.pos.1);
+        assert!(pf.can_lock(&fp));
+        assert_eq!(Some(LockOutType::LockOut), pf.check_lock_out(&fp));
+        pf.append_garbage(&[0]);
+        let fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        assert_eq!(19, fp.placement.pos.1);
+        assert!(!pf.can_lock(&fp));
     }
 
     #[test]
