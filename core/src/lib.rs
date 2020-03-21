@@ -1694,7 +1694,7 @@ impl Game {
         self.state.next_pieces.supply(pieces);
     }
     /// This method should be called right after `new()`.
-    /// `true` will be returned when there are no next pieces.
+    /// `Err` will be returned when there are no next pieces.
     pub fn setup_falling_piece(&mut self, next: Option<Piece>) -> Result<(), &'static str> {
         let s = &mut self.state;
 
@@ -1918,6 +1918,7 @@ impl fmt::Display for Game {
 
 //---
 
+#[derive(Clone, Debug)]
 pub struct MovePlayer {
     record: MoveRecord,
     i: usize,
@@ -1946,7 +1947,11 @@ impl MovePlayer {
         }
         let item = self.record.items[self.i];
         game.do_move(item.by)?;
-        debug_assert_eq!(item.placement, game.state.falling_piece.as_ref().unwrap().placement);
+        if item.placement != game.state.falling_piece.as_ref().unwrap().placement {
+            println!("{:?}", self);
+            println!("hoge");
+        }
+        // debug_assert_eq!(item.placement, game.state.falling_piece.as_ref().unwrap().placement);
         self.i += 1;
         Ok(!self.is_end())
     }

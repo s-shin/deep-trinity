@@ -1,7 +1,9 @@
-use crate::*;
+use std::collections::HashMap;
+use crate::{Playfield, Piece, Placement, RotationMode, MoveRecordItem, MoveRecord};
 
 pub mod astar;
 pub mod bruteforce;
+pub mod humanly_optimized;
 
 pub struct SearchConfiguration<'a> {
     pf: &'a Playfield,
@@ -19,6 +21,7 @@ impl<'a> SearchConfiguration<'a> {
 /// The placement of MoveRecordItem is **source** one.
 pub type MoveDestinations = HashMap<Placement, MoveRecordItem>;
 
+#[derive(Clone, Debug)]
 pub struct SearchResult {
     src: Placement,
     found: MoveDestinations,
@@ -34,6 +37,9 @@ impl SearchResult {
         while let Some(item) = self.found.get(&placement) {
             items.push(MoveRecordItem::new(item.by, placement));
             placement = item.placement;
+            if item.placement == self.src {
+                break;
+            }
         }
         if items.is_empty() {
             return None;

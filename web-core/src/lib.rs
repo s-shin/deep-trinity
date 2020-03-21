@@ -250,18 +250,27 @@ pub struct MovePlayer {
 #[wasm_bindgen]
 impl MovePlayer {
     pub fn from(game: &Game, dst: Placement) -> Result<MovePlayer, JsValue> {
-        let mut searcher = core::move_search::astar::AStarMoveSearcher::new(dst.into(), false);
-        // let mut searcher = core::move_search::bruteforce::BruteForceMoveSearcher::default();
-        let r = match game.game.search_moves(&mut searcher) {
-            Ok(r) => r,
-            Err(e) => { return Err(e.into()); }
-        };
-        let rec = if let Some(rec) = r.get(&dst.into()) { rec } else {
-            return Err("cannot move to".into());
-        };
-        Ok(Self {
-            move_player: core::MovePlayer::new(rec),
-        })
+        use core::move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
+        use core::move_search::astar::AStarMoveSearcher;
+
+        let g = &game.game;
+        for i in 1..2 {
+            // let mut searcher = core::move_search::bruteforce::BruteForceMoveSearcher::default();
+            let r = match match i {
+                0 => g.search_moves(&mut HumanlyOptimizedMoveSearcher::new(dst.into(), true, true)),
+                1 => g.search_moves(&mut AStarMoveSearcher::new(dst.into(), false)),
+                _ => panic!(),
+            } {
+                Ok(r) => r,
+                Err(e) => { return Err(e.into()); }
+            };
+            if let Some(rec) = r.get(&dst.into()) {
+                return Ok(Self {
+                    move_player: core::MovePlayer::new(rec),
+                });
+            }
+        }
+        Err("cannot move to".into())
     }
     pub fn step(&mut self, game: &mut Game) -> Result<bool, JsValue> {
         self.move_player.step(&mut game.game).map_err(|e| { e.into() })

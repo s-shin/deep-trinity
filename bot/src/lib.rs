@@ -59,9 +59,14 @@ mod tests {
             let dst = dst.unwrap();
 
             // let mut searcher = move_search::bruteforce::BruteForceMoveSearcher::default();
-            let mut searcher = move_search::astar::AStarMoveSearcher::new(dst, true);
+            let mut searcher = move_search::humanly_optimized::HumanlyOptimizedMoveSearcher::new(dst, true, true);
             let ret = game.search_moves(&mut searcher).unwrap();
-            let rec = ret.get(&dst).unwrap();
+            let rec = ret.get(&dst).unwrap_or_else(|| {
+                // println!("fallback");
+                let mut searcher = move_search::astar::AStarMoveSearcher::new(dst, false);
+                let ret = game.search_moves(&mut searcher).unwrap();
+                ret.get(&dst).unwrap()
+            });
             let mut mp = MovePlayer::new(rec);
             while mp.step(&mut game).unwrap() {
                 // println!("{}", game);

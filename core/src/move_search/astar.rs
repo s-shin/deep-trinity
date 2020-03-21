@@ -1,5 +1,6 @@
-use crate::*;
-use crate::move_search::*;
+use std::collections::{HashMap, BTreeMap, VecDeque};
+use crate::{Move, FallingPiece, MoveRecordItem, Placement};
+use super::{SearchConfiguration, MoveDestinations, SearchResult, MoveSearcher};
 
 pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> SearchResult {
     type F = i16;
@@ -40,7 +41,7 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
         Action { mv: Move::Rotate(-1), cost: 1 },
     ];
 
-    let mut found: HashMap<Placement, MoveRecordItem> = HashMap::new();
+    let mut found = MoveDestinations::new();
     let mut open_list = OpenList::new();
     let mut state: HashMap<Placement, StateEntry> = HashMap::new();
 

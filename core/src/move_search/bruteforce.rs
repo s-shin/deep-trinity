@@ -1,10 +1,10 @@
-use crate::*;
-use crate::move_search::*;
+use crate::{Move, FallingPiece, MoveRecordItem};
+use super::{SearchConfiguration, MoveDestinations, SearchResult, MoveSearcher};
 
 const MOVES: [Move; 5] = [Move::Drop(1), Move::Shift(1), Move::Shift(-1), Move::Rotate(1), Move::Rotate(-1)];
 
 pub fn search_moves(conf: &SearchConfiguration, debug: bool) -> SearchResult {
-    let mut found: MoveDestinations = HashMap::new();
+    let mut found = MoveDestinations::new();
 
     fn search(conf: &SearchConfiguration, fp: &FallingPiece, depth: usize, found: &mut MoveDestinations, debug: bool) {
         macro_rules! debug_println {
