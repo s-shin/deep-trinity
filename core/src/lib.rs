@@ -10,6 +10,8 @@ use std::hash::{Hash, Hasher};
 use std::ops;
 use rand::seq::SliceRandom;
 
+pub mod move_search;
+
 //---
 
 pub type PosX = i8;
@@ -880,7 +882,7 @@ pub enum LockOutType {
 bitflags! {
     pub struct LossConditions: u8 {
         const BLOCK_OUT        = 0b0001;
-        const LOCK_OUT         = 0b0110; // LOCK_OUT always includes PARTIAL_LOCK_OUT.
+        const LOCK_OUT         = 0b0010;
         const PARTIAL_LOCK_OUT = 0b0100;
         const GARBAGE_OUT      = 0b1000;
     }
@@ -1438,131 +1440,6 @@ impl Default for Playfield {
 
 //---
 
-pub struct MoveSearchConfiguration<'a> {
-    pf: &'a Playfield,
-    piece: Piece,
-    src: Placement,
-    mode: RotationMode,
-    debug: bool,
-}
-
-impl<'a> MoveSearchConfiguration<'a> {
-    pub fn new(pf: &'a Playfield, piece: Piece, src: Placement, mode: RotationMode, debug: bool) -> Self {
-        Self { pf, piece, src, mode, debug }
-    }
-}
-
-pub trait MoveSearchDirector {
-    fn next(&mut self, conf: &MoveSearchConfiguration, fp: &FallingPiece, depth: usize, num_moved: usize) -> Option<Move>;
-}
-
-pub struct MoveSearchResult {
-    src: Placement,
-    found: HashMap<Placement, MoveRecordItem>,
-}
-
-impl MoveSearchResult {
-    pub fn contains(&self, dst: &Placement) -> bool { self.found.contains_key(dst) }
-    pub fn get(&self, dst: &Placement) -> Option<MoveRecord> {
-        let mut placement = *dst;
-        let mut items: Vec<MoveRecordItem> = Vec::new();
-        while let Some(item) = self.found.get(&placement) {
-            items.push(MoveRecordItem::new(item.by, placement));
-            placement = item.placement;
-        }
-        if items.is_empty() {
-            return None;
-        }
-        let mut record = MoveRecord::new(self.src);
-        for item in items.iter().rev() {
-            record.merge_or_push(*item);
-        }
-        Some(record)
-    }
-    pub fn len(&self) -> usize { self.found.len() }
-}
-
-pub fn search_moves(conf: &MoveSearchConfiguration, director: &mut impl MoveSearchDirector) -> MoveSearchResult {
-    type Found = HashMap<Placement, MoveRecordItem>;
-    let mut found: Found = HashMap::new();
-
-    fn search(conf: &MoveSearchConfiguration, director: &mut impl MoveSearchDirector,
-              fp: &FallingPiece, depth: usize, found: &mut Found) {
-        macro_rules! debug_println {
-            ($e:expr $(, $es:expr)*) => {
-                if conf.debug {
-                    if depth > 0 {
-                        print!("{}", "│".repeat(depth));
-                    }
-                    println!($e $(, $es)*);
-                }
-            }
-        }
-
-        debug_println!("search_all: {:?} {}", fp.placement.orientation, fp.placement.pos);
-        if depth > 0 && fp.placement == conf.src {
-            debug_println!("=> initial placement.");
-            return;
-        }
-        if found.contains_key(&fp.placement) {
-            debug_println!("=> already checked.");
-            return;
-        }
-        debug_assert!(fp.move_record.len() <= 1);
-        if let Some(last) = fp.move_record.last() {
-            let from = MoveRecordItem::new(last.by, fp.move_record.initial_placement);
-            let v = found.insert(fp.placement, from);
-            debug_assert!(v.is_none());
-        }
-
-        let mut fp = FallingPiece::new(fp.piece, fp.placement);
-        let mut n = 0;
-        while let Some(mv) = director.next(conf, &fp, depth, n) {
-            debug_println!("├ {:?}", mv);
-            if fp.apply_move(mv, conf.pf, conf.mode) {
-                search(conf, director, &fp, depth + 1, found);
-                fp.rollback();
-            }
-            n += 1;
-        }
-        debug_println!("=> checked.");
-    };
-
-    search(conf, director, &FallingPiece::new(conf.piece, conf.src), 0, &mut found);
-
-    MoveSearchResult { src: conf.src, found }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct BruteForceMoveSearchDirector {}
-
-impl MoveSearchDirector for BruteForceMoveSearchDirector {
-    fn next(&mut self, _conf: &MoveSearchConfiguration, _fp: &FallingPiece, _depth: usize, num_moved: usize) -> Option<Move> {
-        static MOVES: [Move; 5] = [Move::Shift(1), Move::Drop(1), Move::Shift(-1), Move::Rotate(1), Move::Rotate(-1)];
-        MOVES.get(num_moved).copied()
-    }
-}
-
-// TODO
-// pub struct HumanlyOptimizedMoveSearchDirector {}
-//
-// impl MoveSearchDirector for HumanlyOptimizedMoveSearchDirector {
-//     fn next(&mut self, _conf: &MoveSearchConfiguration, _fp: &FallingPiece, _depth: usize, _num_moved: usize) -> Option<Move> {
-//         panic!("TODO");
-//     }
-// }
-
-// TODO
-// pub struct AStarMoveSearchDirector {}
-//
-// impl MoveSearchDirector for AStarMoveSearchDirector {
-//     fn next(&mut self, _conf: &MoveSearchConfiguration, _fp: &FallingPiece, _depth: usize, _num_moved: usize) -> Option<Move> {
-//         panic!("TODO");
-//     }
-// }
-
-//---
-
 pub const DEFAULT_NUM_VISIBLE_NEXT_PIECES: usize = 5;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1912,7 +1789,7 @@ impl Game {
             match lock_out_type {
                 LockOutType::LockOut => {
                     if self.rules.loss_conds.contains(LossConditions::LOCK_OUT) {
-                        s.game_over_reason |= LossConditions::LOCK_OUT;
+                        s.game_over_reason |= LossConditions::LOCK_OUT | LossConditions::PARTIAL_LOCK_OUT;
                     }
                 }
                 LockOutType::PartialLockOut => {
@@ -1965,18 +1842,15 @@ impl Game {
         self.stats.hold += 1;
         Ok(r.is_ok())
     }
-    pub fn search_moves(&self, director: &mut impl MoveSearchDirector, debug: bool) -> Result<MoveSearchResult, &'static str> {
+    pub fn search_moves(&self, searcher: &mut impl move_search::MoveSearcher) -> Result<move_search::SearchResult, &'static str> {
         let s = &self.state;
         if s.falling_piece.is_none() {
             return Err("no falling piece");
         }
         let fp = s.falling_piece.as_ref().unwrap();
         let pf = &s.playfield;
-        let r = search_moves(
-            &MoveSearchConfiguration::new(pf, fp.piece, fp.placement, self.rules.rotation_mode, debug),
-            director,
-        );
-        Ok(r)
+        let conf = move_search::SearchConfiguration::new(pf, fp.piece, fp.placement, self.rules.rotation_mode);
+        Ok(searcher.search(&conf))
     }
 }
 
@@ -2197,20 +2071,23 @@ mod tests {
         let placement_to_be_found = Placement::new(ORIENTATION_3, (1, 0).into());
         let lockable = pf.search_lockable_placements(fp.piece);
         assert!(lockable.iter().any(|p| { *p == placement_to_be_found }));
-        let search_result = search_moves(
-            &MoveSearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs, false),
-            &mut BruteForceMoveSearchDirector::default(),
-        );
-        assert!(search_result.get(&placement_to_be_found).is_some());
+
+        let conf = move_search::SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
+
+        let ret = move_search::bruteforce::search_moves(&conf, false);
+        assert!(ret.contains(&placement_to_be_found));
         {
             let mut moves: Vec<MoveRecord> = Vec::new();
             for p in &lockable {
-                if let Some(record) = search_result.get(p) {
+                if let Some(record) = ret.get(p) {
                     moves.push(record);
                 }
             }
-            assert!(search_result.len() > moves.len());
+            assert!(ret.len() > moves.len());
         }
+
+        let ret = move_search::astar::search_moves(&conf, placement_to_be_found, false);
+        assert!(ret.contains(&placement_to_be_found));
     }
 
     #[test]
@@ -2305,9 +2182,9 @@ mod tests {
         let fp = game.state.falling_piece.as_ref().unwrap();
 
         let placements = game.state.playfield.search_lockable_placements(fp.piece);
-        let search_result = search_moves(
-            &MoveSearchConfiguration::new(&pf, fp.piece, fp.placement, game.rules.rotation_mode, false),
-            &mut BruteForceMoveSearchDirector::default(),
+        let search_result = move_search::bruteforce::search_moves(
+            &move_search::SearchConfiguration::new(&pf, fp.piece, fp.placement, game.rules.rotation_mode),
+            false,
         );
         let dst = placements[0];
         let mr = search_result.get(&dst).unwrap();

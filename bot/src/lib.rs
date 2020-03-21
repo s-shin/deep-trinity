@@ -15,7 +15,8 @@ impl Bot for SimpleBot {
         let pf = &game.state.playfield;
         let fp = game.state.falling_piece.as_ref().unwrap();
         let lockable = pf.search_lockable_placements(fp.piece);
-        let search_result = game.search_moves(&mut BruteForceMoveSearchDirector::default(), false);
+        let search_result = game.search_moves(
+            &mut move_search::bruteforce::BruteForceMoveSearcher::default());
         debug_assert!(search_result.is_ok());
         let search_result = search_result.unwrap();
         let candidates = lockable.iter().filter(|p| { search_result.contains(p) }).collect::<Vec<&Placement>>();
@@ -57,8 +58,9 @@ mod tests {
             }
             let dst = dst.unwrap();
 
-            let ret = game.search_moves(
-                &mut BruteForceMoveSearchDirector::default(), false).unwrap();
+            // let mut searcher = move_search::bruteforce::BruteForceMoveSearcher::default();
+            let mut searcher = move_search::astar::AStarMoveSearcher::new(dst, true);
+            let ret = game.search_moves(&mut searcher).unwrap();
             let rec = ret.get(&dst).unwrap();
             let mut mp = MovePlayer::new(rec);
             while mp.step(&mut game).unwrap() {

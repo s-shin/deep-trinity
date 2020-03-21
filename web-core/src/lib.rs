@@ -68,6 +68,7 @@ pub enum StatisticsEntryType {
 }
 
 #[wasm_bindgen]
+#[derive(Copy, Clone, Debug)]
 pub struct Placement {
     pub orientation: u8,
     pub x: i8,
@@ -249,8 +250,9 @@ pub struct MovePlayer {
 #[wasm_bindgen]
 impl MovePlayer {
     pub fn from(game: &Game, dst: Placement) -> Result<MovePlayer, JsValue> {
-        // TODO: replace with better director
-        let r = match game.game.search_moves(&mut core::BruteForceMoveSearchDirector::default(), false) {
+        let mut searcher = core::move_search::astar::AStarMoveSearcher::new(dst.into(), false);
+        // let mut searcher = core::move_search::bruteforce::BruteForceMoveSearcher::default();
+        let r = match game.game.search_moves(&mut searcher) {
             Ok(r) => r,
             Err(e) => { return Err(e.into()); }
         };

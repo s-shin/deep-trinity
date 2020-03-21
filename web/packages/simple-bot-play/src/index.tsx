@@ -6,6 +6,8 @@ import * as coreHelper from "@deep-trinity/web-core-helper";
 import * as view from "@deep-trinity/view";
 import * as model from "@deep-trinity/model";
 
+core.setPanicHook();
+
 enum BotRunnerState {
   Think,
   Move,
@@ -21,7 +23,7 @@ class BotRunner {
   constructor() {
     this.state = BotRunnerState.Think;
     this.game = new core.Game();
-    this.pg = new core.RandomPieceGenerator(BigInt(5));
+    this.pg = new core.RandomPieceGenerator(BigInt(17));
     this.bot = new core.SimpleBot();
 
     this.game.supplyNextPieces(this.pg.generate());
@@ -71,7 +73,7 @@ const App: React.FC = () => {
   useEffect(() => {
     (async () => {
       for (let i = 0; i < 2000; i++) {
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise(resolve => setTimeout(resolve, 100));
         botRunner.update();
         setGameModel(botRunner.getGameModel());
         if (botRunner.isEnd()) {
