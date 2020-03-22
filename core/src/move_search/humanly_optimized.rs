@@ -7,18 +7,16 @@ pub fn das_optim_plan() -> Vec<Vec<Move>> {
     vec![
         vec![Move::Shift(END), Move::Shift(-END)],
         vec![Move::Rotate(0), Move::Rotate(1), Move::Rotate(-1)],
-        vec![Move::Shift(0), Move::Shift(1), Move::Shift(-1)],
+        // vec![Move::Shift(0), Move::Shift(1), Move::Shift(-1)],
         vec![Move::Drop(END)],
-        vec![Move::Rotate(0), Move::Rotate(1), Move::Rotate(-1)],
     ]
 }
 
 pub fn edge_plan() -> Vec<Vec<Move>> {
     vec![
-        vec![Move::Rotate(1), Move::Rotate(-1), Move::Rotate(2)],
-        vec![Move::Shift(END), Move::Shift(-END)],
+        vec![Move::Rotate(0), Move::Rotate(1), Move::Rotate(-1), Move::Rotate(2), Move::Rotate(2)],
+        vec![Move::Shift(0), Move::Shift(END), Move::Shift(-END)],
         vec![Move::Drop(END)],
-        vec![Move::Rotate(0), Move::Rotate(1), Move::Rotate(-1)],
     ]
 }
 
@@ -38,7 +36,6 @@ pub fn normal_plan(conf: &SearchConfiguration) -> Vec<Vec<Move>> {
         first_mvs,
         vec![Move::Rotate(0), Move::Rotate(1), Move::Rotate(-1)],
         vec![Move::Drop(END)],
-        vec![Move::Rotate(0), Move::Rotate(1), Move::Rotate(-1)],
     ]
 }
 
@@ -73,7 +70,7 @@ fn search_moves(conf: &SearchConfiguration, plan: &[Vec<Move>]) -> SearchResult 
             mv = match mv {
                 Move::Drop(100) => Move::Drop(pf.num_droppable_rows(&fp) as i8),
                 Move::Shift(100) => Move::Shift(pf.num_shiftable_cols(&fp, true) as i8),
-                Move::Shift(-100) => Move::Shift(pf.num_shiftable_cols(&fp, false) as i8),
+                Move::Shift(-100) => Move::Shift(-(pf.num_shiftable_cols(&fp, false) as i8)),
                 _ => mv,
             };
             let ok = fp.apply_move(mv, pf, conf.mode);
@@ -95,26 +92,25 @@ fn search_moves(conf: &SearchConfiguration, plan: &[Vec<Move>]) -> SearchResult 
     SearchResult::new(conf.src, found)
 }
 
+/// This searcher covers most of moves the last move of which is hard drop.
 #[derive(Copy, Clone, Debug)]
 pub struct HumanlyOptimizedMoveSearcher {
     dst: Placement,
-    prefer_drop: bool,
     das_optim: bool,
 }
 
 impl HumanlyOptimizedMoveSearcher {
-    pub fn new(dst: Placement, prefer_drop: bool, das_optim: bool) -> Self {
-        Self { dst, prefer_drop, das_optim }
+    pub fn new(dst: Placement, das_optim: bool) -> Self {
+        Self { dst, das_optim }
     }
 }
 
 impl MoveSearcher for HumanlyOptimizedMoveSearcher {
     fn search(&mut self, conf: &SearchConfiguration) -> SearchResult {
-        let mut candidate = None;
-        for i in 0..2 {
+        for i in 0..=2 {
             let r = match i {
                 0 => {
-                    if self.das_optim {
+                    if !self.das_optim {
                         continue;
                     }
                     search_moves(conf, &das_optim_plan())
@@ -122,23 +118,36 @@ impl MoveSearcher for HumanlyOptimizedMoveSearcher {
                 1 => {
                     search_moves(conf, &edge_plan())
                 }
-                // 2 => {
-                //     search_moves(conf, &normal_plan(conf))
-                // }
+                2 => {
+                    search_moves(conf, &normal_plan(conf))
+                }
                 _ => panic!(),
             };
-            if let Some(rec) = r.get(&self.dst) {
-                if !self.prefer_drop {
-                    return r;
-                }
-                if let Some(Move::Drop(_)) = rec.items.last().map(|item| { item.by }) {
-                    return r;
-                } else {
-                    candidate = Some(r);
-                }
+            if let Some(_) = r.get(&self.dst) {
+                return r;
             }
         }
-        candidate.unwrap_or(SearchResult::new(conf.src, MoveDestinations::new()))
+        SearchResult::new(conf.src, MoveDestinations::new())
     }
 }
 
+#[cfg(test)]
+mod test {
+    use crate::*;
+    use super::*;
+
+    #[test]
+    fn test_das_optim_plan() {
+        let plan = das_optim_plan();
+        let pf = Playfield::default();
+        let fp = FallingPiece::spawn(Piece::I, None);
+        let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
+        let r = search_moves(&conf, &plan);
+        for p in r.found.keys() {
+            // println!("{:?}", p);
+            let mut g = Game::default();
+            g.state.playfield.grid.put(p.pos, FallingPiece::new(fp.piece, *p).grid());
+            println!("{}", g);
+        }
+    }
+}

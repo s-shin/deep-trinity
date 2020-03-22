@@ -23,8 +23,8 @@ pub type MoveDestinations = HashMap<Placement, MoveRecordItem>;
 
 #[derive(Clone, Debug)]
 pub struct SearchResult {
-    src: Placement,
-    found: MoveDestinations,
+    pub src: Placement,
+    pub found: MoveDestinations,
 }
 
 impl SearchResult {

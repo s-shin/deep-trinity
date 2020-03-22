@@ -17,7 +17,7 @@ export const NextPieces: React.FC<NextPiecesProps> = props => {
     );
   }
   if (elPieces.length == 0) {
-    elPieces.push(<PieceContainer/>); // dummy
+    elPieces.push(<PieceContainer key={0}/>); // dummy
   }
   return (
     <NextPiecesRoot>

@@ -248,23 +248,32 @@ pub struct MovePlayer {
 }
 
 #[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+#[wasm_bindgen]
 impl MovePlayer {
     pub fn from(game: &Game, dst: Placement) -> Result<MovePlayer, JsValue> {
         use core::move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
         use core::move_search::astar::AStarMoveSearcher;
 
         let g = &game.game;
-        for i in 1..2 {
+        let fp = g.state.falling_piece.as_ref().unwrap();
+        let dst = core::get_nearest_placement_alias(fp.piece, &dst.into(), &fp.placement, None);
+        for i in 0..=1 {
             // let mut searcher = core::move_search::bruteforce::BruteForceMoveSearcher::default();
             let r = match match i {
-                0 => g.search_moves(&mut HumanlyOptimizedMoveSearcher::new(dst.into(), true, true)),
-                1 => g.search_moves(&mut AStarMoveSearcher::new(dst.into(), false)),
+                0 => g.search_moves(&mut HumanlyOptimizedMoveSearcher::new(dst, true)),
+                1 => g.search_moves(&mut AStarMoveSearcher::new(dst, false)),
                 _ => panic!(),
             } {
                 Ok(r) => r,
                 Err(e) => { return Err(e.into()); }
             };
-            if let Some(rec) = r.get(&dst.into()) {
+            if let Some(rec) = r.get(&dst) {
+                log(&format!("{:?} : {} => {:?}", g.state.falling_piece.as_ref().unwrap().piece, i, rec));
                 return Ok(Self {
                     move_player: core::MovePlayer::new(rec),
                 });

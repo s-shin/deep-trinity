@@ -15,10 +15,25 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
         fn new(f: F, is_checked: bool) -> Self { Self { f, is_checked } }
     }
 
-    // heuristic function.
-    fn distance(a: &Placement, b: &Placement) -> F {
-        let dp = a.pos - b.pos;
-        (dp.0.abs() + dp.1.abs() + (b.orientation.id() as i8 - a.orientation.id() as i8).abs() * 2) as F
+    fn heuristic_func(current: &Placement, target: &Placement) -> F {
+        current.distance(target, None) as F
+    }
+
+    fn cost_func(mv: Move, prev: Option<Move>) -> F {
+        match mv {
+            Move::Rotate(_) => match prev {
+                Some(Move::Drop(_)) => 3,
+                _ => 2,
+            },
+            Move::Drop(_) => match prev {
+                Some(Move::Rotate(_)) => 2,
+                _ => 1,
+            },
+            Move::Shift(_) => match prev {
+                Some(Move::Drop(_)) => 2,
+                _ => 1,
+            }
+        }
     }
 
     macro_rules! debug_println {
@@ -29,16 +44,8 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
         }
     }
 
-    struct Action {
-        mv: Move,
-        cost: F,
-    }
-    const ACTIONS: [Action; 5] = [
-        Action { mv: Move::Drop(1), cost: 1 },
-        Action { mv: Move::Shift(1), cost: 1 },
-        Action { mv: Move::Shift(-1), cost: 1 },
-        Action { mv: Move::Rotate(1), cost: 1 },
-        Action { mv: Move::Rotate(-1), cost: 1 },
+    const MOVES: [Move; 5] = [
+        Move::Drop(1), Move::Shift(1), Move::Shift(-1), Move::Rotate(1), Move::Rotate(-1),
     ];
 
     let mut found = MoveDestinations::new();
@@ -74,13 +81,14 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
             debug_println!("target found.");
             break;
         }
-        let target_g = target_f - distance(&target_placement, &dst);
+        let target_g = target_f - heuristic_func(&target_placement, &dst);
+        let target_by = found.get(&target_placement).map(|item| { item.by });
         debug_println!("target: placement: {:?}, f: {:?}, (g: {})", target_placement, target_f, target_g);
 
-        for action in &ACTIONS {
+        for mv in &MOVES {
             let mut fp = FallingPiece::new(conf.piece, target_placement);
-            if fp.apply_move(action.mv, conf.pf, conf.mode) {
-                let f = target_g + action.cost + distance(&fp.placement, &dst);
+            if fp.apply_move(*mv, conf.pf, conf.mode) {
+                let f = target_g + cost_func(*mv, target_by) + heuristic_func(&fp.placement, &dst);
                 if !open_list.contains_key(&f) {
                     open_list.insert(f, VecDeque::new());
                 }
@@ -92,7 +100,7 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
                 };
                 let should_update = !next.is_checked || f < next.f;
                 debug_println!("  {:?} => placement: {:?}, f: {}, is_checked: {}, new_f: {} => update: {}",
-                    action.mv, fp.placement, next.f, next.is_checked, f, should_update);
+                    mv, fp.placement, next.f, next.is_checked, f, should_update);
                 if should_update {
                     open_list.get_mut(&f).unwrap().push_back(fp.placement);
                     state.insert(fp.placement, StateEntry::new(f, false));

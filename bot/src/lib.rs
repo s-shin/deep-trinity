@@ -41,6 +41,7 @@ mod tests {
 
     #[test]
     fn test_simple_bot() {
+        let debug = false;
         let mut game = Game::new(Default::default());
         let mut pg = RandomPieceGenerator::new(StdRng::seed_from_u64(0));
         game.supply_next_pieces(&pg.generate());
@@ -48,7 +49,7 @@ mod tests {
 
         let mut bot = SimpleBot::default();
         for _ in 0..50 {
-            // println!("{}", game);
+            if debug { println!("{}", game); }
             if game.should_supply_next_pieces() {
                 game.supply_next_pieces(&pg.generate());
             }
@@ -58,18 +59,22 @@ mod tests {
             }
             let dst = dst.unwrap();
 
+            let fp = game.state.falling_piece.as_ref().unwrap();
+            let dst2 = core::get_nearest_placement_alias(fp.piece, &dst, &fp.placement, None);
+            if debug { println!("{:?}: {:?} => {:?}", fp.piece, dst, dst2); }
+
             // let mut searcher = move_search::bruteforce::BruteForceMoveSearcher::default();
-            let mut searcher = move_search::humanly_optimized::HumanlyOptimizedMoveSearcher::new(dst, true, true);
+            let mut searcher = move_search::humanly_optimized::HumanlyOptimizedMoveSearcher::new(dst, true);
             let ret = game.search_moves(&mut searcher).unwrap();
-            let rec = ret.get(&dst).unwrap_or_else(|| {
-                // println!("fallback");
-                let mut searcher = move_search::astar::AStarMoveSearcher::new(dst, false);
+            let rec = ret.get(&dst2).unwrap_or_else(|| {
+                if debug { println!("fallback"); }
+                let mut searcher = move_search::astar::AStarMoveSearcher::new(dst2, false);
                 let ret = game.search_moves(&mut searcher).unwrap();
-                ret.get(&dst).unwrap()
+                ret.get(&dst2).unwrap()
             });
             let mut mp = MovePlayer::new(rec);
             while mp.step(&mut game).unwrap() {
-                // println!("{}", game);
+                if debug { println!("{}", game); }
             }
 
             game.lock().unwrap();
@@ -77,7 +82,7 @@ mod tests {
                 break;
             }
         }
-        // println!("{}", game);
+        if debug { println!("{}", game); }
         assert!(game.stats.lock > 40);
     }
 }

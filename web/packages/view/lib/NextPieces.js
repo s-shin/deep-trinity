@@ -13,7 +13,7 @@ exports.NextPieces = props => {
         elPieces.push(react_1.default.createElement(PieceContainer_1.default, { key: i, piece: props.pieces[i] }));
     }
     if (elPieces.length == 0) {
-        elPieces.push(react_1.default.createElement(PieceContainer_1.default, null)); // dummy
+        elPieces.push(react_1.default.createElement(PieceContainer_1.default, { key: 0 })); // dummy
     }
     return (react_1.default.createElement(NextPiecesRoot, null, elPieces));
 };

@@ -683,6 +683,13 @@ impl Placement {
     pub fn new(orientation: Orientation, pos: Pos) -> Self {
         Self { orientation, pos }
     }
+    pub fn distance(&self, other: &Placement, factors: Option<(usize, usize, usize)>) -> usize {
+        let dp = self.pos - other.pos;
+        let (fx, fy, fr) = factors.unwrap_or((1, 1, 2));
+        (dp.0.abs() as usize) * fx
+            + (dp.1.abs() as usize) * fy
+            + ((self.orientation.id() as i8 - other.orientation.id() as i8).abs() as usize) * fr
+    }
 }
 
 //---
@@ -1144,6 +1151,85 @@ fn gen_piece_specs() -> Vec<PieceSpec> {
 
 lazy_static! {
     pub static ref PIECE_SPECS: Vec<PieceSpec> = gen_piece_specs();
+}
+
+pub fn get_placement_aliases(piece: Piece, placement: &Placement) -> Vec<Placement> {
+    match piece {
+        Piece::O => {
+            match placement.orientation {
+                ORIENTATION_0 => vec![
+                    Placement::new(ORIENTATION_1, placement.pos + pos!(0, 1)),
+                    Placement::new(ORIENTATION_2, placement.pos + pos!(1, 1)),
+                    Placement::new(ORIENTATION_3, placement.pos + pos!(1, 0)),
+                ],
+                ORIENTATION_1 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + pos!(0, -1)),
+                    Placement::new(ORIENTATION_2, placement.pos + pos!(1, 0)),
+                    Placement::new(ORIENTATION_3, placement.pos + pos!(1, -1)),
+                ],
+                ORIENTATION_2 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + pos!(-1, -1)),
+                    Placement::new(ORIENTATION_1, placement.pos + pos!(-1, 0)),
+                    Placement::new(ORIENTATION_3, placement.pos + pos!(0, -1)),
+                ],
+                ORIENTATION_3 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + pos!(-1, 0)),
+                    Placement::new(ORIENTATION_1, placement.pos + pos!(-1, 1)),
+                    Placement::new(ORIENTATION_2, placement.pos + pos!(0, 1)),
+                ],
+                _ => panic!(),
+            }
+        }
+        Piece::I => {
+            match placement.orientation {
+                ORIENTATION_0 => vec![
+                    Placement::new(ORIENTATION_2, placement.pos + pos!(1, 0)),
+                ],
+                ORIENTATION_1 => vec![
+                    Placement::new(ORIENTATION_3, placement.pos + pos!(0, -1)),
+                ],
+                ORIENTATION_2 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + pos!(-1, 0)),
+                ],
+                ORIENTATION_3 => vec![
+                    Placement::new(ORIENTATION_1, placement.pos + pos!(0, 1)),
+                ],
+                _ => panic!(),
+            }
+        }
+        Piece::S | Piece::Z => {
+            match placement.orientation {
+                ORIENTATION_0 => vec![
+                    Placement::new(ORIENTATION_2, placement.pos + pos!(0, 1)),
+                ],
+                ORIENTATION_1 => vec![
+                    Placement::new(ORIENTATION_3, placement.pos + pos!(1, 0)),
+                ],
+                ORIENTATION_2 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + pos!(0, -1)),
+                ],
+                ORIENTATION_3 => vec![
+                    Placement::new(ORIENTATION_1, placement.pos + pos!(-1, 0)),
+                ],
+                _ => panic!(),
+            }
+        }
+        _ => vec![],
+    }
+}
+
+pub fn get_nearest_placement_alias(piece: Piece, aliased: &Placement, reference: &Placement,
+                                   factors: Option<(usize, usize, usize)>) -> Placement {
+    let mut candidate = aliased.clone();
+    let mut distance = reference.distance(aliased, factors);
+    for p in &get_placement_aliases(piece, aliased) {
+        let d = reference.distance(p, factors);
+        if d < distance {
+            distance = d;
+            candidate = p.clone();
+        }
+    }
+    candidate
 }
 
 //---
