@@ -48,8 +48,8 @@ mod tests {
         game.setup_falling_piece(None).unwrap();
 
         let mut bot = SimpleBot::default();
-        for _ in 0..50 {
-            if debug { println!("{}", game); }
+        for i in 0..100 {
+            if debug { println!("===== {} =====\n{}", i, game); }
             if game.should_supply_next_pieces() {
                 game.supply_next_pieces(&pg.generate());
             }
@@ -57,22 +57,33 @@ mod tests {
             if dst.is_none() {
                 break;
             }
-            let dst = dst.unwrap();
-
+            let dst1 = dst.unwrap();
             let fp = game.state.falling_piece.as_ref().unwrap();
-            let dst2 = core::get_nearest_placement_alias(fp.piece, &dst, &fp.placement, None);
-            if debug { println!("{:?}: {:?} => {:?}", fp.piece, dst, dst2); }
+            let dst2 = core::get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
+            if debug { println!("{:?}: {:?} or {:?}", fp.piece, dst1, dst2); }
 
-            // let mut searcher = move_search::bruteforce::BruteForceMoveSearcher::default();
-            let mut searcher = move_search::humanly_optimized::HumanlyOptimizedMoveSearcher::new(dst, true);
-            let ret = game.search_moves(&mut searcher).unwrap();
-            let rec = ret.get(&dst2).unwrap_or_else(|| {
-                if debug { println!("fallback"); }
-                let mut searcher = move_search::astar::AStarMoveSearcher::new(dst2, false);
-                let ret = game.search_moves(&mut searcher).unwrap();
-                ret.get(&dst2).unwrap()
-            });
-            let mut mp = MovePlayer::new(rec);
+            let mut rec = None;
+            for i in 0..=2 {
+                // For special rotations, we should also check original destination.
+                let dst = match i {
+                    0 => &dst2,
+                    1 => &dst2,
+                    2 => &dst1,
+                    _ => panic!(),
+                };
+                let ret = match i {
+                    0 => game.search_moves(&mut move_search::humanly_optimized::HumanlyOptimizedMoveSearcher::new(*dst, true)),
+                    1 => game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(*dst, false)),
+                    2 => game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(*dst, false)),
+                    _ => panic!(),
+                };
+                if let Some(r) = ret.unwrap().get(dst) {
+                    rec = Some(r);
+                    break;
+                }
+            }
+
+            let mut mp = MovePlayer::new(rec.unwrap());
             while mp.step(&mut game).unwrap() {
                 if debug { println!("{}", game); }
             }

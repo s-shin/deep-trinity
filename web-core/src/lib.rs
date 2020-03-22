@@ -258,21 +258,32 @@ impl MovePlayer {
     pub fn from(game: &Game, dst: Placement) -> Result<MovePlayer, JsValue> {
         use core::move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
         use core::move_search::astar::AStarMoveSearcher;
+        // use core::move_search::bruteforce::BruteForceMoveSearcher;
 
         let g = &game.game;
         let fp = g.state.falling_piece.as_ref().unwrap();
-        let dst = core::get_nearest_placement_alias(fp.piece, &dst.into(), &fp.placement, None);
-        for i in 0..=1 {
-            // let mut searcher = core::move_search::bruteforce::BruteForceMoveSearcher::default();
-            let r = match match i {
-                0 => g.search_moves(&mut HumanlyOptimizedMoveSearcher::new(dst, true)),
-                1 => g.search_moves(&mut AStarMoveSearcher::new(dst, false)),
+        let dst1: core::Placement = dst.into();
+        let dst2 = core::get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
+        for i in 0..=2 {
+            // For special rotations, we should also check original destination.
+            let dst = match i {
+                0 => &dst2,
+                1 => &dst2,
+                2 => &dst1,
                 _ => panic!(),
-            } {
+            };
+            let ret = match i {
+                0 => g.search_moves(&mut HumanlyOptimizedMoveSearcher::new(*dst, true)),
+                1 => g.search_moves(&mut AStarMoveSearcher::new(*dst, false)),
+                2 => g.search_moves(&mut AStarMoveSearcher::new(*dst, false)),
+                // x => g.search_moves(&mut BruteForceMoveSearcher::default()),
+                _ => panic!(),
+            };
+            let ret = match ret {
                 Ok(r) => r,
                 Err(e) => { return Err(e.into()); }
             };
-            if let Some(rec) = r.get(&dst) {
+            if let Some(rec) = ret.get(dst) {
                 log(&format!("{:?} : {} => {:?}", g.state.falling_piece.as_ref().unwrap().piece, i, rec));
                 return Ok(Self {
                     move_player: core::MovePlayer::new(rec),
