@@ -11,6 +11,8 @@ const PieceContainerRoot = styled_1.default.div `
   margin: ${(props) => props.margin};
   width: ${(props) => props.size.width};
   height: ${(props) => props.size.height};
+  display: grid;
+  place-items: center;
 `;
 exports.PieceContainer = props => {
     const theme = theme_1.useTheme();

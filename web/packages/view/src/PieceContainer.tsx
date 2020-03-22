@@ -13,6 +13,8 @@ const PieceContainerRoot = styled.div`
   margin: ${(props: PieceContainerRootProps) => props.margin};
   width: ${(props: PieceContainerRootProps) => props.size.width};
   height: ${(props: PieceContainerRootProps) => props.size.height};
+  display: grid;
+  place-items: center;
 `;
 
 export type PieceContainerProps = {

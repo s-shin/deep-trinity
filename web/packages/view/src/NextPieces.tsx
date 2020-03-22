@@ -13,8 +13,11 @@ export const NextPieces: React.FC<NextPiecesProps> = props => {
   const elPieces = [];
   for (let i = 0; i < props.pieces.length; i++) {
     elPieces.push(
-      <PieceContainer key={i} piece={props.pieces[i]}/>
+      <PieceContainer key={i} piece={props.pieces[i]}/>,
     );
+  }
+  if (elPieces.length == 0) {
+    elPieces.push(<PieceContainer/>); // dummy
   }
   return (
     <NextPiecesRoot>
