@@ -230,7 +230,7 @@ impl RandomPieceGenerator {
 #[wasm_bindgen]
 #[derive(Default)]
 pub struct SimpleBot {
-    bot: bot::SimpleBot,
+    bot: bot::simple::SimpleBot,
 }
 
 #[wasm_bindgen]

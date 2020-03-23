@@ -1245,6 +1245,12 @@ impl FallingPiece {
     pub fn new(piece: Piece, placement: Placement) -> Self {
         Self { piece, placement, move_record: MoveRecord::new(placement) }
     }
+    pub fn new_with_one_record_item(piece: Piece, src: Placement, mv: Move, dst: Placement) -> Self {
+        let mut fp = Self::new(piece, dst);
+        fp.move_record.initial_placement = src;
+        fp.move_record.items.push(MoveRecordItem::new(mv, dst));
+        fp
+    }
     pub fn spawn(piece: Piece, pf: Option<&Playfield>) -> Self {
         let spec = PieceSpec::of(piece);
         let mut fp = Self::new(piece, spec.initial_placement);
@@ -1308,13 +1314,20 @@ impl FallingPiece {
     }
     pub fn last_two_placements(&self) -> Option<(Placement, Placement)> {
         let len = self.move_record.items.len();
-        if len < 2 {
+        if len == 0 {
             return None;
         }
-        Some((
-            self.move_record.get(len - 2).unwrap().placement,
-            self.move_record.get(len - 1).unwrap().placement,
-        ))
+        if len == 1 {
+            Some((
+                self.move_record.initial_placement,
+                self.move_record.get(0).unwrap().placement,
+            ))
+        } else {
+            Some((
+                self.move_record.get(len - 2).unwrap().placement,
+                self.move_record.get(len - 1).unwrap().placement,
+            ))
+        }
     }
 }
 
@@ -1937,6 +1950,23 @@ impl Game {
         let pf = &s.playfield;
         let conf = move_search::SearchConfiguration::new(pf, fp.piece, fp.placement, self.rules.rotation_mode);
         Ok(searcher.search(&conf))
+    }
+    pub fn get_move_candidates(&self) -> Result<Vec<FallingPiece>, &'static str> {
+        let s = &self.state;
+        if s.falling_piece.is_none() {
+            return Err("no falling piece");
+        }
+        let fp = s.falling_piece.as_ref().unwrap();
+        let pf = &s.playfield;
+        let lockable = pf.search_lockable_placements(fp.piece);
+        let search_result = self.search_moves(&mut move_search::bruteforce::BruteForceMoveSearcher::default())?;
+        let mut r = Vec::new();
+        for p in lockable.iter() {
+            if let Some(item) = search_result.found.get(p) {
+                r.push(FallingPiece::new_with_one_record_item(fp.piece, item.placement, item.by, *p));
+            }
+        }
+        Ok(r)
     }
 }
 

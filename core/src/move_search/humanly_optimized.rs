@@ -92,7 +92,7 @@ fn search_moves(conf: &SearchConfiguration, plan: &[Vec<Move>]) -> SearchResult 
     SearchResult::new(conf.src, found)
 }
 
-/// This searcher covers most of moves the last move of which is hard drop.
+/// This searcher covers most of moves the last of which is hard drop.
 #[derive(Copy, Clone, Debug)]
 pub struct HumanlyOptimizedMoveSearcher {
     dst: Placement,
