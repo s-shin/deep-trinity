@@ -39,7 +39,6 @@ class BotRunner {
 
     this.game.supplyNextPieces(this.pg.generate());
     this.game.setupFallingPiece();
-    this.game.hold(); // FIXME: remove
   }
 
   getGameModel(): model.Game {

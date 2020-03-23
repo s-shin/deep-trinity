@@ -22,7 +22,10 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
     fn cost_func(mv: Move, prev: Option<Move>) -> F {
         match mv {
             Move::Rotate(_) => match prev {
-                Some(Move::Drop(_)) => 3,
+                // To prevent cases such as `drop -> rotate -> shift -> drop` instead of `rotate -> shift -> drop`,
+                // costs are adjusted.
+                Some(Move::Drop(_)) => 4,
+                Some(Move::Shift(_)) => 3,
                 _ => 2,
             },
             Move::Drop(_) => match prev {
@@ -86,6 +89,15 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
         debug_println!("target: placement: {:?}, f: {:?}, (g: {})", target_placement, target_f, target_g);
 
         for mv in &MOVES {
+            if let Move::Shift(n1) = mv {
+                if let Some(Move::Shift(n2)) = target_by {
+                    // Shifting to opposite direction should be restricted since it sometimes
+                    // leads circular result.
+                    if n1 * n2 < 0 {
+                        continue;
+                    }
+                }
+            }
             let mut fp = FallingPiece::new(conf.piece, target_placement);
             if fp.apply_move(*mv, conf.pf, conf.mode) {
                 let f = target_g + cost_func(*mv, target_by) + heuristic_func(&fp.placement, &dst);

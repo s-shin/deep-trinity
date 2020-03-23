@@ -42,14 +42,16 @@ mod tests {
     #[test]
     fn test_simple_bot() {
         let debug = false;
+        // let seed = 0;
+        let seed = 409509985; // check circular problem
         let mut game = Game::new(Default::default());
-        let mut pg = RandomPieceGenerator::new(StdRng::seed_from_u64(0));
+        let mut pg = RandomPieceGenerator::new(StdRng::seed_from_u64(seed));
         game.supply_next_pieces(&pg.generate());
         game.setup_falling_piece(None).unwrap();
 
         let mut bot = SimpleBot::default();
-        for i in 0..100 {
-            if debug { println!("===== {} =====\n{}", i, game); }
+        for n in 0..100 {
+            if debug { println!("===== {} =====\n{}", n, game); }
             if game.should_supply_next_pieces() {
                 game.supply_next_pieces(&pg.generate());
             }

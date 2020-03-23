@@ -34,12 +34,18 @@ impl SearchResult {
     pub fn get(&self, dst: &Placement) -> Option<MoveRecord> {
         let mut placement = *dst;
         let mut items: Vec<MoveRecordItem> = Vec::new();
+        let mut i = 0;
+        const STOPPER: usize = 10000;
         while let Some(item) = self.found.get(&placement) {
             items.push(MoveRecordItem::new(item.by, placement));
             placement = item.placement;
             if item.placement == self.src {
                 break;
             }
+            if i > STOPPER {
+                panic!("maybe enter infinite loop");
+            }
+            i += 1;
         }
         if items.is_empty() {
             return None;
