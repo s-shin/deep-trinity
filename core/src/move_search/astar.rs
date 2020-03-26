@@ -16,7 +16,7 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
     }
 
     fn heuristic_func(current: &Placement, target: &Placement) -> F {
-        current.distance(target, None) as F
+        current.distance(target, Some((1, 1, 1))) as F
     }
 
     fn cost_func(mv: Move, prev: Option<Move>) -> F {

@@ -228,17 +228,28 @@ impl RandomPieceGenerator {
 
 
 #[wasm_bindgen]
-#[derive(Default)]
 pub struct SimpleBot {
+    ver: u8,
     bot: bot::simple::SimpleBot,
+    bot2: bot::simple2::SimpleBot2,
 }
 
 #[wasm_bindgen]
 impl SimpleBot {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Self { Default::default() }
-    pub fn think(&mut self, game: &Game) -> Option<Placement> {
-        self.bot.think(&game.game).map(|p| { p.into() })
+    pub fn new(ver: Option<u8>) -> Self {
+        Self {
+            ver: ver.unwrap_or(1),
+            bot: Default::default(),
+            bot2: Default::default(),
+        }
+    }
+    pub fn think(&mut self, game: &Game) -> Result<Option<Placement>, JsValue> {
+        match self.ver {
+            1 => Ok(self.bot.think(&game.game).map(|p| { p.into() })),
+            2 => Ok(self.bot2.think(&game.game).map(|p| { p.into() })),
+            _ => Err("invalid ver".into()),
+        }
     }
 }
 

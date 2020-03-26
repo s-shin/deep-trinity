@@ -4,7 +4,7 @@ extern crate bitflags;
 extern crate lazy_static;
 extern crate rand;
 
-use std::collections::{HashMap, VecDeque, BTreeMap};
+use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops;
@@ -315,6 +315,74 @@ pub trait Grid: Clone + fmt::Display {
             n += 1;
         }
         n - 1
+    }
+    fn num_blocks_of_row(&self, y: UPosY) -> usize {
+        if self.is_row_empty(y) {
+            return 0;
+        }
+        let mut n = 0;
+        for x in 0..self.width() {
+            if !self.get_cell(upos!(x, y)).is_empty() {
+                n += 1;
+            }
+        }
+        n
+    }
+    fn num_blocks(&self) -> usize {
+        let mut n = 0;
+        for y in 0..self.height() {
+            n += self.num_blocks_of_row(y);
+        }
+        n
+    }
+    fn enclosed_space(&self, pos: UPos) -> HashSet<UPos> {
+        let mut space = HashSet::new();
+        let mut checked = HashSet::new();
+        let mut unchecked = HashSet::new();
+        unchecked.insert(pos);
+        loop {
+            let p = match unchecked.iter().next().copied() {
+                Some(p) => p,
+                None => break,
+            };
+            let ok = unchecked.remove(&p);
+            debug_assert!(ok);
+            checked.insert(p);
+            if self.get_cell(p).is_empty() {
+                space.insert(p);
+            } else {
+                continue;
+            }
+            if p.0 > 0 {
+                let mut pp = p.clone();
+                pp.0 -= 1;
+                if !checked.contains(&pp) {
+                    unchecked.insert(pp);
+                }
+            }
+            if p.1 > 0 {
+                let mut pp = p.clone();
+                pp.1 -= 1;
+                if !checked.contains(&pp) {
+                    unchecked.insert(pp);
+                }
+            }
+            if p.0 < self.width() - 1 {
+                let mut pp = p.clone();
+                pp.0 += 1;
+                if !checked.contains(&pp) {
+                    unchecked.insert(pp);
+                }
+            }
+            if p.1 < self.height() - 1 {
+                let mut pp = p.clone();
+                pp.1 += 1;
+                if !checked.contains(&pp) {
+                    unchecked.insert(pp);
+                }
+            }
+        }
+        space
     }
     fn format(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for y in (0..self.height()).rev() {
@@ -1432,7 +1500,7 @@ impl Playfield {
                 let dx = *dx;
                 let dy = *dy;
                 let pos = pos!(fp.placement.pos.0 + dx, fp.placement.pos.1 + dy);
-                let is_wall = pos.0 < 0 || pos.1 < 0;
+                let is_wall = pos.0 < 0 || pos.1 < 0 || pos.0 >= self.width() as PosX || pos.1 >= self.height() as PosY;
                 if is_wall || self.grid.has_cell(pos.into()) {
                     num_corners += 1;
                     if match fp.placement.orientation {
@@ -1473,8 +1541,8 @@ impl Playfield {
     }
     pub fn check_line_clear(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> LineClear {
         debug_assert!(self.can_lock(fp));
-        let mut tmp_grid = self.grid.clone();
-        tmp_grid.put_fast(fp.placement.pos, fp.grid());
+        let mut tmp_grid = self.grid.bit_grid.clone();
+        tmp_grid.put_fast(fp.placement.pos, &fp.grid().bit_grid);
         LineClear::new(tmp_grid.num_filled_rows(), self.check_tspin(fp, mode))
     }
     pub fn check_lock_out(&self, fp: &FallingPiece) -> Option<LockOutType> {
@@ -1614,7 +1682,10 @@ impl ops::Sub for LineClearCounter {
     fn sub(self, other: Self) -> Self {
         let mut r = Self::default();
         for (lc, count) in self.data.iter() {
-            r.add(lc, *count - other.get(lc));
+            let dc = *count - other.get(lc);
+            if dc > 0 {
+                r.add(lc, dc);
+            }
         }
         r
     }
@@ -1646,7 +1717,10 @@ impl ops::Sub for ConsecutiveCountCounter {
     fn sub(self, other: Self) -> Self {
         let mut r = Self::default();
         for (cont_count, count) in self.data.iter() {
-            r.add(*cont_count, *count - other.get(*cont_count));
+            let dc = *count - other.get(*cont_count);
+            if dc > 0 {
+                r.add(*cont_count, dc);
+            }
         }
         r
     }
