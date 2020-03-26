@@ -2121,7 +2121,7 @@ impl MovePlayer {
     pub fn is_end(&self) -> bool { self.i >= self.record.len() }
     pub fn step(&mut self, game: &mut Game) -> Result<bool, &'static str> {
         if self.is_end() {
-            return Err("end of record");
+            return Ok(false);
         }
         if game.state.falling_piece.is_none() {
             return Err("no falling piece");
@@ -2138,7 +2138,7 @@ impl MovePlayer {
         let item = self.record.items[self.i];
         game.do_move(item.by)?;
         self.i += 1;
-        Ok(!self.is_end())
+        Ok(true)
     }
 }
 

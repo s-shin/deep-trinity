@@ -59,9 +59,14 @@ class BotRunner {
         if (game.shouldSupplyNextPieces()) {
           game.supplyNextPieces(pg.generate());
         }
-        const dst = bot.think(game);
+        const action = bot.think(game);
+        if (action.isHold()) {
+          game.hold();
+          break;
+        }
+        const dst = action.dst();
         if (dst === undefined) {
-          return;
+          break;
         }
         this.movePlayer = core.MovePlayer.from(game, dst);
         this.state = BotRunnerState.Move;

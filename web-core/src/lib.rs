@@ -6,7 +6,6 @@ extern crate bot;
 
 use wasm_bindgen::prelude::*;
 use rand::SeedableRng;
-use bot::Bot;
 
 #[wasm_bindgen(js_name = setPanicHook)]
 pub fn set_panic_hook() {
@@ -226,29 +225,51 @@ impl RandomPieceGenerator {
     }
 }
 
+#[wasm_bindgen]
+pub struct Action {
+    bot_action: bot::Action,
+}
+
+#[wasm_bindgen]
+impl Action {
+    fn new(bot_action: bot::Action) -> Self {
+        Self { bot_action }
+    }
+    pub fn dst(&self) -> Option<Placement> {
+        match self.bot_action {
+            bot::Action::MoveTo(p) => Some(p.into()),
+            _ => None,
+        }
+    }
+    #[wasm_bindgen(js_name = isHold)]
+    pub fn is_hold(&self) -> bool {
+        match self.bot_action {
+            bot::Action::Hold => true,
+            _ => false,
+        }
+    }
+}
 
 #[wasm_bindgen]
 pub struct SimpleBot {
-    ver: u8,
-    bot: bot::simple::SimpleBot,
-    bot2: bot::simple2::SimpleBot2,
+    bot: Box<dyn bot::Bot>,
 }
 
 #[wasm_bindgen]
 impl SimpleBot {
     #[wasm_bindgen(constructor)]
-    pub fn new(ver: Option<u8>) -> Self {
-        Self {
-            ver: ver.unwrap_or(1),
-            bot: Default::default(),
-            bot2: Default::default(),
-        }
+    pub fn new(bot_type: Option<u8>) -> Result<SimpleBot, JsValue> {
+        let bot: Box<dyn bot::Bot> = match bot_type.unwrap_or(1) {
+            1 => Box::new(bot::simple::SimpleBot::default()),
+            2 => Box::new(bot::simple2::SimpleBot2::default()),
+            _ => return Err("invalid bot type".into()),
+        };
+        Ok(Self { bot })
     }
-    pub fn think(&mut self, game: &Game) -> Result<Option<Placement>, JsValue> {
-        match self.ver {
-            1 => Ok(self.bot.think(&game.game).map(|p| { p.into() })),
-            2 => Ok(self.bot2.think(&game.game).map(|p| { p.into() })),
-            _ => Err("invalid ver".into()),
+    pub fn think(&mut self, game: &Game) -> Result<Action, JsValue> {
+        match self.bot.think(&game.game) {
+            Err(e) => Err(e.to_string().into()),
+            Ok(action) => Ok(Action::new(action)),
         }
     }
 }

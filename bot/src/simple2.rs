@@ -3,6 +3,8 @@ use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, F
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use crate::Action;
+use std::error::Error;
 
 fn eval_state(_game: &Game) -> f32 {
     0.0
@@ -62,16 +64,13 @@ impl Node {
     }
 }
 
-fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) {
+fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) -> Result<bool, Box<dyn Error>> {
     if max_depth == 0 {
-        return;
+        return Ok(false);
     }
-    let candidates = match rc_node.borrow().game.get_move_candidates() {
-        Ok(r) => r,
-        Err(_) => return,
-    };
+    let candidates = rc_node.borrow().game.get_move_candidates()?;
     if candidates.is_empty() {
-        return;
+        return Ok(false);
     }
     let mut max_future_reward = 0.0;
     for fp in candidates.iter() {
@@ -81,7 +80,7 @@ fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) {
         let rc_child = Rc::new(RefCell::new(child));
         rc_node.borrow_mut().children.insert(Some(fp.placement), rc_child.clone());
 
-        expand(rc_child.clone(), max_depth - 1);
+        expand(rc_child.clone(), max_depth - 1)?;
 
         let child = rc_child.borrow();
         let r = child.reward + child.max_future_reward;
@@ -90,6 +89,7 @@ fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) {
         }
     }
     rc_node.borrow_mut().max_future_reward = max_future_reward;
+    Ok(true)
 }
 
 fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
@@ -108,18 +108,19 @@ fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
 pub struct SimpleBot2 {}
 
 impl Bot for SimpleBot2 {
-    fn think(&mut self, game: &Game) -> Option<Placement> {
+    fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
         let node = Rc::new(RefCell::new(Node::new(game.clone(), 0.0)));
-        expand(node.clone(), 3);
+        expand(node.clone(), 3)?;
         let node = node.borrow();
-        node.children.iter()
+        let dst = node.children.iter()
             .max_by(|(_, n1), (_, n2)| {
                 let n1 = n1.borrow();
                 let n2 = n2.borrow();
                 (n1.reward + n1.max_future_reward).partial_cmp(&(n2.reward + n2.max_future_reward)).unwrap()
             })
             .map(|(p, _)| p.clone())
-            .unwrap()
+            .unwrap();
+        dst.map_or(Err("no movable placements".into()), |p| Ok(Action::MoveTo(p)))
     }
 }
 
@@ -133,7 +134,7 @@ mod tests {
     fn test_simple_bot2() {
         let mut bot = SimpleBot2::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 5, false);
+        let game = test_bot(&mut bot, seed, 5, false).unwrap();
         assert!(game.stats.lock > 40);
     }
 }
