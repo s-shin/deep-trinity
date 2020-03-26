@@ -139,7 +139,7 @@ mod tests {
     use crate::test_bot;
 
     #[test]
-    // #[ignore]
+    #[ignore]
     fn test_simple_bot2() {
         let mut bot = SimpleBot2::default();
         let seed = 0;
