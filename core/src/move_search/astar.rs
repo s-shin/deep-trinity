@@ -89,14 +89,17 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
         debug_println!("target: placement: {:?}, f: {:?}, (g: {})", target_placement, target_f, target_g);
 
         for mv in &MOVES {
-            if let Move::Shift(n1) = mv {
-                if let Some(Move::Shift(n2)) = target_by {
-                    // Shifting to opposite direction should be restricted since it sometimes
-                    // leads circular result.
-                    if n1 * n2 < 0 {
-                        continue;
-                    }
+            // Opposite moves should be restricted since it leads circular result.
+            match mv {
+                Move::Shift(n1) => match target_by {
+                    Some(Move::Shift(n2)) => if n1 * n2 < 0 { continue; },
+                    _ => {}
                 }
+                Move::Rotate(n1) => match target_by {
+                    Some(Move::Rotate(n2)) => if n1 * n2 < 0 { continue; },
+                    _ => {}
+                }
+                _ => {}
             }
             let mut fp = FallingPiece::new(conf.piece, target_placement);
             if fp.apply_move(*mv, conf.pf, conf.mode) {
@@ -140,5 +143,35 @@ impl AStarMoveSearcher {
 impl MoveSearcher for AStarMoveSearcher {
     fn search(&mut self, conf: &SearchConfiguration) -> SearchResult {
         search_moves(conf, self.dst, self.debug)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{Game, Piece, RotationMode, MovePlayer, upos, pos, ORIENTATION_3};
+    use super::*;
+
+    #[test]
+    fn test_search_moves() {
+        let mut game: Game = Game::default();
+        game.supply_next_pieces(&[Piece::T]);
+        game.setup_falling_piece(None).unwrap();
+        let pf = &mut game.state.playfield;
+        pf.set_rows(upos!(0, 0), &[
+            "   ####   ",
+            "######    ",
+            "####### ##",
+        ]);
+        let fp = game.state.falling_piece.as_ref().unwrap();
+        let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
+        let dst = Placement::new(ORIENTATION_3, pos!(6, 0));
+        let r = search_moves(&conf, dst, false);
+        let rec = r.get(&dst);
+        assert!(rec.is_some());
+        let mut mp = MovePlayer::new(rec.unwrap());
+        while mp.step(&mut game).unwrap() {
+            // println!("{}", game);
+        }
+        // println!("{}", game);
     }
 }

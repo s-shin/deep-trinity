@@ -2137,11 +2137,6 @@ impl MovePlayer {
         }
         let item = self.record.items[self.i];
         game.do_move(item.by)?;
-        if item.placement != game.state.falling_piece.as_ref().unwrap().placement {
-            println!("{:?}", self);
-            println!("hoge");
-        }
-        // debug_assert_eq!(item.placement, game.state.falling_piece.as_ref().unwrap().placement);
         self.i += 1;
         Ok(!self.is_end())
     }
