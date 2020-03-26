@@ -384,6 +384,29 @@ pub trait Grid: Clone + fmt::Display {
         }
         space
     }
+    fn num_covered_empty_cells(&self) -> usize {
+        let mut n = 0;
+        let mut xs = HashSet::new();
+        for y in (0..self.height()).rev() {
+            if self.is_row_empty(y) {
+                if xs.is_empty() {
+                    continue;
+                }
+                n += xs.len();
+            } else {
+                for x in 0..self.width() {
+                    if self.get_cell(upos!(x, y)) == Cell::Empty {
+                        if xs.contains(&x) {
+                            n += 1;
+                        }
+                    } else {
+                        xs.insert(x);
+                    }
+                }
+            }
+        }
+        n
+    }
     fn format(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for y in (0..self.height()).rev() {
             for x in 0..self.width() {
@@ -1577,7 +1600,7 @@ impl Playfield {
         ];
         let mut r: Vec<Placement> = Vec::new();
         for y in -1..yend {
-            for x in -1..(self.grid.width() as PosX - 1) {
+            for x in -2..(self.grid.width() as PosX - 1) {
                 for o in &ORIENTATIONS {
                     let g = sub_bit_grids[o.id() as usize];
                     let can_put = self.grid.bit_grid.can_put_fast((x, y).into(), g);
@@ -2180,6 +2203,15 @@ mod tests {
     }
 
     #[test]
+    fn test_grid_num_covered_empty_cells() {
+        let mut grid = BasicGrid::new(size!(10, 10));
+        grid.set_cell(upos!(0, 5), Cell::Block(Block::Any));
+        grid.set_cell(upos!(0, 2), Cell::Block(Block::Any));
+        grid.set_cell(upos!(2, 1), Cell::Block(Block::Any));
+        assert_eq!(5, grid.num_covered_empty_cells());
+    }
+
+    #[test]
     fn test_falling_piece() {
         let pf = Playfield::default();
         let mut fp = FallingPiece::spawn(Piece::O, Some(&pf));
@@ -2230,6 +2262,20 @@ mod tests {
         let fp = FallingPiece::spawn(Piece::O, Some(&pf));
         assert_eq!(19, fp.placement.pos.1);
         assert!(!pf.can_lock(&fp));
+    }
+
+    #[test]
+    fn test_lockable() {
+        let mut pf = Playfield::default();
+        pf.set_rows(upos!(0, 0), &[
+            " @@@@@@@@ ",
+            " @@@@@@@@ ",
+            " @@@@@@@@ ",
+            " @@@@@@@@ ",
+        ]);
+        let ps = pf.search_lockable_placements(Piece::I);
+        assert!(ps.contains(&Placement::new(ORIENTATION_1, pos!(-2, 0))));
+        assert!(ps.contains(&Placement::new(ORIENTATION_3, pos!(-2, -1))));
     }
 
     #[test]

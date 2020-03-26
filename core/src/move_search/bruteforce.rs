@@ -65,4 +65,36 @@ impl MoveSearcher for BruteForceMoveSearcher {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use crate::{Game, Piece, Placement, RotationMode, MovePlayer, upos, pos, ORIENTATION_1};
+    use super::*;
 
+    #[test]
+    fn test_search_moves() {
+        let mut game: Game = Game::default();
+        game.supply_next_pieces(&[Piece::I]);
+        game.setup_falling_piece(None).unwrap();
+        let pf = &mut game.state.playfield;
+        pf.set_rows(upos!(0, 0), &[
+            " @@@@@@@@@",
+            " @@@@@@@@@",
+            " @@@@@@@@@",
+            " @@@@@@@@@",
+            " @@@@@@@@@",
+            " @@@@@@@@@",
+            " @@@@@@@@@",
+        ]);
+        let fp = game.state.falling_piece.as_ref().unwrap();
+        let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
+        let dst = Placement::new(ORIENTATION_1, pos!(-2, 0));
+        let r = search_moves(&conf, false);
+        let rec = r.get(&dst);
+        assert!(rec.is_some());
+        let mut mp = MovePlayer::new(rec.unwrap());
+        while mp.step(&mut game).unwrap() {
+            println!("{}", game);
+        }
+        println!("{}", game);
+    }
+}

@@ -1,13 +1,22 @@
 use super::Bot;
-use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, FallingPiece};
+use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, FallingPiece, Grid};
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use crate::Action;
 use std::error::Error;
 
-fn eval_state(_game: &Game) -> f32 {
-    0.0
+fn eval_state(game: &Game) -> f32 {
+    let pf = &game.state.playfield;
+    let n = pf.grid.num_covered_empty_cells() as f32;
+    let threshold = pf.width() as f32 * pf.height() as f32 / 20.0;
+    let r = if n > threshold {
+        0.0
+    } else {
+        1.0 - n / threshold
+    };
+    println!("{}", r);
+    r
 }
 
 fn calc_reward(diff: &Statistics) -> f32 {
@@ -98,8 +107,8 @@ fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
     simulated.lock().unwrap();
     let stats_diff = simulated.stats.clone() - game.stats.clone();
     let reward =
-        eval_placement(&fp.placement) * 1.0
-            + calc_reward(&stats_diff) * 1.0
+        eval_placement(&fp.placement) * 0.1
+            + calc_reward(&stats_diff) * 0.1
             + eval_state(&simulated) * 1.0;
     (simulated, reward)
 }
@@ -110,7 +119,7 @@ pub struct SimpleBot2 {}
 impl Bot for SimpleBot2 {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
         let node = Rc::new(RefCell::new(Node::new(game.clone(), 0.0)));
-        expand(node.clone(), 3)?;
+        expand(node.clone(), 2)?;
         let node = node.borrow();
         let dst = node.children.iter()
             .max_by(|(_, n1), (_, n2)| {
@@ -130,11 +139,11 @@ mod tests {
     use crate::test_bot;
 
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_simple_bot2() {
         let mut bot = SimpleBot2::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 5, false).unwrap();
+        let game = test_bot(&mut bot, seed, 10, true).unwrap();
         assert!(game.stats.lock > 40);
     }
 }
