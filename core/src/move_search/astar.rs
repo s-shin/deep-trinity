@@ -19,23 +19,11 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
         current.distance(target, Some((1, 1, 1))) as F
     }
 
-    fn cost_func(mv: Move, prev: Option<Move>) -> F {
+    fn cost_func(start: &Placement, target: &Placement, mv: Move) -> F {
         match mv {
-            Move::Rotate(_) => match prev {
-                // To prevent cases such as `drop -> rotate -> shift -> drop` instead of `rotate -> shift -> drop`,
-                // costs are adjusted.
-                Some(Move::Drop(_)) => 4,
-                Some(Move::Shift(_)) => 3,
-                _ => 2,
-            },
-            Move::Drop(_) => match prev {
-                Some(Move::Rotate(_)) => 2,
-                _ => 1,
-            },
-            Move::Shift(_) => match prev {
-                Some(Move::Drop(_)) => 2,
-                _ => 1,
-            }
+            Move::Shift(_) => 2 + (start.pos.1 - target.pos.1) as F,
+            Move::Drop(_) => 1,
+            Move::Rotate(_) => 3 + (start.pos.1 - target.pos.1) as F,
         }
     }
 
@@ -85,25 +73,12 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
             break;
         }
         let target_g = target_f - heuristic_func(&target_placement, &dst);
-        let target_by = found.get(&target_placement).map(|item| { item.by });
         debug_println!("target: placement: {:?}, f: {:?}, (g: {})", target_placement, target_f, target_g);
 
         for mv in &MOVES {
-            // Opposite moves should be restricted since it leads circular result.
-            match mv {
-                Move::Shift(n1) => match target_by {
-                    Some(Move::Shift(n2)) => if n1 * n2 < 0 { continue; },
-                    _ => {}
-                }
-                Move::Rotate(n1) => match target_by {
-                    Some(Move::Rotate(n2)) => if n1 * n2 < 0 { continue; },
-                    _ => {}
-                }
-                _ => {}
-            }
             let mut fp = FallingPiece::new(conf.piece, target_placement);
             if fp.apply_move(*mv, conf.pf, conf.mode) {
-                let f = target_g + cost_func(*mv, target_by) + heuristic_func(&fp.placement, &dst);
+                let f = target_g + cost_func(&conf.src, &target_placement, *mv) + heuristic_func(&fp.placement, &dst);
                 if !open_list.contains_key(&f) {
                     open_list.insert(f, VecDeque::new());
                 }
@@ -158,9 +133,9 @@ mod test {
         game.setup_falling_piece(None).unwrap();
         let pf = &mut game.state.playfield;
         pf.set_rows(upos!(0, 0), &[
-            "   ####   ",
-            "######    ",
-            "####### ##",
+            "   @@@@   ",
+            "@@@@@@    ",
+            "@@@@@@@ @@",
         ]);
         let fp = game.state.falling_piece.as_ref().unwrap();
         let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);

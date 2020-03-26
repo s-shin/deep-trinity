@@ -2234,7 +2234,10 @@ mod tests {
 
     #[test]
     fn test_search_moves() {
-        let mut pf = Playfield::default();
+        let mut game: Game = Default::default();
+        game.supply_next_pieces(&[Piece::T]);
+        assert_ok!(game.setup_falling_piece(None));
+        let pf = &mut game.state.playfield;
         pf.set_rows((0, 0).into(), &[
             "          ",
             "          ",
@@ -2257,27 +2260,25 @@ mod tests {
             "@   @     ",
             "@@ @@@    ",
         ]);
-        let fp = FallingPiece::spawn(Piece::T, Some(&pf));
-        let placement_to_be_found = Placement::new(ORIENTATION_3, (1, 0).into());
+        let fp = game.state.falling_piece.as_ref().unwrap();
         let lockable = pf.search_lockable_placements(fp.piece);
-        assert!(lockable.iter().any(|p| { *p == placement_to_be_found }));
 
-        let conf = move_search::SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
+        let dst = Placement::new(ORIENTATION_3, (1, 0).into());
+        assert!(lockable.iter().any(|p| { *p == dst }));
 
-        let ret = move_search::bruteforce::search_moves(&conf, false);
-        assert!(ret.contains(&placement_to_be_found));
-        {
-            let mut moves: Vec<MoveRecord> = Vec::new();
-            for p in &lockable {
-                if let Some(record) = ret.get(p) {
-                    moves.push(record);
-                }
-            }
-            assert!(ret.len() > moves.len());
+        for i in 0..=1 {
+            let ret = match i {
+                0 => game.search_moves(&mut move_search::bruteforce::BruteForceMoveSearcher::default()),
+                1 => game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(dst, false)),
+                _ => panic!(),
+            };
+            assert_ok!(&ret);
+            let ret = ret.unwrap();
+            let rec = ret.get(&dst);
+            assert!(rec.is_some());
+            let rec = rec.unwrap();
+            assert!(rec.len() > 0);
         }
-
-        let ret = move_search::astar::search_moves(&conf, placement_to_be_found, false);
-        assert!(ret.contains(&placement_to_be_found));
     }
 
     #[test]

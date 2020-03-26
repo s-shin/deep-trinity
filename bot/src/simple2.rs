@@ -129,10 +129,11 @@ mod tests {
     use crate::test_bot;
 
     #[test]
+    #[ignore]
     fn test_simple_bot2() {
         let mut bot = SimpleBot2::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 10, true);
+        let game = test_bot(&mut bot, seed, 5, false);
         assert!(game.stats.lock > 40);
     }
 }
