@@ -1,23 +1,10 @@
 use super::Bot;
-use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, Grid, FallingPiece};
+use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, FallingPiece};
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-fn sigmoid(x: f32) -> f32 {
-    ((x / 2.0).tanh() + 1.0) * 0.5
-}
-
-fn eval_state(game: &Game) -> f32 {
-    // let pf = &game.state.playfield;
-    // let fp = game.state.falling_piece.as_ref().unwrap();
-    // let src_pos = core::UPos::from(fp.placement.pos);
-    // let num_empty_cells = pf.width() as usize * pf.height() as usize -
-    //     (pf.grid.num_blocks() + fp.grid().num_blocks());
-    // if num_empty_cells == 0 {
-    //     return 0.0;
-    // }
-    // pf.grid.bit_grid.enclosed_space(src_pos).len() as f32 / num_empty_cells as f32
+fn eval_state(_game: &Game) -> f32 {
     0.0
 }
 
@@ -37,25 +24,11 @@ fn calc_reward(diff: &Statistics) -> f32 {
     ] {
         reward += diff.get(*ent_type) as f32 * val;
     }
-    sigmoid(reward)
+    reward
 }
 
 fn eval_placement(p: &Placement) -> f32 {
-    sigmoid(-p.pos.1 as f32 / 40.0)
-}
-
-fn eval_node_like_puct(parent: &Node, placement: &Option<Placement>, child: &Node) -> f32 {
-    let q = child.reward;
-    let p = if let Some(placement) = placement {
-        let sum: f32 = parent.children.keys()
-            .map(|p| p.map_or(0.0, |p| eval_placement(&p)))
-            .sum();
-        eval_placement(&placement) / sum
-    } else {
-        1.0 / parent.children.len() as f32
-    };
-    let c = 1000.0;
-    q + c * p * (parent.num_simulated as f32).sqrt() / (1 + child.num_simulated) as f32
+    1.0 - (p.pos.1 + 5) as f32 / 50.0
 }
 
 #[derive(Debug)]
@@ -64,7 +37,7 @@ struct Node {
     children: HashMap<Option<Placement>, Rc<RefCell<Node>>>,
     game: Game,
     reward: f32,
-    num_simulated: usize,
+    max_future_reward: f32,
 }
 
 impl Node {
@@ -74,9 +47,10 @@ impl Node {
             children: HashMap::new(),
             game,
             reward,
-            num_simulated: 0,
+            max_future_reward: 0.0,
         }
     }
+    #[allow(dead_code)]
     fn visit(&self, visitor: fn(node: &Node, depth: usize)) {
         fn visit_rec(node: &Node, visitor: fn(node: &Node, depth: usize), depth: usize) {
             visitor(node, depth);
@@ -88,31 +62,10 @@ impl Node {
     }
 }
 
-fn select_child_node(rc_node: Rc<RefCell<Node>>) -> (Option<Placement>, Rc<RefCell<Node>>) {
-    let node = rc_node.borrow();
-    let r = node.children.iter()
-        .max_by(|(p1, n1), (p2, n2)| {
-            let v1 = eval_node_like_puct(&node, *p1, &n1.borrow());
-            let v2 = eval_node_like_puct(&node, *p2, &n2.borrow());
-            v1.partial_cmp(&v2).unwrap()
-        })
-        .unwrap();
-    (r.0.clone(), r.1.clone())
-}
-
-fn select(rc_node: Rc<RefCell<Node>>, max_depth: usize) -> Option<Rc<RefCell<Node>>> {
-    let mut current = rc_node;
-    for _ in 0..max_depth {
-        if current.borrow().children.is_empty() {
-            return Some(current);
-        }
-        let next = select_child_node(current).1;
-        current = next;
+fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) {
+    if max_depth == 0 {
+        return;
     }
-    None
-}
-
-fn expand(rc_node: Rc<RefCell<Node>>) {
     let candidates = match rc_node.borrow().game.get_move_candidates() {
         Ok(r) => r,
         Err(_) => return,
@@ -120,14 +73,23 @@ fn expand(rc_node: Rc<RefCell<Node>>) {
     if candidates.is_empty() {
         return;
     }
+    let mut max_future_reward = 0.0;
     for fp in candidates.iter() {
         let (simulated, reward) = simulate(&rc_node.borrow().game, fp);
         let mut child = Node::new(simulated, reward);
         child.parent = Some(Rc::downgrade(&rc_node));
         let rc_child = Rc::new(RefCell::new(child));
         rc_node.borrow_mut().children.insert(Some(fp.placement), rc_child.clone());
-        backpropagate(rc_child);
+
+        expand(rc_child.clone(), max_depth - 1);
+
+        let child = rc_child.borrow();
+        let r = child.reward + child.max_future_reward;
+        if max_future_reward < r {
+            max_future_reward = r;
+        }
     }
+    rc_node.borrow_mut().max_future_reward = max_future_reward;
 }
 
 fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
@@ -136,33 +98,10 @@ fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
     simulated.lock().unwrap();
     let stats_diff = simulated.stats.clone() - game.stats.clone();
     let reward =
-        eval_placement(&fp.placement) * 0.1
-            + calc_reward(&stats_diff) * 5.0
-            + eval_state(&simulated) * 0.0;
+        eval_placement(&fp.placement) * 1.0
+            + calc_reward(&stats_diff) * 1.0
+            + eval_state(&simulated) * 1.0;
     (simulated, reward)
-}
-
-fn backpropagate(rc_node: Rc<RefCell<Node>>) {
-    let mut current = rc_node;
-    let mut child_reward = 0.0;
-    loop {
-        {
-            let mut current = current.borrow_mut();
-            current.reward += child_reward;
-            child_reward = current.reward;
-            current.num_simulated += 1;
-        }
-        let next = if let Some(parent) = current.borrow().parent.clone() {
-            if let Some(parent) = parent.upgrade() {
-                parent
-            } else {
-                break;
-            }
-        } else {
-            break;
-        };
-        current = next;
-    }
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -171,19 +110,16 @@ pub struct SimpleBot2 {}
 impl Bot for SimpleBot2 {
     fn think(&mut self, game: &Game) -> Option<Placement> {
         let node = Rc::new(RefCell::new(Node::new(game.clone(), 0.0)));
-        for _ in 0..500 {
-            let selected = select(node.clone(), 5);
-            if selected.is_none() {
-                break;
-            }
-            expand(selected.unwrap());
-        }
-        // println!("---");
-        // node.borrow().visit(|node, depth| {
-        //     println!("{}simulated: {}, reward: {}", " ".repeat(depth), node.num_simulated, node.reward);
-        // });
-        // println!("---");
-        select_child_node(node).0
+        expand(node.clone(), 3);
+        let node = node.borrow();
+        node.children.iter()
+            .max_by(|(_, n1), (_, n2)| {
+                let n1 = n1.borrow();
+                let n2 = n2.borrow();
+                (n1.reward + n1.max_future_reward).partial_cmp(&(n2.reward + n2.max_future_reward)).unwrap()
+            })
+            .map(|(p, _)| p.clone())
+            .unwrap()
     }
 }
 
@@ -196,7 +132,7 @@ mod tests {
     fn test_simple_bot2() {
         let mut bot = SimpleBot2::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 2, true);
+        let game = test_bot(&mut bot, seed, 10, true);
         assert!(game.stats.lock > 40);
     }
 }

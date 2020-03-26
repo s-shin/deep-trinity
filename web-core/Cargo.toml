@@ -15,4 +15,4 @@ wasm-bindgen = "0.2"
 console_error_panic_hook = { version = "0.1", optional = true }
 core = { path = "../core" }
 bot = { path = "../bot" }
-rand = "0.7"
+rand = { version = "0.7", features = ["wasm-bindgen"] }
