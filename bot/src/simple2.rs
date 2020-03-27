@@ -6,6 +6,9 @@ use std::collections::HashMap;
 use crate::Action;
 use std::error::Error;
 
+const MAX_DEPTH: usize = 4;
+const CUTOFF: usize = 5;
+
 fn eval_state(game: &Game) -> f32 {
     let pf = &game.state.playfield;
     let n = pf.grid.num_covered_empty_cells() as f32;
@@ -15,7 +18,6 @@ fn eval_state(game: &Game) -> f32 {
     } else {
         1.0 - n / threshold
     };
-    println!("{}", r);
     r
 }
 
@@ -61,16 +63,6 @@ impl Node {
             max_future_reward: 0.0,
         }
     }
-    #[allow(dead_code)]
-    fn visit(&self, visitor: fn(node: &Node, depth: usize)) {
-        fn visit_rec(node: &Node, visitor: fn(node: &Node, depth: usize), depth: usize) {
-            visitor(node, depth);
-            for child in node.children.values() {
-                visit_rec(&child.borrow(), visitor, depth + 1);
-            }
-        }
-        visit_rec(self, visitor, 0);
-    }
 }
 
 fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) -> Result<bool, Box<dyn Error>> {
@@ -81,12 +73,18 @@ fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) -> Result<bool, Box<dyn 
     if candidates.is_empty() {
         return Ok(false);
     }
+    let mut children = candidates.iter()
+        .map(|fp| {
+            let (simulated, reward) = simulate(&rc_node.borrow().game, fp);
+            let mut child = Node::new(simulated, reward);
+            child.parent = Some(Rc::downgrade(&rc_node));
+            (fp, Rc::new(RefCell::new(child)), reward)
+        })
+        .collect::<Vec<_>>();
+    children.sort_by(|(_, _, r1), (_, _, r2)| r2.partial_cmp(&r1).unwrap());
+    let children = children.iter().take(CUTOFF).collect::<Vec<_>>();
     let mut max_future_reward = 0.0;
-    for fp in candidates.iter() {
-        let (simulated, reward) = simulate(&rc_node.borrow().game, fp);
-        let mut child = Node::new(simulated, reward);
-        child.parent = Some(Rc::downgrade(&rc_node));
-        let rc_child = Rc::new(RefCell::new(child));
+    for (fp, rc_child, _) in children.iter() {
         rc_node.borrow_mut().children.insert(Some(fp.placement), rc_child.clone());
 
         expand(rc_child.clone(), max_depth - 1)?;
@@ -97,6 +95,7 @@ fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) -> Result<bool, Box<dyn 
             max_future_reward = r;
         }
     }
+
     rc_node.borrow_mut().max_future_reward = max_future_reward;
     Ok(true)
 }
@@ -119,7 +118,7 @@ pub struct SimpleBot2 {}
 impl Bot for SimpleBot2 {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
         let node = Rc::new(RefCell::new(Node::new(game.clone(), 0.0)));
-        expand(node.clone(), 2)?;
+        expand(node.clone(), MAX_DEPTH)?;
         let node = node.borrow();
         let dst = node.children.iter()
             .max_by(|(_, n1), (_, n2)| {
@@ -144,6 +143,6 @@ mod tests {
         let mut bot = SimpleBot2::default();
         let seed = 0;
         let game = test_bot(&mut bot, seed, 10, true).unwrap();
-        assert!(game.stats.lock > 40);
+        assert!(game.stats.lock > 5);
     }
 }
