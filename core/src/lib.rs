@@ -1646,6 +1646,9 @@ impl NextPieces {
     pub fn pop(&mut self) -> Option<Piece> { self.pieces.pop_front() }
     pub fn supply(&mut self, ps: &[Piece]) { self.pieces.extend(ps) }
     pub fn should_supply(&self) -> bool { self.len() <= self.visible_num }
+    pub fn remove_invisible(&mut self) {
+        self.pieces = self.pieces.iter().take(self.visible_num).copied().collect();
+    }
 }
 
 impl Default for NextPieces {

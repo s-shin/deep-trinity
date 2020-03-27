@@ -6,8 +6,10 @@ use std::collections::HashMap;
 use crate::Action;
 use std::error::Error;
 
-const MAX_DEPTH: usize = 4;
-const CUTOFF: usize = 5;
+const BUDGET: f32 = 5.0;
+const CONSUMPTION_BY_HOLD: f32 = 0.0;
+const MIN_CONSUMPTION_BY_MOVE: f32 = 1.0;
+const CONSUMPTION_GROWTH_IN_MOVE: f32 = 1.0;
 
 fn eval_state(game: &Game) -> f32 {
     let pf = &game.state.playfield;
@@ -24,16 +26,16 @@ fn eval_state(game: &Game) -> f32 {
 fn calc_reward(diff: &Statistics) -> f32 {
     let mut reward = 0.0;
     for (ent_type, val) in &[
-        (StatisticsEntryType::LineClear(LineClear::new(1, None)), 1.0),
-        (StatisticsEntryType::LineClear(LineClear::new(2, None)), 3.0),
-        (StatisticsEntryType::LineClear(LineClear::new(3, None)), 5.0),
-        (StatisticsEntryType::LineClear(LineClear::new(4, None)), 8.0),
-        (StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Standard))), 5.0),
-        (StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Standard))), 8.0),
-        (StatisticsEntryType::LineClear(LineClear::new(3, Some(TSpin::Standard))), 9.0),
-        (StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Mini))), 2.0),
-        (StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Mini))), 4.0),
-        (StatisticsEntryType::PerfectClear, 10.0),
+        (StatisticsEntryType::LineClear(LineClear::new(1, None)), 0.1),
+        (StatisticsEntryType::LineClear(LineClear::new(2, None)), 0.1),
+        (StatisticsEntryType::LineClear(LineClear::new(3, None)), 0.1),
+        (StatisticsEntryType::LineClear(LineClear::new(4, None)), 5.0),
+        (StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Standard))), 1.0),
+        (StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Standard))), 5.0),
+        (StatisticsEntryType::LineClear(LineClear::new(3, Some(TSpin::Standard))), 5.0),
+        (StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Mini))), 0.0),
+        (StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Mini))), 0.0),
+        (StatisticsEntryType::PerfectClear, 5.0),
     ] {
         reward += diff.get(*ent_type) as f32 * val;
     }
@@ -47,57 +49,73 @@ fn eval_placement(p: &Placement) -> f32 {
 #[derive(Debug)]
 struct Node {
     parent: Option<Weak<RefCell<Node>>>,
-    children: HashMap<Option<Placement>, Rc<RefCell<Node>>>,
+    children: HashMap<Action, Rc<RefCell<Node>>>,
     game: Game,
     reward: f32,
     max_future_reward: f32,
 }
 
 impl Node {
-    fn new(game: Game, reward: f32) -> Self {
+    fn new(game: Game, reward: f32, parent: Option<Weak<RefCell<Node>>>) -> Self {
         Self {
-            parent: None,
+            parent,
             children: HashMap::new(),
             game,
             reward,
             max_future_reward: 0.0,
         }
     }
+    fn max_reward(&self) -> f32 { self.reward + self.max_future_reward }
 }
 
-fn expand(rc_node: Rc<RefCell<Node>>, max_depth: usize) -> Result<bool, Box<dyn Error>> {
-    if max_depth == 0 {
-        return Ok(false);
+fn expand(rc_node: Rc<RefCell<Node>>, budget: f32) -> Result<(), Box<dyn Error>> {
+    if budget <= 0.0 {
+        return Ok(());
+    }
+    let mut remain = budget;
+    let mut max_future_reward = 0.0;
+    {
+        let mut node = rc_node.borrow_mut();
+        if node.game.state.can_hold {
+            let mut next = node.game.clone();
+            let ok = next.hold()?;
+            let rc_child = Rc::new(RefCell::new(Node::new(next, 0.0, Some(Rc::downgrade(&rc_node)))));
+            node.children.insert(Action::Hold, rc_child.clone());
+            remain -= CONSUMPTION_BY_HOLD;
+            if ok {
+                expand(rc_child.clone(), remain)?;
+            }
+            max_future_reward = rc_child.borrow().max_reward();
+        }
     }
     let candidates = rc_node.borrow().game.get_move_candidates()?;
-    if candidates.is_empty() {
-        return Ok(false);
-    }
     let mut children = candidates.iter()
         .map(|fp| {
             let (simulated, reward) = simulate(&rc_node.borrow().game, fp);
-            let mut child = Node::new(simulated, reward);
-            child.parent = Some(Rc::downgrade(&rc_node));
-            (fp, Rc::new(RefCell::new(child)), reward)
+            let rc_child = Rc::new(RefCell::new(Node::new(simulated, reward, Some(Rc::downgrade(&rc_node)))));
+            (fp, rc_child, reward)
         })
         .collect::<Vec<_>>();
     children.sort_by(|(_, _, r1), (_, _, r2)| r2.partial_cmp(&r1).unwrap());
-    let children = children.iter().take(CUTOFF).collect::<Vec<_>>();
-    let mut max_future_reward = 0.0;
+    let mut consumption = MIN_CONSUMPTION_BY_MOVE;
     for (fp, rc_child, _) in children.iter() {
-        rc_node.borrow_mut().children.insert(Some(fp.placement), rc_child.clone());
-
-        expand(rc_child.clone(), max_depth - 1)?;
-
-        let child = rc_child.borrow();
-        let r = child.reward + child.max_future_reward;
+        remain -= consumption;
+        if remain <= 0.0 {
+            break;
+        }
+        rc_node.borrow_mut().children.insert(Action::MoveTo(fp.placement), rc_child.clone());
+        if rc_child.borrow().game.state.falling_piece.is_some() {
+            expand(rc_child.clone(), remain)?;
+        }
+        let r = rc_child.borrow().max_reward();
         if max_future_reward < r {
             max_future_reward = r;
         }
+        consumption += CONSUMPTION_GROWTH_IN_MOVE;
     }
 
     rc_node.borrow_mut().max_future_reward = max_future_reward;
-    Ok(true)
+    Ok(())
 }
 
 fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
@@ -106,9 +124,9 @@ fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
     simulated.lock().unwrap();
     let stats_diff = simulated.stats.clone() - game.stats.clone();
     let reward =
-        eval_placement(&fp.placement) * 0.1
-            + calc_reward(&stats_diff) * 0.1
-            + eval_state(&simulated) * 1.0;
+        eval_placement(&fp.placement) * 0.2
+            + calc_reward(&stats_diff) * 1.0
+            + eval_state(&simulated) * 0.5;
     (simulated, reward)
 }
 
@@ -117,18 +135,19 @@ pub struct SimpleBot2 {}
 
 impl Bot for SimpleBot2 {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
-        let node = Rc::new(RefCell::new(Node::new(game.clone(), 0.0)));
-        expand(node.clone(), MAX_DEPTH)?;
-        let node = node.borrow();
-        let dst = node.children.iter()
+        let mut game = game.clone();
+        game.state.next_pieces.remove_invisible();
+        let node = Rc::new(RefCell::new(Node::new(game, 0.0, None)));
+        expand(node.clone(), BUDGET)?;
+        let action = node.borrow().children.iter()
             .max_by(|(_, n1), (_, n2)| {
                 let n1 = n1.borrow();
                 let n2 = n2.borrow();
-                (n1.reward + n1.max_future_reward).partial_cmp(&(n2.reward + n2.max_future_reward)).unwrap()
+                n1.max_reward().partial_cmp(&n2.max_reward()).unwrap()
             })
-            .map(|(p, _)| p.clone())
+            .map(|(a, _)| a.clone())
             .unwrap();
-        dst.map_or(Err("no movable placements".into()), |p| Ok(Action::MoveTo(p)))
+        Ok(action)
     }
 }
 
