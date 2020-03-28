@@ -37,9 +37,7 @@ impl SearchResult {
         let mut i = 0;
         const STOPPER: usize = 10000;
         while let Some(item) = self.found.get(&placement) {
-            // if i < 30 {
-            //     println!("{:?}", item);
-            // }
+            // if i < 30 { println!("{:?}", item); }
             items.push(MoveRecordItem::new(item.by, placement));
             placement = item.placement;
             if item.placement == self.src {

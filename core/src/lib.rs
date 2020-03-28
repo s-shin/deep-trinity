@@ -2331,6 +2331,26 @@ mod tests {
     }
 
     #[test]
+    fn test_search_moves_2() {
+        let mut game: Game = Default::default();
+        game.supply_next_pieces(&[Piece::I]);
+        assert_ok!(game.setup_falling_piece(None));
+        let pf = &mut game.state.playfield;
+        pf.set_rows((0, 19).into(), &["       @  "]);
+        pf.set_rows((0, 0).into(), &[" @@@@@@@@ "].repeat(19));
+        let all = game.get_move_candidates();
+        assert!(all.is_ok());
+        let all = all.unwrap();
+        for fp in all.iter() {
+            let r = game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(fp.placement, false));
+            assert!(r.is_ok());
+            let r = r.unwrap();
+            let rec = r.get(&fp.placement);
+            assert!(rec.is_some());
+        }
+    }
+
+    #[test]
     fn test_game() {
         let pieces = [
             Piece::O, Piece::T, Piece::I, Piece::J, Piece::L, Piece::S, Piece::Z,

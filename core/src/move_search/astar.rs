@@ -6,7 +6,7 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
     type F = i16;
     type OpenList = BTreeMap<F, VecDeque<Placement>>;
 
-    #[derive(Copy, Clone)]
+    #[derive(Copy, Clone, Debug)]
     struct StateEntry {
         f: F,
         is_checked: bool,
@@ -73,7 +73,7 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
             break;
         }
         let target_g = target_f - heuristic_func(&target_placement, &dst);
-        debug_println!("target: placement: {:?}, f: {:?}, (g: {})", target_placement, target_f, target_g);
+        debug_println!("target: placement: {:?}, f: {:?}, g: {}", target_placement, target_f, target_g);
 
         for mv in &MOVES {
             let mut fp = FallingPiece::new(conf.piece, target_placement);
@@ -82,15 +82,15 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
                 if !open_list.contains_key(&f) {
                     open_list.insert(f, VecDeque::new());
                 }
-                let next = if let Some(ent) = state.get(&fp.placement) {
-                    *ent
+                let should_update = if let Some(ent) = state.get(&fp.placement) {
+                    let r = f < ent.f;
+                    debug_println!("  {:?} => placement: {:?}, f: {}, is_checked: {}, new_f: {} => update: {}",
+                        mv, fp.placement, ent.f, ent.is_checked, f, r);
+                    r
                 } else {
-                    state.insert(fp.placement, StateEntry::new(0, false));
-                    StateEntry::new(0, false)
+                    debug_println!("  {:?} => placement: {:?}, new_f: {} => new", mv, fp.placement, f);
+                    true
                 };
-                let should_update = !next.is_checked || f < next.f;
-                debug_println!("  {:?} => placement: {:?}, f: {}, is_checked: {}, new_f: {} => update: {}",
-                    mv, fp.placement, next.f, next.is_checked, f, should_update);
                 if should_update {
                     open_list.get_mut(&f).unwrap().push_back(fp.placement);
                     state.insert(fp.placement, StateEntry::new(f, false));
