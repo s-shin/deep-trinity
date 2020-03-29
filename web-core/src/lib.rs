@@ -237,7 +237,7 @@ impl Action {
     }
     pub fn dst(&self) -> Option<Placement> {
         match self.bot_action {
-            bot::Action::MoveTo(p) => Some(p.into()),
+            bot::Action::Move(p) => Some(p.into()),
             _ => None,
         }
     }
@@ -251,17 +251,17 @@ impl Action {
 }
 
 #[wasm_bindgen]
-pub struct SimpleBot {
+pub struct Bot {
     bot: Box<dyn bot::Bot>,
 }
 
 #[wasm_bindgen]
-impl SimpleBot {
+impl Bot {
     #[wasm_bindgen(constructor)]
-    pub fn new(bot_type: Option<u8>) -> Result<SimpleBot, JsValue> {
+    pub fn new(bot_type: Option<u8>) -> Result<Bot, JsValue> {
         let bot: Box<dyn bot::Bot> = match bot_type.unwrap_or(1) {
             1 => Box::new(bot::simple::SimpleBot::default()),
-            2 => Box::new(bot::simple2::SimpleBot2::default()),
+            2 => Box::new(bot::simple_tree::SimpleTreeBot::default()),
             _ => return Err("invalid bot type".into()),
         };
         Ok(Self { bot })

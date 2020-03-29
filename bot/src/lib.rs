@@ -1,12 +1,13 @@
-use core::{Game, Placement};
+use core::{Game, Placement, MoveTransition};
 use std::error::Error;
 
 pub mod simple;
-pub mod simple2;
+pub mod simple_tree;
+pub mod puct;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
-    MoveTo(Placement),
+    Move(Placement),
     Hold,
 }
 
@@ -30,7 +31,7 @@ pub fn test_bot<B: Bot>(bot: &mut B, random_seed: u64, max_iterations: usize, de
             game.supply_next_pieces(&pg.generate());
         }
         match bot.think(&game)? {
-            Action::MoveTo(dst) => {
+            Action::Move(dst) => {
                 let fp = game.state.falling_piece.as_ref().unwrap();
                 let dst2 = core::get_nearest_placement_alias(fp.piece, &dst, &fp.placement, None);
                 if debug_print { println!("{:?}: {:?} or {:?}", fp.piece, dst, dst2); }

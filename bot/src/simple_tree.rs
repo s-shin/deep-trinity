@@ -103,7 +103,7 @@ fn expand(rc_node: Rc<RefCell<Node>>, budget: f32) -> Result<(), Box<dyn Error>>
         if remain <= 0.0 {
             break;
         }
-        rc_node.borrow_mut().children.insert(Action::MoveTo(fp.placement), rc_child.clone());
+        rc_node.borrow_mut().children.insert(Action::Move(fp.placement), rc_child.clone());
         if rc_child.borrow().game.state.falling_piece.is_some() {
             expand(rc_child.clone(), remain)?;
         }
@@ -131,9 +131,9 @@ fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
 }
 
 #[derive(Copy, Clone, Debug, Default)]
-pub struct SimpleBot2 {}
+pub struct SimpleTreeBot {}
 
-impl Bot for SimpleBot2 {
+impl Bot for SimpleTreeBot {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
         let mut game = game.clone();
         game.state.next_pieces.remove_invisible();
@@ -153,13 +153,13 @@ impl Bot for SimpleBot2 {
 
 #[cfg(test)]
 mod tests {
-    use super::SimpleBot2;
+    use super::SimpleTreeBot;
     use crate::test_bot;
 
     #[test]
     #[ignore]
     fn test_simple_bot2() {
-        let mut bot = SimpleBot2::default();
+        let mut bot = SimpleTreeBot::default();
         let seed = 0;
         let game = test_bot(&mut bot, seed, 10, true).unwrap();
         assert!(game.stats.lock > 5);

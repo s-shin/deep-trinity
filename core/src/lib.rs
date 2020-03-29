@@ -829,6 +829,19 @@ impl Move {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MoveTransition {
+    pub src: Placement,
+    pub by: Move,
+    pub dst: Placement,
+}
+
+impl MoveTransition {
+    fn new(src: Placement, by: Move, dst: Placement) -> Self {
+        Self { src, by, dst }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MoveRecordItem {
     pub by: Move,
@@ -883,6 +896,26 @@ impl MoveRecord {
             r.merge_or_push(*item);
         }
         r
+    }
+    pub fn last_transition(&self) -> Option<MoveTransition> {
+        let len = self.len();
+        if len == 0 {
+            return None;
+        }
+        let t = if len == 1 {
+            MoveTransition::new(
+                self.initial_placement,
+                self.items[0].by,
+                self.items[0].placement,
+            )
+        } else {
+            MoveTransition::new(
+                self.items[len - 2].placement,
+                self.items[len - 1].by,
+                self.items[len - 1].placement,
+            )
+        };
+        Some(t)
     }
 }
 
@@ -1403,22 +1436,8 @@ impl FallingPiece {
         }
         false
     }
-    pub fn last_two_placements(&self) -> Option<(Placement, Placement)> {
-        let len = self.move_record.items.len();
-        if len == 0 {
-            return None;
-        }
-        if len == 1 {
-            Some((
-                self.move_record.initial_placement,
-                self.move_record.get(0).unwrap().placement,
-            ))
-        } else {
-            Some((
-                self.move_record.get(len - 2).unwrap().placement,
-                self.move_record.get(len - 1).unwrap().placement,
-            ))
-        }
+    pub fn last_move_transition(&self) -> Option<MoveTransition> {
+        self.move_record.last_transition()
     }
 }
 
@@ -1542,9 +1561,9 @@ impl Playfield {
             3 => {
                 if num_pointing_side_corners == 2 {
                     Some(TSpin::Standard)
-                } else if let Some((p1, p2)) = fp.last_two_placements() {
-                    let is_shifted = p1.pos.0 != p2.pos.0;
-                    let num_rows = p1.pos.0 - p2.pos.0;
+                } else if let Some(mt) = fp.last_move_transition() {
+                    let is_shifted = mt.src.pos.0 != mt.dst.pos.0;
+                    let num_rows = mt.src.pos.1 - mt.dst.pos.1;
                     if num_rows == 2 {
                         if is_shifted {
                             Some(TSpin::Standard)

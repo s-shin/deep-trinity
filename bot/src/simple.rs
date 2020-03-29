@@ -17,7 +17,7 @@ impl Bot for SimpleBot {
                 candidate = fp;
             }
         }
-        Ok(Action::MoveTo(candidate.placement))
+        Ok(Action::Move(candidate.placement))
     }
 }
 
