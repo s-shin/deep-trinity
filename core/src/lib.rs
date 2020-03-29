@@ -2121,15 +2121,21 @@ impl Game {
                     r.insert(MoveTransition::new(item.placement, item.by, *p));
                 }
                 if fp.piece == Piece::T {
-                    // Append transitions by rotations for preventing leaks of handling worthy special rotations.
+                    // Append worthy transitions by rotation.
                     let dst_fp = FallingPiece::new(fp.piece, *p);
                     for cw in &[true, false] {
                         for src in pf.check_reverse_rotation(self.rules.rotation_mode, &dst_fp, *cw).iter() {
-                            r.insert(MoveTransition::new(
-                                *src,
-                                Move::Rotate(if *cw { 1 } else { -1 }),
-                                *p,
-                            ));
+                            if let Some(_) = pf.check_tspin(
+                                &FallingPiece::new_with_one_path_item(
+                                    fp.piece, *src, Move::Rotate(if *cw { 1 } else { -1 }), *p),
+                                self.rules.tspin_judgement_mode,
+                            ) {
+                                r.insert(MoveTransition::new(
+                                    *src,
+                                    Move::Rotate(if *cw { 1 } else { -1 }),
+                                    *p,
+                                ));
+                            }
                         }
                     }
                 }

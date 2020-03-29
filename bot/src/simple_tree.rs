@@ -9,7 +9,7 @@ use std::error::Error;
 const BUDGET: f32 = 5.0;
 const CONSUMPTION_BY_HOLD: f32 = 0.0;
 const MIN_CONSUMPTION_BY_MOVE: f32 = 1.0;
-const CONSUMPTION_GROWTH_IN_MOVE: f32 = 1.0;
+const CONSUMPTION_GROWTH_IN_MOVE: f32 = 0.0;
 
 fn eval_state(game: &Game) -> f32 {
     let pf = &game.state.playfield;
@@ -27,14 +27,14 @@ fn calc_reward(diff: &Statistics) -> f32 {
     let mut reward = 0.0;
     for (ent_type, val) in &[
         (StatisticsEntryType::LineClear(LineClear::new(1, None)), 0.1),
-        (StatisticsEntryType::LineClear(LineClear::new(2, None)), 0.1),
-        (StatisticsEntryType::LineClear(LineClear::new(3, None)), 0.1),
+        (StatisticsEntryType::LineClear(LineClear::new(2, None)), 0.2),
+        (StatisticsEntryType::LineClear(LineClear::new(3, None)), 0.3),
         (StatisticsEntryType::LineClear(LineClear::new(4, None)), 5.0),
         (StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Standard))), 1.0),
         (StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Standard))), 5.0),
         (StatisticsEntryType::LineClear(LineClear::new(3, Some(TSpin::Standard))), 5.0),
-        (StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Mini))), 0.0),
-        (StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Mini))), 0.0),
+        (StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Mini))), 0.2),
+        (StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Mini))), 0.2),
         (StatisticsEntryType::PerfectClear, 5.0),
     ] {
         reward += diff.get(*ent_type) as f32 * val;
