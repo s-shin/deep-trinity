@@ -317,6 +317,7 @@ impl Bot {
         let bot: Box<dyn bot::Bot> = match bot_type.unwrap_or(1) {
             1 => Box::new(bot::simple::SimpleBot::default()),
             2 => Box::new(bot::simple_tree::SimpleTreeBot::default()),
+            3 => Box::new(bot::mcts_puct::MctsPuctBot::default()),
             _ => return Err("invalid bot type".into()),
         };
         Ok(Self { bot })

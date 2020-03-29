@@ -35,7 +35,7 @@ class BotRunner {
     this.state = BotRunnerState.Think;
     this.game = new core.Game();
     this.pg = new core.RandomPieceGenerator(BigInt(seed));
-    this.bot = new core.Bot(2);
+    this.bot = new core.Bot(3);
 
     this.game.supplyNextPieces(this.pg.generate());
     this.game.setupFallingPiece();

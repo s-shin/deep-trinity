@@ -3,7 +3,7 @@ use std::error::Error;
 
 pub mod simple;
 pub mod simple_tree;
-pub mod puct;
+pub mod mcts_puct;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
