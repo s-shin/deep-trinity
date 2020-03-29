@@ -188,7 +188,7 @@ impl Game {
             StatisticsEntryType::Tsd => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Standard))),
             StatisticsEntryType::Tss => core::StatisticsEntryType::LineClear(core::LineClear::new(1, Some(core::TSpin::Standard))),
             StatisticsEntryType::Tsmd => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
-            StatisticsEntryType::Tsms => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
+            StatisticsEntryType::Tsms => core::StatisticsEntryType::LineClear(core::LineClear::new(1, Some(core::TSpin::Mini))),
             StatisticsEntryType::MaxCombos => core::StatisticsEntryType::MaxCombos,
             StatisticsEntryType::MaxBtbs => core::StatisticsEntryType::MaxBtbs,
             StatisticsEntryType::PerfectClear => core::StatisticsEntryType::PerfectClear,
