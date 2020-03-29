@@ -1,4 +1,4 @@
-use core::{Game, Placement, MoveTransition};
+use core::{Game, MoveTransition};
 use std::error::Error;
 
 pub mod simple;
@@ -18,7 +18,7 @@ pub trait Bot {
 pub fn test_bot<B: Bot>(bot: &mut B, random_seed: u64, max_iterations: usize, debug_print: bool) -> Result<Game, Box<dyn Error>> {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
-    use core::{RandomPieceGenerator, MovePlayer, move_search};
+    use core::{RandomPieceGenerator, MovePlayer};
 
     let mut game = Game::new(Default::default());
     let mut pg = RandomPieceGenerator::new(StdRng::seed_from_u64(random_seed));
