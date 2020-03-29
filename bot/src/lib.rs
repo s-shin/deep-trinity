@@ -7,7 +7,7 @@ pub mod puct;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
-    Move(Placement),
+    Move(MoveTransition),
     Hold,
 }
 
@@ -31,33 +31,10 @@ pub fn test_bot<B: Bot>(bot: &mut B, random_seed: u64, max_iterations: usize, de
             game.supply_next_pieces(&pg.generate());
         }
         match bot.think(&game)? {
-            Action::Move(dst) => {
-                let fp = game.state.falling_piece.as_ref().unwrap();
-                let dst2 = core::get_nearest_placement_alias(fp.piece, &dst, &fp.placement, None);
-                if debug_print { println!("{:?}: {:?} or {:?}", fp.piece, dst, dst2); }
+            Action::Move(mt) => {
+                let rec = game.get_almost_good_move_path(&mt)?;
 
-                let mut rec = None;
-                for i in 0..=2 {
-                    // For special rotations, we should also check original destination.
-                    let dst = match i {
-                        0 => &dst2,
-                        1 => &dst2,
-                        2 => &dst,
-                        _ => panic!(),
-                    };
-                    let ret = match i {
-                        0 => game.search_moves(&mut move_search::humanly_optimized::HumanlyOptimizedMoveSearcher::new(*dst, true)),
-                        1 => game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(*dst, false)),
-                        2 => game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(*dst, false)),
-                        _ => panic!(),
-                    };
-                    if let Some(r) = ret.unwrap().get(dst) {
-                        rec = Some(r);
-                        break;
-                    }
-                }
-
-                let mut mp = MovePlayer::new(rec.unwrap());
+                let mut mp = MovePlayer::new(rec);
                 while mp.step(&mut game)? {
                     if debug_print { println!("{}", game); }
                 }

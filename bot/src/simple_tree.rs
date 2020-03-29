@@ -1,5 +1,5 @@
 use super::Bot;
-use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, FallingPiece, Grid};
+use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, FallingPiece, Grid, MoveTransition};
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -90,20 +90,20 @@ fn expand(rc_node: Rc<RefCell<Node>>, budget: f32) -> Result<(), Box<dyn Error>>
     }
     let candidates = rc_node.borrow().game.get_move_candidates()?;
     let mut children = candidates.iter()
-        .map(|fp| {
-            let (simulated, reward) = simulate(&rc_node.borrow().game, fp);
+        .map(|mt| {
+            let (simulated, reward) = simulate(&rc_node.borrow().game, mt);
             let rc_child = Rc::new(RefCell::new(Node::new(simulated, reward, Some(Rc::downgrade(&rc_node)))));
-            (fp, rc_child, reward)
+            (mt, rc_child, reward)
         })
         .collect::<Vec<_>>();
     children.sort_by(|(_, _, r1), (_, _, r2)| r2.partial_cmp(&r1).unwrap());
     let mut consumption = MIN_CONSUMPTION_BY_MOVE;
-    for (fp, rc_child, _) in children.iter() {
+    for (mt, rc_child, _) in children.iter() {
         remain -= consumption;
         if remain <= 0.0 {
             break;
         }
-        rc_node.borrow_mut().children.insert(Action::Move(fp.placement), rc_child.clone());
+        rc_node.borrow_mut().children.insert(Action::Move((*mt).clone()), rc_child.clone());
         if rc_child.borrow().game.state.falling_piece.is_some() {
             expand(rc_child.clone(), remain)?;
         }
@@ -118,13 +118,19 @@ fn expand(rc_node: Rc<RefCell<Node>>, budget: f32) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
-fn simulate(game: &Game, fp: &FallingPiece) -> (Game, f32) {
+fn simulate(game: &Game, mt: &MoveTransition) -> (Game, f32) {
+    let fp = FallingPiece::new_with_one_record_item(
+        game.state.falling_piece.as_ref().unwrap().piece,
+        mt.src,
+        mt.by,
+        mt.dst,
+    );
     let mut simulated = game.clone();
-    simulated.state.falling_piece = Some(fp.clone());
+    simulated.state.falling_piece = Some(fp);
     simulated.lock().unwrap();
     let stats_diff = simulated.stats.clone() - game.stats.clone();
     let reward =
-        eval_placement(&fp.placement) * 0.2
+        eval_placement(&mt.dst) * 0.2
             + calc_reward(&stats_diff) * 1.0
             + eval_state(&simulated) * 0.5;
     (simulated, reward)

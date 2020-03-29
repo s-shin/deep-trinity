@@ -11,13 +11,14 @@ impl Bot for SimpleBot {
         if candidates.is_empty() {
             return Err("no movable placements".into());
         }
-        let mut candidate = &candidates[0];
-        for fp in &candidates {
-            if fp.placement.pos.1 < candidate.placement.pos.1 {
-                candidate = fp;
+        let mut it = candidates.iter();
+        let mut candidate = it.next().unwrap();
+        for mt in it {
+            if mt.dst.pos.1 < candidate.dst.pos.1 {
+                candidate = &mt;
             }
         }
-        Ok(Action::Move(candidate.placement))
+        Ok(Action::Move(candidate.clone()))
     }
 }
 

@@ -1,3 +1,8 @@
+/// Move searcher by brute force approach.
+/// Using this, we can get all movable placements.
+///
+/// Remarks: Since this searcher doesn't search all move patterns,
+/// it cannot detect some meaningful special rotations (e.g. T-Spin Mini).
 use crate::{Move, FallingPiece, MoveRecordItem};
 use super::{SearchConfiguration, MoveDestinations, SearchResult, MoveSearcher};
 

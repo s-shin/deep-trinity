@@ -1513,6 +1513,11 @@ impl Playfield {
         }
         true
     }
+    pub fn check_rotation(&self, mode: RotationMode, fp: &FallingPiece, cw: bool) -> Option<Placement> {
+        match mode {
+            RotationMode::Srs => self.check_rotation_by_srs(fp, cw),
+        }
+    }
     pub fn check_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Option<Placement> {
         let after: Orientation = fp.placement.orientation.rotate(if cw { 1 } else { -1 });
         let spec = PieceSpec::of(fp.piece);
@@ -1526,6 +1531,29 @@ impl Playfield {
             }
         }
         None
+    }
+    pub fn check_reverse_rotation(&self, mode: RotationMode, fp: &FallingPiece, cw: bool) -> Vec<Placement> {
+        match mode {
+            RotationMode::Srs => self.check_reverse_rotation_by_srs(fp, cw),
+        }
+    }
+    pub fn check_reverse_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Vec<Placement> {
+        let after: Orientation = fp.placement.orientation.rotate(if cw { -1 } else { 1 });
+        let spec = PieceSpec::of(fp.piece);
+        let next_grid: &HybridGrid = &spec.grids[after.id() as usize];
+        let offsets1: &Vec<(PosX, PosY)> = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
+        let offsets2: &Vec<(PosX, PosY)> = &spec.srs_offset_data[after.id() as usize];
+        let mut r = Vec::new();
+        for i in 0..offsets1.len() {
+            let mut p = fp.placement.pos;
+            for j in (0..=i).rev() {
+                p = p - Pos::from(offsets1[j]) + Pos::from(offsets2[j]);
+            }
+            if self.grid.bit_grid.can_put_fast(p, &next_grid.bit_grid) {
+                r.push(Placement::new(after, p));
+            }
+        }
+        r
     }
     // This method doesn't consider whether the game is over or not.
     pub fn can_lock(&self, fp: &FallingPiece) -> bool { self.can_put(fp) && !self.can_drop(fp) }
@@ -2070,7 +2098,7 @@ impl Game {
         let conf = move_search::SearchConfiguration::new(pf, fp.piece, fp.placement, self.rules.rotation_mode);
         Ok(searcher.search(&conf))
     }
-    pub fn get_move_candidates(&self) -> Result<Vec<FallingPiece>, &'static str> {
+    pub fn get_move_candidates(&self) -> Result<HashSet<MoveTransition>, &'static str> {
         let s = &self.state;
         if s.falling_piece.is_none() {
             return Err("no falling piece");
@@ -2079,13 +2107,63 @@ impl Game {
         let pf = &s.playfield;
         let lockable = pf.search_lockable_placements(fp.piece);
         let search_result = self.search_moves(&mut move_search::bruteforce::BruteForceMoveSearcher::default())?;
-        let mut r = Vec::new();
+        let mut r = HashSet::new();
         for p in lockable.iter() {
             if let Some(item) = search_result.found.get(p) {
-                r.push(FallingPiece::new_with_one_record_item(fp.piece, item.placement, item.by, *p));
+                r.insert(MoveTransition::new(item.placement, item.by, *p));
+                if fp.piece == Piece::T {
+                    for is_cw in &[true, false] {
+                        for src in pf.check_reverse_rotation(self.rules.rotation_mode, fp, *is_cw).iter() {
+                            r.insert(MoveTransition::new(
+                                *src,
+                                Move::Rotate(if *is_cw { 1 } else { -1 }),
+                                *p,
+                            ));
+                        }
+                    }
+                }
             }
         }
         Ok(r)
+    }
+    pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MoveRecord, &'static str> {
+        let fp = if let Some(fp) = self.state.falling_piece.as_ref() {
+            fp
+        } else {
+            return Err("no falling piece");
+        };
+        let dst1 = last_transition.src;
+        let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
+        // FIXME
+        // if debug_print { println!("{:?}: {:?} or {:?}", fp.piece, dst1, dst2); }
+
+        let mut rec = None;
+        for i in 0..=2 {
+            // For special rotations, we should also check original destination.
+            let dst = match i {
+                0 => &dst2,
+                1 => &dst2,
+                2 => &dst1,
+                _ => panic!(),
+            };
+            let ret = match i {
+                0 => self.search_moves(&mut move_search::humanly_optimized::HumanlyOptimizedMoveSearcher::new(*dst, true)),
+                1 => self.search_moves(&mut move_search::astar::AStarMoveSearcher::new(*dst, false)),
+                2 => self.search_moves(&mut move_search::astar::AStarMoveSearcher::new(*dst, false)),
+                _ => panic!(),
+            }?;
+            if let Some(mut r) = ret.get(dst) {
+                r.merge_or_push(MoveRecordItem::new(last_transition.by, last_transition.dst));
+                rec = Some(r);
+                break;
+            }
+        }
+
+        if let Some(rec) = rec {
+            Ok(rec)
+        } else {
+            Err("move path not found")
+        }
     }
 }
 
@@ -2360,11 +2438,11 @@ mod tests {
         let all = game.get_move_candidates();
         assert!(all.is_ok());
         let all = all.unwrap();
-        for fp in all.iter() {
-            let r = game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(fp.placement, false));
+        for mt in all.iter() {
+            let r = game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(mt.dst, false));
             assert!(r.is_ok());
             let r = r.unwrap();
-            let rec = r.get(&fp.placement);
+            let rec = r.get(&mt.dst);
             assert!(rec.is_some());
         }
     }

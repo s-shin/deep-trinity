@@ -1,3 +1,5 @@
+/// Move searcher by A* algorithm.
+/// Using this, we can get mostly good moves to a specific placement.
 use std::collections::{HashMap, BTreeMap, VecDeque};
 use crate::{Move, FallingPiece, MoveRecordItem, Placement};
 use super::{SearchConfiguration, MoveDestinations, SearchResult, MoveSearcher};

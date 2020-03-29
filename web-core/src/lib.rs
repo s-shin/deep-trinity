@@ -236,8 +236,9 @@ impl Action {
         Self { bot_action }
     }
     pub fn dst(&self) -> Option<Placement> {
-        match self.bot_action {
-            bot::Action::Move(p) => Some(p.into()),
+        match &self.bot_action {
+            // FIXME
+            bot::Action::Move(mt) => Some(mt.dst.into()),
             _ => None,
         }
     }

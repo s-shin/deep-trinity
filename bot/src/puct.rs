@@ -27,7 +27,7 @@ struct GameData {
 impl GameData {
     fn new<R: Rng + ?Sized>(game: Game, rng: &mut R) -> Result<Self, Box<dyn Error>> {
         let mut actions = game.get_move_candidates()?.iter()
-            .map(|fp| { Action::Move(fp.placement) })
+            .map(|mt| { Action::Move(mt.clone()) })
             .collect::<Vec<_>>();
         if game.state.can_hold {
             actions.push(Action::Hold);
@@ -171,17 +171,7 @@ struct PuctBot {}
 
 impl Bot for PuctBot {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
-        let candidates = game.get_move_candidates()?;
-        if candidates.is_empty() {
-            return Err("no movable placements".into());
-        }
-        let mut candidate = &candidates[0];
-        for fp in &candidates {
-            if fp.placement.pos.1 < candidate.placement.pos.1 {
-                candidate = fp;
-            }
-        }
-        Ok(Action::Move(candidate.placement))
+        panic!()
     }
 }
 
