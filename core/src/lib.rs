@@ -837,7 +837,7 @@ pub struct MoveTransition {
 }
 
 impl MoveTransition {
-    fn new(src: Placement, by: Move, dst: Placement) -> Self {
+    pub fn new(src: Placement, by: Move, dst: Placement) -> Self {
         Self { src, by, dst }
     }
 }
@@ -849,7 +849,7 @@ pub struct MovePathItem {
 }
 
 impl MovePathItem {
-    fn new(by: Move, placement: Placement) -> Self {
+    pub fn new(by: Move, placement: Placement) -> Self {
         Self { by, placement }
     }
 }
@@ -1560,6 +1560,7 @@ impl Playfield {
     // This method doesn't consider whether the game is over or not.
     pub fn can_lock(&self, fp: &FallingPiece) -> bool { self.can_put(fp) && !self.can_drop(fp) }
     pub fn check_tspin(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> Option<TSpin> {
+        // TODO: T-Spin Mini might not be detected correctly.
         debug_assert!(self.can_lock(fp));
         debug_assert_eq!(TSpinJudgementMode::PuyoPuyoTetris, mode);
         if fp.piece != Piece::T || !fp.is_last_move_rotation() {

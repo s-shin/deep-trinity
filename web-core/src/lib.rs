@@ -48,7 +48,7 @@ impl From<core::Cell> for Cell {
 }
 
 #[wasm_bindgen]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum StatisticsEntryType {
     Single,
     Double,
@@ -83,6 +83,61 @@ impl Into<core::Placement> for Placement {
 impl From<core::Placement> for Placement {
     fn from(p: core::Placement) -> Self {
         Self { orientation: p.orientation.id(), x: p.pos.0, y: p.pos.1 }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug)]
+pub enum Move {
+    Right,
+    Left,
+    Down,
+    Cw,
+    Ccw,
+}
+
+impl Into<core::Move> for Move {
+    fn into(self) -> core::Move {
+        match self {
+            Move::Right => core::Move::Shift(1),
+            Move::Left => core::Move::Shift(-1),
+            Move::Down => core::Move::Drop(1),
+            Move::Cw => core::Move::Rotate(1),
+            Move::Ccw => core::Move::Rotate(-1),
+        }
+    }
+}
+
+impl From<core::Move> for Move {
+    fn from(mv: core::Move) -> Self {
+        match mv {
+            core::Move::Shift(1) => Move::Right,
+            core::Move::Shift(-1) => Move::Left,
+            core::Move::Drop(1) => Move::Down,
+            core::Move::Rotate(1) => Move::Cw,
+            core::Move::Rotate(-1) => Move::Ccw,
+            _ => panic!("invalid core::Move: {:?}", mv),
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Copy, Clone, Debug)]
+pub struct MoveTransition {
+    pub src: Placement,
+    pub by: Move,
+    pub dst: Placement,
+}
+
+impl Into<core::MoveTransition> for MoveTransition {
+    fn into(self) -> core::MoveTransition {
+        core::MoveTransition::new(self.src.into(), self.by.into(), self.dst.into())
+    }
+}
+
+impl From<core::MoveTransition> for MoveTransition {
+    fn from(mt: core::MoveTransition) -> Self {
+        Self { src: mt.src.into(), by: mt.by.into(), dst: mt.dst.into() }
     }
 }
 
@@ -235,10 +290,9 @@ impl Action {
     fn new(bot_action: bot::Action) -> Self {
         Self { bot_action }
     }
-    pub fn dst(&self) -> Option<Placement> {
+    pub fn dst(&self) -> Option<MoveTransition> {
         match &self.bot_action {
-            // FIXME
-            bot::Action::Move(mt) => Some(mt.dst.into()),
+            bot::Action::Move(mt) => Some((*mt).into()),
             _ => None,
         }
     }
@@ -288,42 +342,12 @@ extern "C" {
 
 #[wasm_bindgen]
 impl MovePlayer {
-    pub fn from(game: &Game, dst: Placement) -> Result<MovePlayer, JsValue> {
-        use core::move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
-        use core::move_search::astar::AStarMoveSearcher;
-        // use core::move_search::bruteforce::BruteForceMoveSearcher;
-
-        let g = &game.game;
-        let fp = g.state.falling_piece.as_ref().unwrap();
-        let dst1: core::Placement = dst.into();
-        let dst2 = core::get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
-        for i in 0..=2 {
-            // For special rotations, we should also check original destination.
-            let dst = match i {
-                0 => &dst2,
-                1 => &dst2,
-                2 => &dst1,
-                _ => panic!(),
-            };
-            let ret = match i {
-                0 => g.search_moves(&mut HumanlyOptimizedMoveSearcher::new(*dst, true)),
-                1 => g.search_moves(&mut AStarMoveSearcher::new(*dst, false)),
-                2 => g.search_moves(&mut AStarMoveSearcher::new(*dst, false)),
-                // x => g.search_moves(&mut BruteForceMoveSearcher::default()),
-                _ => panic!(),
-            };
-            let ret = match ret {
-                Ok(r) => r,
-                Err(e) => { return Err(e.into()); }
-            };
-            if let Some(path) = ret.get(dst) {
-                log(&format!("{:?} : {} => {:?}", g.state.falling_piece.as_ref().unwrap().piece, i, path));
-                return Ok(Self {
-                    move_player: core::MovePlayer::new(path),
-                });
-            }
-        }
-        Err("cannot move to".into())
+    pub fn from(game: &Game, mt: &MoveTransition) -> Result<MovePlayer, JsValue> {
+        let path = game.game.get_almost_good_move_path(&((*mt).into()))?;
+        log(&format!("{:?}: {:?}", &game.game.state.falling_piece.as_ref().unwrap().piece, path));
+        Ok(Self {
+            move_player: core::MovePlayer::new(path),
+        })
     }
     pub fn step(&mut self, game: &mut Game) -> Result<bool, JsValue> {
         self.move_player.step(&mut game.game).map_err(|e| { e.into() })
