@@ -1560,7 +1560,6 @@ impl Playfield {
     // This method doesn't consider whether the game is over or not.
     pub fn can_lock(&self, fp: &FallingPiece) -> bool { self.can_put(fp) && !self.can_drop(fp) }
     pub fn check_tspin(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> Option<TSpin> {
-        // TODO: T-Spin Mini might not be detected correctly.
         debug_assert!(self.can_lock(fp));
         debug_assert_eq!(TSpinJudgementMode::PuyoPuyoTetris, mode);
         if fp.piece != Piece::T || !fp.is_last_move_rotation() {
@@ -1602,7 +1601,7 @@ impl Playfield {
                             Some(TSpin::Mini) // Neo
                         }
                     } else {
-                        None
+                        Some(TSpin::Mini)
                     }
                 } else {
                     None
@@ -2393,6 +2392,53 @@ mod tests {
         assert_eq!(vec![
             Placement::new(ORIENTATION_3, pos!(0, 0)),
         ], r_ccw);
+    }
+
+    #[test]
+    fn test_tspin_mini() {
+        let mut pf = Playfield::default();
+        pf.set_rows(upos!(0, 0), &[
+            " @@@@@@@@@",
+        ]);
+        let mut fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_0, pos!(0, 0)));
+        assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
+        assert_eq!(Placement::new(ORIENTATION_1, pos!(-1, 0)), fp.placement);
+        let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
+        assert_eq!(Some(TSpin::Mini), tspin);
+    }
+
+    #[test]
+    fn test_tspin_neo() {
+        let mut pf = Playfield::default();
+        pf.set_rows(upos!(0, 0), &[
+            "       @@@",
+            "         @",
+            "        @@",
+            "@@@@@@  @@",
+            "@@@@@@@ @@",
+        ]);
+        let mut fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_2, pos!(6, 2)));
+        assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
+        assert_eq!(Placement::new(ORIENTATION_3, pos!(6, 0)), fp.placement);
+        let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
+        assert_eq!(Some(TSpin::Mini), tspin);
+    }
+
+    #[test]
+    fn test_tspin_fin() {
+        let mut pf = Playfield::default();
+        pf.set_rows(upos!(0, 0), &[
+            "       @@@",
+            "         @",
+            "         @",
+            "@@@@@@@  @",
+            "@@@@@@@@ @",
+        ]);
+        let mut fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_2, pos!(6, 2)));
+        assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
+        assert_eq!(Placement::new(ORIENTATION_3, pos!(7, 0)), fp.placement);
+        let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
+        assert_eq!(Some(TSpin::Standard), tspin);
     }
 
     #[test]
