@@ -1519,15 +1519,15 @@ impl Playfield {
         }
     }
     pub fn check_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Option<Placement> {
-        let after: Orientation = fp.placement.orientation.rotate(if cw { 1 } else { -1 });
+        let next_orientation: Orientation = fp.placement.orientation.rotate(if cw { 1 } else { -1 });
         let spec = PieceSpec::of(fp.piece);
-        let next_grid: &HybridGrid = &spec.grids[after.id() as usize];
+        let next_grid: &HybridGrid = &spec.grids[next_orientation.id() as usize];
         let offsets1: &Vec<(PosX, PosY)> = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
-        let offsets2: &Vec<(PosX, PosY)> = &spec.srs_offset_data[after.id() as usize];
+        let offsets2: &Vec<(PosX, PosY)> = &spec.srs_offset_data[next_orientation.id() as usize];
         for i in 0..offsets1.len() {
             let p = fp.placement.pos + Pos::from(offsets1[i]) - Pos::from(offsets2[i]);
             if self.grid.bit_grid.can_put_fast(p, &next_grid.bit_grid) {
-                return Some(Placement::new(after, p));
+                return Some(Placement::new(next_orientation, p));
             }
         }
         None
@@ -1538,19 +1538,21 @@ impl Playfield {
         }
     }
     pub fn check_reverse_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Vec<Placement> {
-        let after: Orientation = fp.placement.orientation.rotate(if cw { -1 } else { 1 });
+        let prev_orientation: Orientation = fp.placement.orientation.rotate(if cw { -1 } else { 1 });
         let spec = PieceSpec::of(fp.piece);
-        let next_grid: &HybridGrid = &spec.grids[after.id() as usize];
-        let offsets1: &Vec<(PosX, PosY)> = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
-        let offsets2: &Vec<(PosX, PosY)> = &spec.srs_offset_data[after.id() as usize];
+        let prev_grid: &HybridGrid = &spec.grids[prev_orientation.id() as usize];
+        let offsets1: &Vec<(PosX, PosY)> = &spec.srs_offset_data[prev_orientation.id() as usize];
+        let offsets2: &Vec<(PosX, PosY)> = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
         let mut r = Vec::new();
         for i in 0..offsets1.len() {
-            let mut p = fp.placement.pos;
-            for j in (0..=i).rev() {
-                p = p - Pos::from(offsets1[j]) + Pos::from(offsets2[j]);
-            }
-            if self.grid.bit_grid.can_put_fast(p, &next_grid.bit_grid) {
-                r.push(Placement::new(after, p));
+            let p = fp.placement.pos - Pos::from(offsets1[i]) + Pos::from(offsets2[i]);
+            if self.grid.bit_grid.can_put_fast(p, &prev_grid.bit_grid) {
+                let prev_fp = FallingPiece::new(fp.piece, Placement::new(prev_orientation, p));
+                if let Some(pp) = self.check_rotation_by_srs(&prev_fp, cw) {
+                    if pp == fp.placement {
+                        r.push(Placement::new(prev_orientation, p));
+                    }
+                }
             }
         }
         r
@@ -2110,13 +2112,22 @@ impl Game {
         let mut r = HashSet::new();
         for p in lockable.iter() {
             if let Some(item) = search_result.found.get(p) {
-                r.insert(MoveTransition::new(item.placement, item.by, *p));
+                // For move optimization, the source placement by drop is preferred rather than by rotation.
+                let mut pp = p.clone();
+                pp.pos.1 += 1;
+                if pf.can_put(&FallingPiece::new(fp.piece, pp.clone())) {
+                    r.insert(MoveTransition::new(pp, Move::Drop(1), *p));
+                } else {
+                    r.insert(MoveTransition::new(item.placement, item.by, *p));
+                }
                 if fp.piece == Piece::T {
-                    for is_cw in &[true, false] {
-                        for src in pf.check_reverse_rotation(self.rules.rotation_mode, fp, *is_cw).iter() {
+                    // Append transitions by rotations for preventing leaks of handling worthy special rotations.
+                    let dst_fp = FallingPiece::new(fp.piece, *p);
+                    for cw in &[true, false] {
+                        for src in pf.check_reverse_rotation(self.rules.rotation_mode, &dst_fp, *cw).iter() {
                             r.insert(MoveTransition::new(
                                 *src,
-                                Move::Rotate(if *is_cw { 1 } else { -1 }),
+                                Move::Rotate(if *cw { 1 } else { -1 }),
                                 *p,
                             ));
                         }
@@ -2134,12 +2145,11 @@ impl Game {
         };
         let dst1 = last_transition.src;
         let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
-        // FIXME
-        // if debug_print { println!("{:?}: {:?} or {:?}", fp.piece, dst1, dst2); }
 
         let mut path = None;
-        for i in 0..=2 {
-            // For special rotations, we should also check original destination.
+        // For special rotations, we should check only the original destination if the last move is rotation.
+        let start = if let Move::Rotate(_) = last_transition.by { 2 } else { 0 };
+        for i in start..=2 {
             let dst = match i {
                 0 => &dst2,
                 1 => &dst2,
@@ -2362,6 +2372,26 @@ mod tests {
         let fp = FallingPiece::spawn(Piece::O, Some(&pf));
         assert_eq!(19, fp.placement.pos.1);
         assert!(!pf.can_lock(&fp));
+    }
+
+    #[test]
+    fn test_reverse_rotation_by_srs() {
+        let mut pf = Playfield::default();
+        pf.set_rows(upos!(0, 0), &[
+            "  @@@@@@@@",
+            "   @@@@@@@",
+            "@ @@@@@@@@",
+        ]);
+        let fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_2, pos!(0, 0)));
+        let r_cw = pf.check_reverse_rotation_by_srs(&fp, true);
+        assert_eq!(vec![
+            Placement::new(ORIENTATION_1, pos!(0, 0)),
+            Placement::new(ORIENTATION_1, pos!(-1, 1)),
+        ], r_cw);
+        let r_ccw = pf.check_reverse_rotation_by_srs(&fp, false);
+        assert_eq!(vec![
+            Placement::new(ORIENTATION_3, pos!(0, 0)),
+        ], r_ccw);
     }
 
     #[test]

@@ -30,7 +30,9 @@ pub fn test_bot<B: Bot>(bot: &mut B, random_seed: u64, max_iterations: usize, de
         if game.should_supply_next_pieces() {
             game.supply_next_pieces(&pg.generate());
         }
-        match bot.think(&game)? {
+        let action = bot.think(&game)?;
+        if debug_print { println!("Action: {:?}", action); }
+        match action {
             Action::Move(mt) => {
                 let path = game.get_almost_good_move_path(&mt)?;
 

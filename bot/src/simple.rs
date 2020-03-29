@@ -1,5 +1,5 @@
-use core::Game;
 use crate::{Bot, Action};
+use core::Game;
 use std::error::Error;
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -11,14 +11,10 @@ impl Bot for SimpleBot {
         if candidates.is_empty() {
             return Err("no movable placements".into());
         }
-        let mut it = candidates.iter();
-        let mut candidate = it.next().unwrap();
-        for mt in it {
-            if mt.dst.pos.1 < candidate.dst.pos.1 {
-                candidate = &mt;
-            }
-        }
-        Ok(Action::Move(candidate.clone()))
+        let selected = candidates.iter()
+            .min_by(|mt1, mt2| mt1.dst.pos.1.cmp(&mt2.dst.pos.1))
+            .unwrap();
+        Ok(Action::Move(selected.clone()))
     }
 }
 
@@ -31,7 +27,6 @@ mod tests {
     fn test_simple_bot() {
         let mut bot = SimpleBot::default();
         let seed = 0;
-        // let seed = 409509985; // check circular problem
         let game = test_bot(&mut bot, seed, 100, false).unwrap();
         assert!(game.stats.lock > 40);
     }
