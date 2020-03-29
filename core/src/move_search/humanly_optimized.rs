@@ -1,4 +1,4 @@
-use crate::{Move, FallingPiece, MoveRecordItem, Placement};
+use crate::{Move, FallingPiece, MovePathItem, Placement};
 use super::{SearchConfiguration, MoveDestinations, SearchResult, MoveSearcher};
 
 pub const END: i8 = 100;
@@ -80,9 +80,9 @@ fn search_moves(conf: &SearchConfiguration, plan: &[Vec<Move>]) -> SearchResult 
             let should_update = !found.contains_key(&fp.placement);
             if should_update {
                 let item = if let Some(mt) = fp.last_move_transition() {
-                    MoveRecordItem::new(mv, mt.src)
+                    MovePathItem::new(mv, mt.src)
                 } else {
-                    MoveRecordItem::new(mv, fp.move_record.initial_placement)
+                    MovePathItem::new(mv, fp.move_path.initial_placement)
                 };
                 found.insert(fp.placement, item);
             }

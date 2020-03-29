@@ -316,10 +316,10 @@ impl MovePlayer {
                 Ok(r) => r,
                 Err(e) => { return Err(e.into()); }
             };
-            if let Some(rec) = ret.get(dst) {
-                log(&format!("{:?} : {} => {:?}", g.state.falling_piece.as_ref().unwrap().piece, i, rec));
+            if let Some(path) = ret.get(dst) {
+                log(&format!("{:?} : {} => {:?}", g.state.falling_piece.as_ref().unwrap().piece, i, path));
                 return Ok(Self {
-                    move_player: core::MovePlayer::new(rec),
+                    move_player: core::MovePlayer::new(path),
                 });
             }
         }

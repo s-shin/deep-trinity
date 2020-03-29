@@ -1,7 +1,7 @@
 /// Move searcher by A* algorithm.
 /// Using this, we can get mostly good moves to a specific placement.
 use std::collections::{HashMap, BTreeMap, VecDeque};
-use crate::{Move, FallingPiece, MoveRecordItem, Placement};
+use crate::{Move, FallingPiece, MovePathItem, Placement};
 use super::{SearchConfiguration, MoveDestinations, SearchResult, MoveSearcher};
 
 pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> SearchResult {
@@ -96,7 +96,7 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
                 if should_update {
                     open_list.get_mut(&f).unwrap().push_back(fp.placement);
                     state.insert(fp.placement, StateEntry::new(f, false));
-                    found.insert(fp.placement, MoveRecordItem::new(fp.move_record.items[0].by, fp.move_record.initial_placement));
+                    found.insert(fp.placement, MovePathItem::new(fp.move_path.items[0].by, fp.move_path.initial_placement));
                 }
             }
         }
@@ -143,9 +143,9 @@ mod test {
         let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
         let dst = Placement::new(ORIENTATION_3, pos!(6, 0));
         let r = search_moves(&conf, dst, false);
-        let rec = r.get(&dst);
-        assert!(rec.is_some());
-        let mut mp = MovePlayer::new(rec.unwrap());
+        let path = r.get(&dst);
+        assert!(path.is_some());
+        let mut mp = MovePlayer::new(path.unwrap());
         while mp.step(&mut game).unwrap() {
             // println!("{}", game);
         }

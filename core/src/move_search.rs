@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::{Playfield, Piece, Placement, RotationMode, MoveRecordItem, MoveRecord};
+use crate::{Playfield, Piece, Placement, RotationMode, MovePathItem, MovePath};
 
 pub mod astar;
 pub mod bruteforce;
@@ -19,7 +19,7 @@ impl<'a> SearchConfiguration<'a> {
 }
 
 /// The placement of MoveRecordItem is **source** one.
-pub type MoveDestinations = HashMap<Placement, MoveRecordItem>;
+pub type MoveDestinations = HashMap<Placement, MovePathItem>;
 
 #[derive(Clone, Debug)]
 pub struct SearchResult {
@@ -31,14 +31,14 @@ impl SearchResult {
     pub fn new(src: Placement, found: MoveDestinations) -> Self { Self { src, found } }
     pub fn len(&self) -> usize { self.found.len() }
     pub fn contains(&self, dst: &Placement) -> bool { self.found.contains_key(dst) }
-    pub fn get(&self, dst: &Placement) -> Option<MoveRecord> {
+    pub fn get(&self, dst: &Placement) -> Option<MovePath> {
         let mut placement = *dst;
-        let mut items: Vec<MoveRecordItem> = Vec::new();
+        let mut items: Vec<MovePathItem> = Vec::new();
         let mut i = 0;
         const STOPPER: usize = 10000;
         while let Some(item) = self.found.get(&placement) {
             // if i < 30 { println!("{:?}", item); }
-            items.push(MoveRecordItem::new(item.by, placement));
+            items.push(MovePathItem::new(item.by, placement));
             placement = item.placement;
             if item.placement == self.src {
                 break;
@@ -51,11 +51,11 @@ impl SearchResult {
         if items.is_empty() {
             return None;
         }
-        let mut record = MoveRecord::new(self.src);
+        let mut path = MovePath::new(self.src);
         for item in items.iter().rev() {
-            record.merge_or_push(*item);
+            path.merge_or_push(*item);
         }
-        Some(record)
+        Some(path)
     }
 }
 

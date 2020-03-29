@@ -3,7 +3,7 @@
 ///
 /// Remarks: Since this searcher doesn't search all move patterns,
 /// it cannot detect some meaningful special rotations (e.g. T-Spin Mini).
-use crate::{Move, FallingPiece, MoveRecordItem};
+use crate::{Move, FallingPiece, MovePathItem};
 use super::{SearchConfiguration, MoveDestinations, SearchResult, MoveSearcher};
 
 const MOVES: [Move; 5] = [Move::Drop(1), Move::Shift(1), Move::Shift(-1), Move::Rotate(1), Move::Rotate(-1)];
@@ -32,9 +32,9 @@ pub fn search_moves(conf: &SearchConfiguration, debug: bool) -> SearchResult {
             debug_println!("=> already checked.");
             return;
         }
-        debug_assert!(fp.move_record.len() <= 1);
-        if let Some(last) = fp.move_record.last() {
-            let from = MoveRecordItem::new(last.by, fp.move_record.initial_placement);
+        debug_assert!(fp.move_path.len() <= 1);
+        if let Some(last) = fp.move_path.last() {
+            let from = MovePathItem::new(last.by, fp.move_path.initial_placement);
             let v = found.insert(fp.placement, from);
             debug_assert!(v.is_none());
         }
@@ -94,9 +94,9 @@ mod test {
         let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
         let dst = Placement::new(ORIENTATION_1, pos!(-2, 0));
         let r = search_moves(&conf, false);
-        let rec = r.get(&dst);
-        assert!(rec.is_some());
-        let mut mp = MovePlayer::new(rec.unwrap());
+        let path = r.get(&dst);
+        assert!(path.is_some());
+        let mut mp = MovePlayer::new(path.unwrap());
         while mp.step(&mut game).unwrap() {
             println!("{}", game);
         }

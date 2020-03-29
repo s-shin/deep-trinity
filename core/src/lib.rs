@@ -829,7 +829,7 @@ impl Move {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MoveTransition {
     pub src: Placement,
     pub by: Move,
@@ -843,24 +843,24 @@ impl MoveTransition {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MoveRecordItem {
+pub struct MovePathItem {
     pub by: Move,
     pub placement: Placement,
 }
 
-impl MoveRecordItem {
+impl MovePathItem {
     fn new(by: Move, placement: Placement) -> Self {
         Self { by, placement }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MoveRecord {
+pub struct MovePath {
     pub initial_placement: Placement,
-    pub items: Vec<MoveRecordItem>,
+    pub items: Vec<MovePathItem>,
 }
 
-impl MoveRecord {
+impl MovePath {
     pub fn new(initial_placement: Placement) -> Self {
         Self {
             initial_placement,
@@ -868,19 +868,19 @@ impl MoveRecord {
         }
     }
     pub fn len(&self) -> usize { self.items.len() }
-    pub fn push(&mut self, item: MoveRecordItem) { self.items.push(item); }
-    pub fn pop(&mut self) -> Option<MoveRecordItem> { self.items.pop() }
-    pub fn get(&self, i: usize) -> Option<&MoveRecordItem> { self.items.get(i) }
-    pub fn get_mut(&mut self, i: usize) -> Option<&mut MoveRecordItem> { self.items.get_mut(i) }
-    pub fn last(&self) -> Option<&MoveRecordItem> { self.items.last() }
-    pub fn iter(&self) -> std::slice::Iter<MoveRecordItem> { self.items.iter() }
-    pub fn append(&mut self, other: &MoveRecord) {
+    pub fn push(&mut self, item: MovePathItem) { self.items.push(item); }
+    pub fn pop(&mut self) -> Option<MovePathItem> { self.items.pop() }
+    pub fn get(&self, i: usize) -> Option<&MovePathItem> { self.items.get(i) }
+    pub fn get_mut(&mut self, i: usize) -> Option<&mut MovePathItem> { self.items.get_mut(i) }
+    pub fn last(&self) -> Option<&MovePathItem> { self.items.last() }
+    pub fn iter(&self) -> std::slice::Iter<MovePathItem> { self.items.iter() }
+    pub fn append(&mut self, other: &MovePath) {
         if let Some(item) = self.items.last() {
             debug_assert_eq!(item.placement, other.initial_placement);
         }
         self.items.extend(&other.items);
     }
-    pub fn merge_or_push(&mut self, item: MoveRecordItem) {
+    pub fn merge_or_push(&mut self, item: MovePathItem) {
         if let Some(last) = self.items.last_mut() {
             if let Some(mv) = last.by.merge(item.by) {
                 last.by = mv;
@@ -1362,17 +1362,17 @@ pub fn get_nearest_placement_alias(piece: Piece, aliased: &Placement, reference:
 pub struct FallingPiece {
     pub piece: Piece,
     pub placement: Placement,
-    pub move_record: MoveRecord,
+    pub move_path: MovePath,
 }
 
 impl FallingPiece {
     pub fn new(piece: Piece, placement: Placement) -> Self {
-        Self { piece, placement, move_record: MoveRecord::new(placement) }
+        Self { piece, placement, move_path: MovePath::new(placement) }
     }
-    pub fn new_with_one_record_item(piece: Piece, src: Placement, mv: Move, dst: Placement) -> Self {
+    pub fn new_with_one_path_item(piece: Piece, src: Placement, mv: Move, dst: Placement) -> Self {
         let mut fp = Self::new(piece, dst);
-        fp.move_record.initial_placement = src;
-        fp.move_record.items.push(MoveRecordItem::new(mv, dst));
+        fp.move_path.initial_placement = src;
+        fp.move_path.items.push(MovePathItem::new(mv, dst));
         fp
     }
     pub fn spawn(piece: Piece, pf: Option<&Playfield>) -> Self {
@@ -1381,7 +1381,7 @@ impl FallingPiece {
         if let Some(pf) = pf {
             if !pf.can_put(&fp) {
                 fp.placement.pos.1 += 1;
-                fp.move_record.initial_placement.pos.1 += 1;
+                fp.move_path.initial_placement.pos.1 += 1;
             }
         }
         fp
@@ -1416,20 +1416,20 @@ impl FallingPiece {
                 }
             }
         }
-        self.move_record.push(MoveRecordItem::new(mv, self.placement));
+        self.move_path.push(MovePathItem::new(mv, self.placement));
         true
     }
     pub fn rollback(&mut self) -> bool {
-        if let Some(_) = self.move_record.pop() {
-            self.placement = self.move_record.last()
-                .map_or(self.move_record.initial_placement, |item| { item.placement });
+        if let Some(_) = self.move_path.pop() {
+            self.placement = self.move_path.last()
+                .map_or(self.move_path.initial_placement, |item| { item.placement });
             true
         } else {
             false
         }
     }
     pub fn is_last_move_rotation(&self) -> bool {
-        if let Some(item) = self.move_record.items.last() {
+        if let Some(item) = self.move_path.items.last() {
             if let Move::Rotate(_) = item.by {
                 return true;
             }
@@ -1437,7 +1437,7 @@ impl FallingPiece {
         false
     }
     pub fn last_move_transition(&self) -> Option<MoveTransition> {
-        self.move_record.last_transition()
+        self.move_path.last_transition()
     }
 }
 
@@ -2126,7 +2126,7 @@ impl Game {
         }
         Ok(r)
     }
-    pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MoveRecord, &'static str> {
+    pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MovePath, &'static str> {
         let fp = if let Some(fp) = self.state.falling_piece.as_ref() {
             fp
         } else {
@@ -2137,7 +2137,7 @@ impl Game {
         // FIXME
         // if debug_print { println!("{:?}: {:?} or {:?}", fp.piece, dst1, dst2); }
 
-        let mut rec = None;
+        let mut path = None;
         for i in 0..=2 {
             // For special rotations, we should also check original destination.
             let dst = match i {
@@ -2153,14 +2153,14 @@ impl Game {
                 _ => panic!(),
             }?;
             if let Some(mut r) = ret.get(dst) {
-                r.merge_or_push(MoveRecordItem::new(last_transition.by, last_transition.dst));
-                rec = Some(r);
+                r.merge_or_push(MovePathItem::new(last_transition.by, last_transition.dst));
+                path = Some(r);
                 break;
             }
         }
 
-        if let Some(rec) = rec {
-            Ok(rec)
+        if let Some(path) = path {
+            Ok(path)
         } else {
             Err("move path not found")
         }
@@ -2233,15 +2233,15 @@ impl fmt::Display for Game {
 
 #[derive(Clone, Debug)]
 pub struct MovePlayer {
-    record: MoveRecord,
+    path: MovePath,
     i: usize,
 }
 
 impl MovePlayer {
-    pub fn new(record: MoveRecord) -> Self {
-        Self { record, i: 0 }
+    pub fn new(path: MovePath) -> Self {
+        Self { path, i: 0 }
     }
-    pub fn is_end(&self) -> bool { self.i >= self.record.len() }
+    pub fn is_end(&self) -> bool { self.i >= self.path.len() }
     pub fn step(&mut self, game: &mut Game) -> Result<bool, &'static str> {
         if self.is_end() {
             return Ok(false);
@@ -2251,14 +2251,14 @@ impl MovePlayer {
         }
         let fp = game.state.falling_piece.as_ref().unwrap();
         let placement = if self.i == 0 {
-            self.record.initial_placement
+            self.path.initial_placement
         } else {
-            self.record.items[self.i - 1].placement
+            self.path.items[self.i - 1].placement
         };
         if fp.placement != placement {
             return Err("invalid placement");
         }
-        let item = self.record.items[self.i];
+        let item = self.path.items[self.i];
         game.do_move(item.by)?;
         self.i += 1;
         Ok(true)
@@ -2325,17 +2325,17 @@ mod tests {
         assert!(fp.apply_move(Move::Rotate(-1), &pf, RotationMode::Srs));
         assert!(fp.apply_move(Move::Shift(-1), &pf, RotationMode::Srs));
         assert!(fp.apply_move(Move::Shift(-1), &pf, RotationMode::Srs));
-        let rec = fp.move_record.normalize();
-        assert_eq!(Placement::new(ORIENTATION_0, pos!(3, 18)), rec.initial_placement);
+        let path = fp.move_path.normalize();
+        assert_eq!(Placement::new(ORIENTATION_0, pos!(3, 18)), path.initial_placement);
         assert_eq!(vec![
-            MoveRecordItem::new(Move::Shift(2), Placement::new(ORIENTATION_0, pos!(5, 18))),
-            MoveRecordItem::new(Move::Rotate(1), Placement::new(ORIENTATION_1, pos!(5, 19))),
-            MoveRecordItem::new(Move::Rotate(1), Placement::new(ORIENTATION_2, pos!(6, 19))),
-            MoveRecordItem::new(Move::Drop(2), Placement::new(ORIENTATION_2, pos!(6, 17))),
-            MoveRecordItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_1, pos!(5, 17))),
-            MoveRecordItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_0, pos!(5, 16))),
-            MoveRecordItem::new(Move::Shift(-2), Placement::new(ORIENTATION_0, pos!(3, 16))),
-        ], rec.items);
+            MovePathItem::new(Move::Shift(2), Placement::new(ORIENTATION_0, pos!(5, 18))),
+            MovePathItem::new(Move::Rotate(1), Placement::new(ORIENTATION_1, pos!(5, 19))),
+            MovePathItem::new(Move::Rotate(1), Placement::new(ORIENTATION_2, pos!(6, 19))),
+            MovePathItem::new(Move::Drop(2), Placement::new(ORIENTATION_2, pos!(6, 17))),
+            MovePathItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_1, pos!(5, 17))),
+            MovePathItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_0, pos!(5, 16))),
+            MovePathItem::new(Move::Shift(-2), Placement::new(ORIENTATION_0, pos!(3, 16))),
+        ], path.items);
     }
 
     #[test]
@@ -2420,10 +2420,10 @@ mod tests {
             };
             assert_ok!(&ret);
             let ret = ret.unwrap();
-            let rec = ret.get(&dst);
-            assert!(rec.is_some());
-            let rec = rec.unwrap();
-            assert!(rec.len() > 0);
+            let path = ret.get(&dst);
+            assert!(path.is_some());
+            let path = path.unwrap();
+            assert!(path.len() > 0);
         }
     }
 
@@ -2442,8 +2442,8 @@ mod tests {
             let r = game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(mt.dst, false));
             assert!(r.is_ok());
             let r = r.unwrap();
-            let rec = r.get(&mt.dst);
-            assert!(rec.is_some());
+            let path = r.get(&mt.dst);
+            assert!(path.is_some());
         }
     }
 

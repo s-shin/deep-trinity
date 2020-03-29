@@ -32,9 +32,9 @@ pub fn test_bot<B: Bot>(bot: &mut B, random_seed: u64, max_iterations: usize, de
         }
         match bot.think(&game)? {
             Action::Move(mt) => {
-                let rec = game.get_almost_good_move_path(&mt)?;
+                let path = game.get_almost_good_move_path(&mt)?;
 
-                let mut mp = MovePlayer::new(rec);
+                let mut mp = MovePlayer::new(path);
                 while mp.step(&mut game)? {
                     if debug_print { println!("{}", game); }
                 }

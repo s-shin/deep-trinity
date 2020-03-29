@@ -119,7 +119,7 @@ fn expand(rc_node: Rc<RefCell<Node>>, budget: f32) -> Result<(), Box<dyn Error>>
 }
 
 fn simulate(game: &Game, mt: &MoveTransition) -> (Game, f32) {
-    let fp = FallingPiece::new_with_one_record_item(
+    let fp = FallingPiece::new_with_one_path_item(
         game.state.falling_piece.as_ref().unwrap().piece,
         mt.src,
         mt.by,
