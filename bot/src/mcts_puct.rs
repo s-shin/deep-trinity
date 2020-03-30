@@ -13,6 +13,14 @@ type Reward = f32;
 
 fn eval_game(game: &Game) -> Reward {
     let mut reward = 0.0;
+    // let pf = &game.state.playfield;
+    // let n = pf.grid.num_covered_empty_cells() as f32;
+    // let threshold = pf.width() as f32 * pf.height() as f32 / 20.0;
+    // reward += if n > threshold {
+    //     0.0
+    // } else {
+    //     1.0 - n / threshold
+    // };
     for (ent_type, val) in &[
         (StatisticsEntryType::LineClear(LineClear::new(1, None)), 0.5),
         (StatisticsEntryType::LineClear(LineClear::new(2, None)), 1.0),
@@ -31,11 +39,11 @@ fn eval_game(game: &Game) -> Reward {
 }
 
 fn progressive_widening_coefficient(_depth: usize) -> f32 {
-    1.0
+    0.15
 }
 
 fn exploration_coefficient(_depth: usize) -> f32 {
-    1.0
+    0.1
 }
 
 #[derive(Debug)]
@@ -57,6 +65,11 @@ impl GameData {
     }
 }
 
+trait Visitor {
+    fn on_decision_node(&mut self, _node: &DecisionNode) {}
+    fn on_random_node(&mut self, _node: &RandomNode) {}
+}
+
 #[derive(Debug)]
 struct DecisionNode {
     parent: Option<Weak<RefCell<RandomNode>>>,
@@ -74,6 +87,13 @@ impl DecisionNode {
             num_visits: 1,
             depth,
             game_data,
+        }
+    }
+    #[allow(dead_code)]
+    fn visit<V: Visitor>(&self, visitor: &mut V) {
+        visitor.on_decision_node(self);
+        for child in self.children.values() {
+            child.borrow().visit(visitor);
         }
     }
     fn best_action(&self) -> Option<Action> {
@@ -114,7 +134,7 @@ impl DecisionNodeMethods for Rc<RefCell<DecisionNode>> {
 
         loop {
             let n_z = self.borrow().num_visits as f32;
-            if n_z.powf(alpha).abs() <= (n_z - 1.0).powf(alpha).abs() {
+            if n_z.powf(alpha).floor() <= (n_z - 1.0).powf(alpha).floor() {
                 break;
             }
             if !self.expand()? {
@@ -149,7 +169,7 @@ impl DecisionNodeMethods for Rc<RefCell<DecisionNode>> {
         let mut game_data = rc_game_data.borrow_mut();
         let mut game = game_data.game.clone();
         let action = game_data.actions.pop();
-        if action.is_none() {
+        if action.is_none() || game.state.next_pieces.is_empty() {
             return Ok(false);
         }
         let action = action.unwrap();
@@ -196,6 +216,13 @@ impl RandomNode {
             game_data,
         }
     }
+    #[allow(dead_code)]
+    fn visit<V: Visitor>(&self, visitor: &mut V) {
+        visitor.on_random_node(self);
+        for child in self.children.iter() {
+            child.borrow().visit(visitor);
+        }
+    }
     fn backpropagate(&mut self, reward: Reward) -> Result<(), Box<dyn Error>> {
         self.sum_reward += reward;
         if let Some(parent) = self.parent.upgrade().as_mut() {
@@ -217,7 +244,7 @@ impl RandomNodeMethods for Rc<RefCell<RandomNode>> {
 
         loop {
             let n_w = self.borrow().num_visits as f32;
-            if n_w.powf(alpha).abs() > (n_w - 1.0).powf(alpha).abs() {
+            if n_w.powf(alpha).floor() == (n_w - 1.0).powf(alpha).floor() {
                 break;
             }
             let node = DecisionNode::new(
@@ -244,19 +271,42 @@ impl RandomNodeMethods for Rc<RefCell<RandomNode>> {
     }
 }
 
+#[derive(Default)]
+struct Dumper {}
+
+impl Visitor for Dumper {
+    fn on_decision_node(&mut self, node: &DecisionNode) {
+        println!(
+            "{}{}|Decision: num_visits={}, num_children={}",
+            "  ".repeat(node.depth), node.depth, node.num_visits,
+            node.children.len(),
+        );
+    }
+    fn on_random_node(&mut self, node: &RandomNode) {
+        println!(
+            "{}{}|Random: num_visits={}, num_children={}, sum_reward={}",
+            "  ".repeat(node.depth), node.depth, node.num_visits,
+            node.children.len(), node.sum_reward,
+        );
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default)]
 pub struct MctsPuctBot {}
 
 impl Bot for MctsPuctBot {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
         let mut rng = thread_rng();
-        let game_data = GameData::new(game.clone(), &mut rng)?;
+        let mut game = game.clone();
+        game.state.next_pieces.remove_invisible();
+        let game_data = GameData::new(game, &mut rng)?;
         let mut root = Rc::new(RefCell::new(
             DecisionNode::new(None, 0, Rc::new(RefCell::new(game_data)))
         ));
-        for _ in 0..100 {
+        for _ in 0..10000 {
             root.iterate()?;
         }
+        // root.borrow().visit(&mut Dumper::default());
         let action = root.borrow().best_action();
         Ok(action.unwrap())
     }
@@ -271,7 +321,7 @@ mod tests {
     fn test_simple_bot2() {
         let mut bot = MctsPuctBot::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 10, true).unwrap();
+        let game = test_bot(&mut bot, seed, 20, true).unwrap();
         assert!(game.stats.lock > 5);
     }
 }
