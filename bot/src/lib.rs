@@ -5,7 +5,7 @@ pub mod simple;
 pub mod simple_tree;
 pub mod mcts_puct;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
     Move(MoveTransition),
     Hold,
