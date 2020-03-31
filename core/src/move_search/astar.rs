@@ -22,10 +22,11 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
     }
 
     fn cost_func(start: &Placement, target: &Placement, mv: Move) -> F {
+        const BUFFER: i8 = 0; // TODO
         match mv {
-            Move::Shift(_) => 2 + (start.pos.1 - target.pos.1) as F,
+            Move::Shift(_) => 2 + (start.pos.1 + BUFFER - target.pos.1) as F,
             Move::Drop(_) => 1,
-            Move::Rotate(_) => 3 + (start.pos.1 - target.pos.1) as F,
+            Move::Rotate(_) => 3 + (start.pos.1 + BUFFER - target.pos.1) as F,
         }
     }
 
@@ -125,24 +126,44 @@ impl MoveSearcher for AStarMoveSearcher {
 
 #[cfg(test)]
 mod test {
-    use crate::{Game, Piece, RotationMode, MovePlayer, upos, pos, ORIENTATION_3};
+    use crate::{Game, Piece, MovePlayer, upos, pos, ORIENTATION_3, ORIENTATION_1};
     use super::*;
 
     #[test]
-    fn test_search_moves() {
-        let mut game: Game = Game::default();
-        game.supply_next_pieces(&[Piece::T]);
-        game.setup_falling_piece(None).unwrap();
+    fn test1() {
+        let mut game: Game = Default::default();
         let pf = &mut game.state.playfield;
         pf.set_rows(upos!(0, 0), &[
             "   @@@@   ",
             "@@@@@@    ",
             "@@@@@@@ @@",
         ]);
-        let fp = game.state.falling_piece.as_ref().unwrap();
-        let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
+        game.supply_next_pieces(&[Piece::T]);
+        game.setup_falling_piece(None).unwrap();
         let dst = Placement::new(ORIENTATION_3, pos!(6, 0));
-        let r = search_moves(&conf, dst, false);
+        let r = game.search_moves(&mut AStarMoveSearcher::new(dst, false));
+        assert!(r.is_ok());
+        let r = r.unwrap();
+        let path = r.get(&dst);
+        assert!(path.is_some());
+        let mut mp = MovePlayer::new(path.unwrap());
+        while mp.step(&mut game).unwrap() {
+            // println!("{}", game);
+        }
+        // println!("{}", game);
+    }
+
+    #[test]
+    fn test2() {
+        let mut game: Game = Default::default();
+        let pf = &mut game.state.playfield;
+        pf.set_rows(upos!(0, 0), &["@@@@@@@@@@"].repeat(20));
+        game.supply_next_pieces(&[Piece::T]);
+        game.setup_falling_piece(None).unwrap();
+        let dst = Placement::new(ORIENTATION_1, pos!(3, 20));
+        let r = game.search_moves(&mut AStarMoveSearcher::new(dst, false));
+        assert!(r.is_ok());
+        let r = r.unwrap();
         let path = r.get(&dst);
         assert!(path.is_some());
         let mut mp = MovePlayer::new(path.unwrap());

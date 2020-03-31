@@ -157,10 +157,14 @@ fn iterate<R: Rng + ?Sized>(mut node: Rc<RefCell<Node>>, rng: &mut R) -> Result<
                 match action {
                     Action::Move(mt) => {
                         let fp = next_game.state.falling_piece.as_mut().unwrap();
-                        fp.placement = mt.src;
-                        let ok = fp.apply_move(mt.by, &next_game.state.playfield, next_game.rules.rotation_mode);
-                        debug_assert!(ok);
-                        debug_assert_eq!(mt.dst, fp.placement);
+                        if let Some(hint) = mt.hint {
+                            fp.placement = hint.placement;
+                            let ok = fp.apply_move(hint.by, &next_game.state.playfield, next_game.rules.rotation_mode);
+                            debug_assert!(ok);
+                        } else {
+                            fp.placement = mt.placement;
+                        }
+                        debug_assert_eq!(mt.placement, fp.placement);
                         next_game.lock()?;
                     }
                     Action::Hold => {
@@ -265,7 +269,7 @@ mod tests {
     fn test_simple_bot2() {
         let mut bot = MctsPuctBot::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 2, false).unwrap();
+        let game = test_bot(&mut bot, seed, 3, false).unwrap();
         assert!(game.stats.lock > 1);
     }
 }

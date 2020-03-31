@@ -6,6 +6,7 @@ extern crate bot;
 
 use wasm_bindgen::prelude::*;
 use rand::SeedableRng;
+use core::MovePathItem;
 
 #[wasm_bindgen(js_name = setPanicHook)]
 pub fn set_panic_hook() {
@@ -124,20 +125,31 @@ impl From<core::Move> for Move {
 #[wasm_bindgen]
 #[derive(Copy, Clone, Debug)]
 pub struct MoveTransition {
-    pub src: Placement,
-    pub by: Move,
+    pub src: Option<Placement>,
+    pub by: Option<Move>,
     pub dst: Placement,
 }
 
 impl Into<core::MoveTransition> for MoveTransition {
     fn into(self) -> core::MoveTransition {
-        core::MoveTransition::new(self.src.into(), self.by.into(), self.dst.into())
+        core::MoveTransition::new(
+            self.dst.into(),
+            if let (Some(src), Some(by)) = (self.src, self.by) {
+                Some(MovePathItem::new(by.into(), src.into()))
+            } else {
+                None
+            },
+        )
     }
 }
 
 impl From<core::MoveTransition> for MoveTransition {
     fn from(mt: core::MoveTransition) -> Self {
-        Self { src: mt.src.into(), by: mt.by.into(), dst: mt.dst.into() }
+        if let Some(hint) = mt.hint {
+            Self { src: Some(hint.placement.into()), by: Some(hint.by.into()), dst: mt.placement.into() }
+        } else {
+            Self { src: None, by: None, dst: mt.placement.into() }
+        }
     }
 }
 

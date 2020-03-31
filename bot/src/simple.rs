@@ -12,7 +12,7 @@ impl Bot for SimpleBot {
             return Err("no movable placements".into());
         }
         let selected = candidates.iter()
-            .min_by(|mt1, mt2| mt1.dst.pos.1.cmp(&mt2.dst.pos.1))
+            .min_by(|mt1, mt2| mt1.placement.pos.1.cmp(&mt2.placement.pos.1))
             .unwrap();
         Ok(Action::Move(selected.clone()))
     }

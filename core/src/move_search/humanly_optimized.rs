@@ -79,8 +79,8 @@ fn search_moves(conf: &SearchConfiguration, plan: &[Vec<Move>]) -> SearchResult 
             }
             let should_update = !found.contains_key(&fp.placement);
             if should_update {
-                let item = if let Some(mt) = fp.last_move_transition() {
-                    MovePathItem::new(mv, mt.src)
+                let item = if let Some(mt) = fp.last_move_transition(true) {
+                    MovePathItem::new(mv, mt.hint.unwrap().placement)
                 } else {
                     MovePathItem::new(mv, fp.move_path.initial_placement)
                 };

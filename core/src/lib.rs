@@ -830,19 +830,6 @@ impl Move {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MoveTransition {
-    pub src: Placement,
-    pub by: Move,
-    pub dst: Placement,
-}
-
-impl MoveTransition {
-    pub fn new(src: Placement, by: Move, dst: Placement) -> Self {
-        Self { src, by, dst }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MovePathItem {
     pub by: Move,
     pub placement: Placement,
@@ -851,6 +838,18 @@ pub struct MovePathItem {
 impl MovePathItem {
     pub fn new(by: Move, placement: Placement) -> Self {
         Self { by, placement }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MoveTransition {
+    pub placement: Placement,
+    pub hint: Option<MovePathItem>,
+}
+
+impl MoveTransition {
+    pub fn new(placement: Placement, hint: Option<MovePathItem>) -> Self {
+        Self { placement, hint }
     }
 }
 
@@ -897,25 +896,26 @@ impl MovePath {
         }
         r
     }
-    pub fn last_transition(&self) -> Option<MoveTransition> {
+    pub fn last_transition(&self, use_hint: bool) -> Option<MoveTransition> {
         let len = self.len();
         if len == 0 {
             return None;
         }
-        let t = if len == 1 {
-            MoveTransition::new(
-                self.initial_placement,
-                self.items[0].by,
-                self.items[0].placement,
-            )
-        } else {
-            MoveTransition::new(
-                self.items[len - 2].placement,
-                self.items[len - 1].by,
-                self.items[len - 1].placement,
-            )
-        };
-        Some(t)
+        Some(MoveTransition::new(
+            self.items[len - 1].placement,
+            if use_hint {
+                Some(MovePathItem::new(
+                    self.items[len - 1].by,
+                    if len == 1 {
+                        self.initial_placement
+                    } else {
+                        self.items[len - 2].placement
+                    },
+                ))
+            } else {
+                None
+            },
+        ))
     }
 }
 
@@ -1436,8 +1436,8 @@ impl FallingPiece {
         }
         false
     }
-    pub fn last_move_transition(&self) -> Option<MoveTransition> {
-        self.move_path.last_transition()
+    pub fn last_move_transition(&self, use_hint: bool) -> Option<MoveTransition> {
+        self.move_path.last_transition(use_hint)
     }
 }
 
@@ -1591,17 +1591,23 @@ impl Playfield {
             3 => {
                 if num_pointing_side_corners == 2 {
                     Some(TSpin::Standard)
-                } else if let Some(mt) = fp.last_move_transition() {
-                    let is_shifted = mt.src.pos.0 != mt.dst.pos.0;
-                    let num_rows = mt.src.pos.1 - mt.dst.pos.1;
-                    if num_rows == 2 {
-                        if is_shifted {
-                            Some(TSpin::Standard)
+                } else if let Some(mt) = fp.last_move_transition(true) {
+                    if let Some(hint) = mt.hint {
+                        let src = &hint.placement;
+                        let dst = &mt.placement;
+                        let is_shifted = src.pos.0 != dst.pos.0;
+                        let num_rows = src.pos.1 - dst.pos.1;
+                        if num_rows == 2 {
+                            if is_shifted {
+                                Some(TSpin::Standard)
+                            } else {
+                                Some(TSpin::Mini) // Neo
+                            }
                         } else {
-                            Some(TSpin::Mini) // Neo
+                            Some(TSpin::Mini)
                         }
                     } else {
-                        Some(TSpin::Mini)
+                        None
                     }
                 } else {
                     None
@@ -2111,16 +2117,13 @@ impl Game {
         let search_result = self.search_moves(&mut move_search::bruteforce::BruteForceMoveSearcher::default())?;
         let mut r = HashSet::new();
         for p in lockable.iter() {
-            if let Some(item) = search_result.found.get(p) {
-                // For move optimization, the source placement by drop is preferred rather than by rotation.
-                let mut pp = p.clone();
-                pp.pos.1 += 1;
-                if pf.can_put(&FallingPiece::new(fp.piece, pp.clone())) {
-                    r.insert(MoveTransition::new(pp, Move::Drop(1), *p));
-                } else {
-                    r.insert(MoveTransition::new(item.placement, item.by, *p));
-                }
+            if search_result.contains(p) {
                 if fp.piece == Piece::T {
+                    let mut pp = p.clone();
+                    pp.pos.1 += 1;
+                    if search_result.contains(&pp) {
+                        r.insert(MoveTransition::new(*p, Some(MovePathItem::new(Move::Drop(1), pp))));
+                    }
                     // Append worthy transitions by rotation.
                     let dst_fp = FallingPiece::new(fp.piece, *p);
                     for cw in &[true, false] {
@@ -2131,50 +2134,69 @@ impl Game {
                                 self.rules.tspin_judgement_mode,
                             ) {
                                 r.insert(MoveTransition::new(
-                                    *src,
-                                    Move::Rotate(if *cw { 1 } else { -1 }),
                                     *p,
+                                    Some(MovePathItem::new(
+                                        Move::Rotate(if *cw { 1 } else { -1 }),
+                                        *src,
+                                    )),
                                 ));
                             }
                         }
                     }
+                } else {
+                    r.insert(MoveTransition::new(*p, None));
                 }
             }
         }
         Ok(r)
     }
     pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MovePath, &'static str> {
+        use move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
+        use move_search::astar::AStarMoveSearcher;
+
         let fp = if let Some(fp) = self.state.falling_piece.as_ref() {
             fp
         } else {
             return Err("no falling piece");
         };
-        let dst1 = last_transition.src;
-        let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
+
+        enum Searcher {
+            HumanOptimized,
+            AStar,
+        }
+
+        // NOTE: For special rotations, we should check only the original destination.
+        let mut patterns = Vec::new();
+        if let Some(hint) = last_transition.hint {
+            let dst1 = hint.placement;
+            let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
+            if let Move::Rotate(_) = hint.by {
+                patterns.push((dst2, Searcher::HumanOptimized));
+            }
+            patterns.push((dst2, Searcher::AStar));
+            patterns.push((dst1, Searcher::AStar));
+        } else {
+            let dst1 = last_transition.placement;
+            let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
+            patterns.push((dst2, Searcher::HumanOptimized));
+            patterns.push((dst2, Searcher::AStar));
+            patterns.push((dst1, Searcher::AStar));
+        }
 
         let mut path = None;
-        // For special rotations, we should check only the original destination if the last move is rotation.
-        let start = if let Move::Rotate(_) = last_transition.by { 2 } else { 0 };
-        for i in start..=2 {
-            let dst = match i {
-                0 => &dst2,
-                1 => &dst2,
-                2 => &dst1,
-                _ => panic!(),
-            };
-            let ret = match i {
-                0 => self.search_moves(&mut move_search::humanly_optimized::HumanlyOptimizedMoveSearcher::new(*dst, true)),
-                1 => self.search_moves(&mut move_search::astar::AStarMoveSearcher::new(*dst, false)),
-                2 => self.search_moves(&mut move_search::astar::AStarMoveSearcher::new(*dst, false)),
-                _ => panic!(),
+        for (dst, searcher) in patterns.iter() {
+            let r = match *searcher {
+                Searcher::HumanOptimized => self.search_moves(&mut HumanlyOptimizedMoveSearcher::new(*dst, true)),
+                Searcher::AStar => self.search_moves(&mut AStarMoveSearcher::new(*dst, false)),
             }?;
-            if let Some(mut r) = ret.get(dst) {
-                r.merge_or_push(MovePathItem::new(last_transition.by, last_transition.dst));
-                path = Some(r);
+            if let Some(mut p) = r.get(dst) {
+                if let Some(hint) = last_transition.hint {
+                    p.merge_or_push(MovePathItem::new(hint.by, last_transition.placement));
+                }
+                path = Some(p);
                 break;
             }
         }
-
         if let Some(path) = path {
             Ok(path)
         } else {
@@ -2188,11 +2210,11 @@ impl fmt::Display for Game {
         let s = &self.state;
         let w = self.state.playfield.width() as usize;
         let h = self.state.playfield.visible_height as usize;
-        let num_next = self.state.next_pieces.visible_num;
+        let num_next = std::cmp::min(self.state.next_pieces.visible_num, self.state.next_pieces.len());
         write!(f, "[{}]", s.hold_piece.map_or(
             Cell::Empty, |p| { Cell::Block(Block::Piece(p)) }).char(),
         )?;
-        write!(f, "{}", " ".repeat(w - num_next - 3))?;
+        write!(f, "{}", " ".repeat(w - num_next - 2))?;
         write!(f, "({})", s.falling_piece.as_ref().map_or(
             Cell::Empty, |fp| { Cell::Block(Block::Piece(fp.piece)) }).char(),
         )?;
@@ -2522,10 +2544,10 @@ mod tests {
         assert!(all.is_ok());
         let all = all.unwrap();
         for mt in all.iter() {
-            let r = game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(mt.dst, false));
+            let r = game.search_moves(&mut move_search::astar::AStarMoveSearcher::new(mt.placement, false));
             assert!(r.is_ok());
             let r = r.unwrap();
-            let path = r.get(&mt.dst);
+            let path = r.get(&mt.placement);
             assert!(path.is_some());
         }
     }
@@ -2586,7 +2608,7 @@ mod tests {
         assert_ok!(game.rotate(-1));
         assert_ok!(game.lock());
 
-        assert_eq!(r#"[O]  (T)IJLSZ
+        assert_eq!(r#"[O]   (T)IJLSZ
 --+----------+
 19|   TTT    |  SINGLE  0
 18|          |  DOUBLE  0

@@ -1,5 +1,5 @@
 use super::Bot;
-use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, FallingPiece, Grid, MoveTransition};
+use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, Grid, MoveTransition};
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -119,21 +119,23 @@ fn expand(rc_node: Rc<RefCell<Node>>, budget: f32) -> Result<(), Box<dyn Error>>
 }
 
 fn simulate(game: &Game, mt: &MoveTransition) -> (Game, f32) {
-    let fp = FallingPiece::new_with_one_path_item(
-        game.state.falling_piece.as_ref().unwrap().piece,
-        mt.src,
-        mt.by,
-        mt.dst,
-    );
-    let mut simulated = game.clone();
-    simulated.state.falling_piece = Some(fp);
-    simulated.lock().unwrap();
-    let stats_diff = simulated.stats.clone() - game.stats.clone();
+    let mut next_game = game.clone();
+    let fp = next_game.state.falling_piece.as_mut().unwrap();
+    if let Some(hint) = mt.hint {
+        fp.placement = hint.placement;
+        let ok = fp.apply_move(hint.by, &next_game.state.playfield, next_game.rules.rotation_mode);
+        debug_assert!(ok);
+    } else {
+        fp.placement = mt.placement;
+    }
+    debug_assert_eq!(mt.placement, fp.placement);
+    next_game.lock().unwrap();
+    let stats_diff = next_game.stats.clone() - game.stats.clone();
     let reward =
-        eval_placement(&mt.dst) * 0.2
+        eval_placement(&mt.placement) * 0.2
             + calc_reward(&stats_diff) * 1.0
-            + eval_state(&simulated) * 0.5;
-    (simulated, reward)
+            + eval_state(&next_game) * 0.5;
+    (next_game, reward)
 }
 
 #[derive(Copy, Clone, Debug, Default)]
