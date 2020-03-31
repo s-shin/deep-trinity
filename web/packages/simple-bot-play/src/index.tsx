@@ -31,11 +31,11 @@ class BotRunner {
     return !this.pg;
   }
 
-  setup(seed: number): void {
+  setup(bot: number, seed: number): void {
     this.state = BotRunnerState.Think;
     this.game = new core.Game();
     this.pg = new core.RandomPieceGenerator(BigInt(seed));
-    this.bot = new core.Bot(2);
+    this.bot = new core.Bot(bot);
 
     this.game.supplyNextPieces(this.pg.generate());
     this.game.setupFallingPiece();
@@ -117,6 +117,7 @@ const randInt = (min: number, max: number) => min + Math.floor(Math.random() * m
 const ControlPanelRoot = styled.div``;
 
 type SetupFormValue = {
+  bot: number,
   seed: number,
 };
 
@@ -151,6 +152,14 @@ const ControlPanel: React.FC<ControlPanelProps> = props => {
       <div>
         <form onSubmit={setupForm.handleSubmit(props.onSetup)}>
           <p>
+            <label htmlFor="bot">Bot: </label>
+            <select id="bot" name="bot" defaultValue="2" ref={setupForm.register}>
+              <option value="1">Simple</option>
+              <option value="2">Simple Tree</option>
+              <option value="3">MCTS (PUCT)</option>
+            </select>
+          </p>
+          <p>
             <label htmlFor="seed">Seed: </label>
             <input id="seed" name="seed" type="number" defaultValue={0} ref={setupForm.register}/>
             <button type="button" onClick={() => setupForm.setValue("seed", randInt(0, 1000000000))}>Generate</button>
@@ -171,7 +180,7 @@ const App: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
 
   const onSetup = (data: SetupFormValue): void => {
-    botRunner.setup(data.seed);
+    botRunner.setup(data.bot, data.seed);
     setGameModel(botRunner.getGameModel());
   };
 
