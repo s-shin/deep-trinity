@@ -1375,6 +1375,13 @@ impl FallingPiece {
         fp.move_path.items.push(MovePathItem::new(mv, dst));
         fp
     }
+    pub fn new_with_last_move_transition(piece: Piece, mt: &MoveTransition) -> Self {
+        if let Some(hint) = mt.hint {
+            Self::new_with_one_path_item(piece, hint.placement, hint.by, mt.placement)
+        } else {
+            Self::new(piece, mt.placement)
+        }
+    }
     pub fn spawn(piece: Piece, pf: Option<&Playfield>) -> Self {
         let spec = PieceSpec::of(piece);
         let mut fp = Self::new(piece, spec.initial_placement);
