@@ -1,13 +1,9 @@
 .PHONY: all
 all:
 
-.PHONY: use_nightly_rust
-use_nightly_rust:
-	rustup override add nightly
-
-.PHONY: use_stable_rust
-use_stable_rust:
-	rustup override unset
+.PHONY: test
+test:
+	cargo test --verbose --workspace --exclude py-core
 
 .PHONY: build_web_core
 build_web_core:
