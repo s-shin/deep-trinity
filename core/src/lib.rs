@@ -479,7 +479,7 @@ pub struct BitGrid {
     size: Size,
     // cells: 0000000000
     // pos x: 9876543210
-    rows: Vec<BitGridRow>,
+    pub rows: Vec<BitGridRow>,
     row_mask: BitGridRow,
 }
 

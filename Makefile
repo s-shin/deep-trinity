@@ -18,4 +18,4 @@ run_python:
 	mkdir -p tmp/py
 	rm -f tmp/py/detris.so
 	ln -s ../../target/debug/deps/libdetris.dylib tmp/py/detris.so
-	PYTHONPATH=tmp/py python
+	PYTHONPATH=tmp/py python $(ARGS)
