@@ -12,5 +12,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 core = { path = "../core" }
-pyo3 = { version = "0.9", features = ["extension-module"] }
+pyo3 = "0.9"
 rand = "0.7"
+
+[features]
+# https://github.com/PyO3/pyo3/blob/v0.9.1/guide/src/advanced.md#testing
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
