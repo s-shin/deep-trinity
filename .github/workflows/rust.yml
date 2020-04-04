@@ -20,8 +20,8 @@ jobs:
       run: cargo build --release -p py-core --verbose
     - name: Install
       run: ./script/install_py_core.sh release tmp
-    - name: Upload detris.so
+    - name: Upload detris-core.so
       uses: actions/upload-artifact@v1
       with:
-        name: detris.so
-        path: tmp/detris.so
+        name: detris-core.so
+        path: tmp/core.so

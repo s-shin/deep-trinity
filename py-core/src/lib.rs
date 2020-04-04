@@ -12,16 +12,16 @@ fn to_py_err(e: &'static str) -> PyErr {
 }
 
 const HOLD_ACTION_ID: u32 = 0;
-const NUM_ACTIONS: u32 = 10 * 22 * 4 * 2;
+const NUM_ACTIONS: u32 = 10 * 25 * 4 * 2;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct Action(u32);
 
 impl Action {
-    // hold, (x, y, orientation, is_rotated) * 10 * 22 * 4 * 2
+    // hold, (x, y, orientation, is_rotated) * 10 * 25 * 4 * 2
     fn from_move_transition(mt: &core::MoveTransition, piece: core::Piece) -> Self {
         let offset = if piece == core::Piece::I { 2 } else { 1 } as i32;
-        let x = ((mt.placement.pos.0 as i32 + offset) * 22 * 4 * 2) as u32;
+        let x = ((mt.placement.pos.0 as i32 + offset) * 25 * 4 * 2) as u32;
         let y = ((mt.placement.pos.1 as i32 + offset) * 4 * 2) as u32;
         let o = mt.placement.orientation.id() as u32 * 2;
         let r = if let Some(hint) = mt.hint {
@@ -95,6 +95,7 @@ impl GameSession {
             legal_actions.insert(Action::from_move_transition(mt, piece), *mt);
         }
         self.legal_actions = legal_actions;
+        self.last_reward = 0.0;
         Ok(())
     }
     fn legal_actions(&self) -> Vec<u32> {
@@ -208,7 +209,7 @@ impl Environment {
 }
 
 #[pymodule]
-fn detris(_py: Python, m: &PyModule) -> PyResult<()> {
+fn core(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Environment>()?;
     Ok(())
 }
