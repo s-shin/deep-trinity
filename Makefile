@@ -11,7 +11,5 @@ build_web_core:
 
 .PHONY: run_python
 run_python:
-	mkdir -p tmp/py
-	rm -f tmp/py/detris.so
-	ln -s ../../target/debug/deps/libdetris.dylib tmp/py/detris.so
+	./script/install_py_core.sh debug tmp/py
 	PYTHONPATH=tmp/py python $(ARGS)
