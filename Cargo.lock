@@ -170,6 +170,14 @@ version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "ml-core"
+version = "0.1.0"
+dependencies = [
+ "core 0.1.0",
+ "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -242,6 +250,7 @@ name = "py-core"
 version = "0.1.0"
 dependencies = [
  "core 0.1.0",
+ "ml-core 0.1.0",
  "pyo3 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

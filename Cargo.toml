@@ -3,6 +3,7 @@ members = [
   "core",
   "bot",
   "web-core",
+  "ml-core",
   "py-core",
 ]
 
