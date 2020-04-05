@@ -144,7 +144,7 @@ impl GameSession {
         Ok(())
     }
     pub fn last_reward(&self) -> f32 { self.last_reward }
-    pub fn is_done(&self) -> bool { self.game.state.is_game_over() }
+    pub fn is_done(&self) -> bool { self.game.state.is_game_over() || self.legal_actions.is_empty() }
 }
 
 #[cfg(test)]

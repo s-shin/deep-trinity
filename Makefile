@@ -13,3 +13,7 @@ build_web_core:
 run_python:
 	./script/install_py_core.sh debug tmp/py
 	PYTHONPATH=tmp/py python $(ARGS)
+
+.PHONY: install_detris_core_debug
+install_detris_core_debug:
+	./script/install_py_core.sh debug ml/detris
