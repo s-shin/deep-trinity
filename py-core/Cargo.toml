@@ -1,0 +1,22 @@
+[package]
+name = "py-core"
+version = "0.1.0"
+authors = ["Shintaro Seki <s2pch.luck@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "core"
+crate-type = ["cdylib"]
+
+[dependencies]
+core = { path = "../core" }
+ml-core = { path = "../ml-core" }
+pyo3 = "0.9"
+rand = "0.7"
+
+[features]
+# https://github.com/PyO3/pyo3/blob/v0.9.1/guide/src/advanced.md#testing
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
