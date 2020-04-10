@@ -78,7 +78,7 @@ def train(args):
         })
     else:
         os.makedirs(os.path.dirname(args.model_file), exist_ok=True)
-        model = create_model(input_size, env.action_space())
+        model = create_model(input_size, env.num_actions())
         model.compile(
             optimizer=tf.optimizers.Adam(),
             loss=[action_probs_loss_fn, state_value_loss_fn],

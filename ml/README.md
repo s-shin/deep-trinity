@@ -1,4 +1,5 @@
 ## NOTE
 
 * `detris.simple_a2c`
-    * not good result
+    * Single thread a2c.
+    * The result was not good...
