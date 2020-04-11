@@ -327,6 +327,7 @@ def train(args):
 
 
 def test(args):
+    # TODO
     # env = detris.core.Environment()
     # model = tf.keras.models.load_model(args.model_file, custom_objects={
     #     'action_probs_loss_fn': lambda: 'dummy',

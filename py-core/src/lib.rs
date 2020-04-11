@@ -13,20 +13,6 @@ struct Environment {
     session: GameSession,
 }
 
-// fn must_get_session(env: &Environment) -> PyResult<&GameSession> {
-//     if env.session.is_none() {
-//         return Err(to_py_err("game session is not initialized"));
-//     }
-//     Ok(env.session.as_ref().unwrap())
-// }
-//
-// fn must_get_mut_session(env: &mut Environment) -> PyResult<&mut GameSession> {
-//     if env.session.is_none() {
-//         return Err(to_py_err("game session is not initialized"));
-//     }
-//     Ok(env.session.as_mut().unwrap())
-// }
-
 #[pymethods]
 impl Environment {
     #[new]

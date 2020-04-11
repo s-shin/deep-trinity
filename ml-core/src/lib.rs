@@ -13,7 +13,7 @@ pub const NUM_ACTIONS: u32 = 1 + 10 * 30 * 4 * 2;
 pub struct Action(pub u32);
 
 impl Action {
-    // hold, (x, y, orientation, is_rotated) * 10 * 30 * 4 * 2
+    // hold, (x, y, orientation, is_rotated) = 10 * 30 * 4 * 2
     pub fn from_move_transition(mt: &core::MoveTransition, piece: core::Piece) -> Self {
         let offset = if piece == core::Piece::I { 2 } else { 1 } as i32;
         let x = mt.placement.pos.0 as i32 + offset;
