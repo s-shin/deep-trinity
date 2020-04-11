@@ -17,12 +17,12 @@ impl Action {
     pub fn from_move_transition(mt: &core::MoveTransition, piece: core::Piece) -> Self {
         let offset = if piece == core::Piece::I { 2 } else { 1 } as i32;
         let x = mt.placement.pos.0 as i32 + offset;
-        assert_debug!(0 <= x);
-        assert_debug!(x < 10);
+        debug_assert!(0 <= x);
+        debug_assert!(x < 10);
         let x = (x * 30 * 4 * 2) as u32;
         let y = mt.placement.pos.1 as i32 + offset;
-        assert_debug!(0 <= y);
-        assert_debug!(y < 30);
+        debug_assert!(0 <= y);
+        debug_assert!(y < 30);
         let y = (y * 4 * 2) as u32;
         let o = mt.placement.orientation.id() as u32 * 2;
         let r = if let Some(hint) = mt.hint {

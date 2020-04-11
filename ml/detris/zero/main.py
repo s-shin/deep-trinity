@@ -234,7 +234,7 @@ def train_worker(worker_i, args, next_episode_n: mp.Value, req_queue: mp.Queue, 
                 if env.is_done():
                     with next_episode_n.get_lock():
                         logger.info('Episode#{}: reward={:.03f}'.format(episode_n, episode_reward))
-                        # logger.info('game:\n{}'.format(env.to_string()))
+                        logger.info('game:\n{}'.format(env.game_str()))
                         with tb_summary_writer.as_default():
                             tf.summary.scalar('Rewards', episode_reward, step=episode_n)
                         episode_n = next_episode_n.value
@@ -317,8 +317,7 @@ def train(args):
         sync()
         update_n += 1
 
-    if update_n % args.model_save_interval != 0:
-        save()
+    save()
 
     for q in req_queues:
         q.put(TRAIN_REQ_EXIT)
@@ -362,14 +361,14 @@ def main(arguments=None):
     p.add_argument('--tb_log_dir', default='tmp/zero/tb_log')
     p.add_argument('--num_sampling_steps', default=30, type=int)
     p.add_argument('--max_steps', default=100, type=int)
-    p.add_argument('--num_simulations', default=20, type=int)
+    p.add_argument('--num_simulations', default=500, type=int)
     p.add_argument('--root_dirichlet_alpha', default=0.15, type=float)
     p.add_argument('--root_exploration_fraction', default=0.25, type=float)
     p.add_argument('--pb_c_base', default=19652, type=int)
     p.add_argument('--pb_c_init', default=1.25, type=float)
     p.add_argument('--num_workers', default=2, type=int)
     p.add_argument('--worker_batch_size', default=16, type=int)
-    p.add_argument('--max_updates', default=20, type=int)
+    p.add_argument('--max_updates', default=1, type=int)
     p.set_defaults(func=train)
 
     p = sub_parser.add_parser('test')
