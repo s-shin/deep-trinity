@@ -1,8 +1,8 @@
 /// Move searcher by brute force approach.
-/// Using this, we can get all movable placements.
+/// By using this, we can get all movable placements.
 ///
-/// Remarks: Since this searcher doesn't search all move patterns,
-/// it cannot detect some meaningful special rotations (e.g. T-Spin Mini).
+/// Remarks: Since this searcher doesn't search all move transitions,
+/// the result will lack some meaningful special rotations (e.g. T-Spin Mini).
 use crate::{Move, FallingPiece, MovePathItem};
 use super::{SearchConfiguration, MoveDestinations, SearchResult, MoveSearcher};
 
@@ -48,7 +48,8 @@ pub fn search_moves(conf: &SearchConfiguration, debug: bool) -> SearchResult {
             }
         }
         debug_println!("=> checked.");
-    };
+    }
+    ;
 
     search(conf, &FallingPiece::new(conf.piece, conf.src), 0, &mut found, debug);
 

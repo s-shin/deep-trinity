@@ -2172,7 +2172,7 @@ impl Game {
             AStar,
         }
 
-        // NOTE: For special rotations, we should check only the original destination.
+        // NOTE: For special rotations, we should also check the original destination.
         let mut patterns = Vec::new();
         if let Some(hint) = last_transition.hint {
             let dst1 = hint.placement;

@@ -3,18 +3,27 @@ use rand::prelude::StdRng;
 use rand::SeedableRng;
 use core::Grid;
 
+#[cfg(feature = "async_session")]
+pub mod async_session;
+
 pub const HOLD_ACTION_ID: u32 = 0;
-pub const NUM_ACTIONS: u32 = 10 * 25 * 4 * 2;
+pub const NUM_ACTIONS: u32 = 1 + 10 * 30 * 4 * 2;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Action(pub u32);
 
 impl Action {
-    // hold, (x, y, orientation, is_rotated) * 10 * 25 * 4 * 2
+    // hold, (x, y, orientation, is_rotated) = 10 * 30 * 4 * 2
     pub fn from_move_transition(mt: &core::MoveTransition, piece: core::Piece) -> Self {
         let offset = if piece == core::Piece::I { 2 } else { 1 } as i32;
-        let x = ((mt.placement.pos.0 as i32 + offset) * 25 * 4 * 2) as u32;
-        let y = ((mt.placement.pos.1 as i32 + offset) * 4 * 2) as u32;
+        let x = mt.placement.pos.0 as i32 + offset;
+        debug_assert!(0 <= x);
+        debug_assert!(x < 10);
+        let x = (x * 30 * 4 * 2) as u32;
+        let y = mt.placement.pos.1 as i32 + offset;
+        debug_assert!(0 <= y);
+        debug_assert!(y < 30);
+        let y = (y * 4 * 2) as u32;
         let o = mt.placement.orientation.id() as u32 * 2;
         let r = if let Some(hint) = mt.hint {
             if let core::Move::Rotate(_) = hint.by { 1 } else { 0 }
@@ -57,6 +66,7 @@ pub fn calc_reward(stats: &core::Statistics) -> f32 {
     if reward > MAX { 1.0 } else { reward / MAX }
 }
 
+#[derive(Clone, Debug)]
 pub struct GameSession {
     piece_gen: core::RandomPieceGenerator<StdRng>,
     game: core::Game,
@@ -65,8 +75,9 @@ pub struct GameSession {
 }
 
 impl GameSession {
-    pub fn new(rand_seed: u64) -> Result<Self, &'static str> {
-        let mut pg = core::RandomPieceGenerator::new(StdRng::seed_from_u64(rand_seed));
+    pub fn new(rand_seed: Option<u64>) -> Result<Self, &'static str> {
+        let rng = if let Some(seed) = rand_seed { StdRng::seed_from_u64(seed) } else { StdRng::from_entropy() };
+        let mut pg = core::RandomPieceGenerator::new(rng);
         let mut game: core::Game = Default::default();
         game.supply_next_pieces(&pg.generate());
         game.setup_falling_piece(None).unwrap();
@@ -79,7 +90,17 @@ impl GameSession {
         r.sync()?;
         Ok(r)
     }
-    pub fn game_str(&self) -> String { format!("{}", self.game) }
+    pub fn reset(&mut self, rand_seed: Option<u64>) -> Result<(), &'static str> {
+        if let Some(seed) = rand_seed {
+            self.piece_gen = core::RandomPieceGenerator::new(StdRng::seed_from_u64(seed));
+        }
+        self.game = Default::default();
+        self.game.supply_next_pieces(&self.piece_gen.generate());
+        self.game.setup_falling_piece(None).unwrap();
+        self.last_reward = 0.0;
+        self.sync()?;
+        Ok(())
+    }
     fn sync(&mut self) -> Result<(), &'static str> {
         let piece = self.game.state.falling_piece.as_ref().unwrap().piece;
         let mut legal_actions = HashMap::new();
@@ -90,6 +111,27 @@ impl GameSession {
         self.legal_actions = legal_actions;
         Ok(())
     }
+    pub fn step(&mut self, action: Action) -> Result<(), &'static str> {
+        if action.is_hold() {
+            self.game.hold()?;
+            self.last_reward = 0.0;
+        } else {
+            let mt = self.legal_actions.get(&action).unwrap();
+            let piece = self.game.state.falling_piece.as_ref().unwrap().piece;
+            let fp = core::FallingPiece::new_with_last_move_transition(piece, &mt);
+            self.game.state.falling_piece = Some(fp);
+            let stats = self.game.stats.clone();
+            self.game.lock()?;
+            let stats = self.game.stats.clone() - stats;
+            self.last_reward = calc_reward(&stats);
+        }
+        if self.game.should_supply_next_pieces() {
+            self.game.supply_next_pieces(&self.piece_gen.generate());
+        }
+        self.sync()?;
+        Ok(())
+    }
+    pub fn game_str(&self) -> String { format!("{}", self.game) }
     pub fn legal_actions(&self) -> Vec<u32> {
         let mut r = self.legal_actions.keys().map(|a| a.0).collect::<Vec<_>>();
         if self.game.state.can_hold {
@@ -122,26 +164,6 @@ impl GameSession {
                 })
         );
         r
-    }
-    pub fn step(&mut self, action: Action) -> Result<(), &'static str> {
-        if action.is_hold() {
-            self.game.hold()?;
-            self.last_reward = 0.0;
-        } else {
-            let mt = self.legal_actions.get(&action).unwrap();
-            let piece = self.game.state.falling_piece.as_ref().unwrap().piece;
-            let fp = core::FallingPiece::new_with_last_move_transition(piece, &mt);
-            self.game.state.falling_piece = Some(fp);
-            let stats = self.game.stats.clone();
-            self.game.lock()?;
-            let stats = self.game.stats.clone() - stats;
-            self.last_reward = calc_reward(&stats);
-        }
-        if self.game.should_supply_next_pieces() {
-            self.game.supply_next_pieces(&self.piece_gen.generate());
-        }
-        self.sync()?;
-        Ok(())
     }
     pub fn last_reward(&self) -> f32 { self.last_reward }
     pub fn is_done(&self) -> bool { self.game.state.is_game_over() || self.legal_actions.is_empty() }
