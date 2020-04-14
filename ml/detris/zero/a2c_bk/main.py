@@ -357,9 +357,9 @@ def main(arguments=None):
     sub_parser = parser.add_subparsers()
 
     p = sub_parser.add_parser('train')
-    p.add_argument('--model_file', default='tmp/zero/model.h5')
+    p.add_argument('--model_file', default='tmp/zero_a2c/model.h5')
     p.add_argument('--model_save_interval', default=100, type=int)
-    p.add_argument('--tb_log_dir', default='tmp/zero/tb_log')
+    p.add_argument('--tb_log_dir', default='tmp/zero_a2c/tb_log')
     p.add_argument('--num_sampling_steps', default=30, type=int)
     p.add_argument('--max_steps', default=100, type=int)
     p.add_argument('--num_simulations', default=500, type=int)
@@ -373,7 +373,7 @@ def main(arguments=None):
     p.set_defaults(func=train)
 
     p = sub_parser.add_parser('test')
-    p.add_argument('--model_file', default='tmp/zero/model.h5')
+    p.add_argument('--model_file', default='tmp/zero_a2c/model.h5')
     p.add_argument('--num_episodes', default=10, type=int)
     p.add_argument('--num_steps', default=100, type=int)
     p.set_defaults(func=test)
