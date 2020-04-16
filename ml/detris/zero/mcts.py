@@ -1,7 +1,8 @@
 import math
-from typing import Dict
+from typing import Dict, NamedTuple
 import numpy as np
 import tensorflow as tf
+from . import util
 
 
 class Node:
@@ -29,11 +30,10 @@ def expand(node: Node, model, env) -> float:
     observation = np.array(env.observation())
     x = tf.convert_to_tensor(observation[None, :])
     action_probs_batch, state_value_batch = model.predict_on_batch(x)
-    action_probs = {a: action_probs_batch[0][a] for a in env.legal_actions()}
-    action_probs_sum = sum(action_probs.values())
-    assert action_probs_sum > 0
-    for (action, prob) in action_probs.items():
-        node.children[action] = Node(float(prob) / action_probs_sum)
+    legal_actions = env.legal_actions()
+    action_probs = util.softmax([float(action_probs_batch[0][a]) for a in legal_actions])
+    for (i, action) in enumerate(legal_actions):
+        node.children[action] = Node(action_probs[i])
     return float(state_value_batch[0][0])
 
 
@@ -45,32 +45,36 @@ def add_exploration_noise(node: Node, dirichlet_alpha: float, exploration_fracti
             node.children[action].action_prob * (1 - exploration_fraction) + noise * exploration_fraction
 
 
-def calc_ucb_score(parent: Node, child: Node, pb_c_base, pb_c_init) -> float:
+def calc_ucb_score(parent: Node, child: Node, pb_c_base: int, pb_c_init: float) -> float:
     pb_c = math.log(float(1 + parent.num_visits + pb_c_base) / pb_c_base) + pb_c_init
     return child.avg_state_value() + pb_c * child.action_prob * math.sqrt(parent.num_visits) / (1 + child.num_visits)
 
 
 def select_action(node: Node, should_sample_action: bool) -> int:
-    actions = [(child.num_visits, action) for action, child in root.children.items()]
+    actions = [(child.num_visits, action) for action, child in node.children.items()]
     if should_sample_action:
         num_visits_arr, action_arr = np.array(list(zip(*actions)))
-        softmax_num_visits_arr = np.exp(num_visits_arr)
-        softmax_num_visits_arr /= sum(softmax_num_visits_arr)
-        mask = np.random.multinomial(1, softmax_num_visits_arr).astype(bool)
+        mask = np.random.multinomial(1, util.softmax(num_visits_arr)).astype(bool)
         action = action_arr[mask][0]
     else:
         _, action = max(actions)
     return action
 
 
-def run(model, env, should_sample_action: bool, num_simulations: int,
-        root_dirichlet_alpha: float, root_exploration_fraction: float,
-        pb_c_base: float, pb_c_init: float) -> (int, Node):
-    root = Node(0)
-    expand(model, env, root)
-    add_exploration_noise(root, root_dirichlet_alpha, root_exploration_fraction)
+class RunParams(NamedTuple):
+    num_simulations: int
+    root_dirichlet_alpha: float
+    root_exploration_fraction: float
+    pb_c_base: int
+    pb_c_init: float
 
-    for _ in range(num_simulations):
+
+def run(model, env, should_sample_action: bool, params: RunParams) -> (int, Node):
+    root = Node(0)
+    expand(root, model, env)
+    add_exploration_noise(root, params.root_dirichlet_alpha, params.root_exploration_fraction)
+
+    for _ in range(params.num_simulations):
         node = root
         sim_env = env.clone()
         path = []
@@ -78,7 +82,7 @@ def run(model, env, should_sample_action: bool, num_simulations: int,
         # select
         while not node.is_expanded():
             _, action, node = max(
-                (calc_ucb_score(node, child, pb_c_base, pb_c_init), action, child)
+                (calc_ucb_score(node, child, params.pb_c_base, params.pb_c_init), action, child)
                 for action, child in node.children.items()
             )
             sim_env.step(action)
