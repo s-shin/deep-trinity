@@ -24,6 +24,7 @@ def create_model_v1(env, hidden_layer_units: List[int], weight_decay: float):
     )(x)
     state_value = tf.keras.layers.Dense(
         1,
+        activation='tanh',
         kernel_regularizer=tf.keras.regularizers.l2(weight_decay),
         name='state_value'
     )(x)

@@ -27,7 +27,7 @@ class Node:
 
 
 def expand(node: Node, model, env) -> float:
-    observation = np.array(env.observation())
+    observation = util.normalize_observation(env.observation())
     x = tf.convert_to_tensor(observation[None, :])
     action_probs_batch, state_value_batch = model.predict_on_batch(x)
     legal_actions = env.legal_actions()

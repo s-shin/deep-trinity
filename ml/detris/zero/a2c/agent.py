@@ -77,11 +77,12 @@ class Agent:
             action, root = mcts.run(self.model, self.env, self.should_sample_action(), self.params)
             self.env.step(action)
 
-            reward = self.env.last_reward()
+            step_reward = 0.0001
+            reward = self.env.last_reward() + step_reward
             self.episode_reward += reward
             is_done = self.env.is_done()
 
-            sum_visits = sum([child.num_visits for child in root.children.values()])
+            sum_visits = sum(np.array([child.num_visits for child in root.children.values()]))
             action_probs = [
                 root.children[a].num_visits / sum_visits if a in root.children else 0
                 for a in range(self.env.num_actions())

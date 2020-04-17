@@ -7,10 +7,9 @@ import os
 import shutil
 import tensorflow as tf
 import numpy as np
-from .. import model as M
 from ...core import Environment
+from .. import mcts, util, model as M
 from .agent import Agent
-from .. import mcts
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ class Hyperparams(NamedTuple):
     weight_decay: float = 1e-4
     learning_rate_boundaries: List[int] = [100_000, 300_000, 500_000]
     learning_rate_values: List[float] = [2e-1, 2e-2, 2e-3, 2e-4]
-    discount_rate: float = 0.99
+    discount_rate: float = 0.9
 
 
 class RunState(NamedTuple):
@@ -162,9 +161,20 @@ def init(args):
 
 # --- train ---
 
+class LossLoggingCallback(tf.keras.callbacks.Callback):
+    def __init__(self, episode_n, tb_summary_writer):
+        super(LossLoggingCallback, self).__init__()
+        self.episode_n = episode_n
+        self.tb_summary_writer = tb_summary_writer
+
+    def on_epoch_end(self, epoch, logs=None):
+        with self.tb_summary_writer.as_default():
+            tf.summary.scalar('Losses', logs['loss'], step=self.episode_n)
+
+
 def register_train(p: argparse.ArgumentParser):
     p.add_argument('--project_dir', default=DEFAULT_PROJECT_DIR)
-    p.add_argument('--num_updates', default=10, type=int)
+    p.add_argument('--num_updates', default=100, type=int)
     p.set_defaults(func=train)
 
 
@@ -199,8 +209,8 @@ def train_in_this_process(args):
     reward_batch = np.empty((hyperparams.batch_size,), dtype=np.float)
     done_batch = np.empty((hyperparams.batch_size,), dtype=np.bool)
 
-    def store(i, observation, action_probs, action, reward, is_done):
-        observation_batch[i] = observation
+    def store(i, observation, action_probs, _action, reward, is_done):
+        observation_batch[i] = util.normalize_observation(observation)
         action_probs_batch[i] = action_probs
         reward_batch[i] = reward
         done_batch[i] = is_done
@@ -222,18 +232,20 @@ def train_in_this_process(args):
             return_batch[i] = reward_batch[i] + hyperparams.discount_rate * return_batch[i + 1] * (1 - done_batch[i])
         return_batch = return_batch[:-1]
         # Standarize
-        # MACHINE_EPS = np.finfo(np.float32).eps.item()
-        # return_batch = (return_batch - return_batch.mean()) / (return_batch.std() + MACHINE_EPS)
+        return_batch = (return_batch - return_batch.mean()) / (return_batch.std() + np.finfo(np.float32).eps.item())
 
         logger.info(f'Update#{run_state.update_n}:')
         model.fit(
             observation_batch,
             [action_probs_batch, return_batch],
             batch_size=hyperparams.batch_size,
+            callbacks=[LossLoggingCallback(run_state.update_n, tb_summary_writer)]
         )
 
         run_state = run_state._replace(update_n=run_state.update_n + 1)
         save()
+
+    logger.info('Done!')
 
 
 # --- main ---
