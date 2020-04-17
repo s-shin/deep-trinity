@@ -105,7 +105,7 @@ def register_init(p: argparse.ArgumentParser):
     p.add_argument('--project_dir', default=DEFAULT_PROJECT_DIR)
     p.add_argument('--clean', action='store_true')
     p.add_argument('--num_hidden_layers', default=10, type=int)
-    p.add_argument('--num_hidden_layer_units', default=512, type=int)
+    p.add_argument('--num_hidden_layer_units', default=1024, type=int)
     types = {
         'learning_rate_boundaries': lambda s: list(map(int, s.split(','))),
         'learning_rate_values': lambda s: list(map(float, s.split(','))),
@@ -227,12 +227,11 @@ def train_in_this_process(args):
     for _ in range(args.num_updates):
         agent.run_steps(hyperparams.batch_size, store, on_done)
 
+        # Calculate discounted cumulative reward.
         return_batch = np.append(np.zeros_like(reward_batch), agent.next_state_value())
         for i in reversed(range(reward_batch.shape[0])):
             return_batch[i] = reward_batch[i] + hyperparams.discount_rate * return_batch[i + 1] * (1 - done_batch[i])
-        return_batch = return_batch[:-1]
-        # Standarize
-        return_batch = (return_batch - return_batch.mean()) / (return_batch.std() + np.finfo(np.float32).eps.item())
+        return_batch = util.standalize(return_batch[:-1])
 
         logger.info(f'Update#{run_state.update_n}:')
         model.fit(

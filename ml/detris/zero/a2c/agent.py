@@ -77,7 +77,7 @@ class Agent:
             action, root = mcts.run(self.model, self.env, self.should_sample_action(), self.params)
             self.env.step(action)
 
-            step_reward = 0.0001
+            step_reward = 0.01
             reward = self.env.last_reward() + step_reward
             self.episode_reward += reward
             is_done = self.env.is_done()
