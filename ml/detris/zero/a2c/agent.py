@@ -1,20 +1,9 @@
 from typing import Callable, List
 import tensorflow as tf
 import numpy as np
-from ...core import Environment
+from ...environment import Environment
+from ..batch import MultiBatch
 from .. import mcts
-
-StoreFunc = Callable[
-    [
-        int,  # step index of current update
-        List[int],  # observations
-        List[float],  # action_probs[num_actions]
-        int,  # action
-        float,  # reward
-        bool  # is_done
-    ],
-    None,
-]
 
 DoneCallback = Callable[
     [
@@ -31,65 +20,53 @@ class Agent:
     num_sample_actions: int
     params: mcts.RunParams
     env: Environment
-    observation_size: int
     episode_n: int
     step_n: int
     episode_reward: float
 
-    def __init__(self, model, num_sample_actions: int, params: mcts.RunParams):
+    def __init__(self, model: tf.keras.Model, num_sample_actions: int, params: mcts.RunParams):
         self.model = model
         self.num_sample_actions = num_sample_actions
         self.params = params
         self.env = Environment()
-        self.observation_size = len(self.env.observation())
         self.episode_n = 1  # 1-indexed
         self.step_n = 1  # 1-indexed
         self.episode_reward = 0
 
-    def env_observation_size(self) -> int:
-        return self.observation_size
+    def game_strs(self) -> List[str]:
+        return [self.env.game_str()]
 
-    def env_num_actions(self) -> int:
-        return self.env.num_actions()
-
-    def env_game_str(self) -> str:
-        return self.env.game_str()
-
-    def set_model(self, model):
+    def set_model(self, model: tf.keras.Model):
         self.model = model
 
-    def should_sample_action(self) -> bool:
-        return self.step_n <= self.num_sample_actions
-
-    def next_state_value(self) -> float:
-        if self.env.is_done():
-            return 0
-        observation = np.array(self.env.observation())
-        x = tf.convert_to_tensor(observation[None, :])
+    def next_state_values(self) -> List[float]:
+        if self.env.done:
+            return [0]
+        x = tf.convert_to_tensor(self.env.observation[None, :])
         _, state_value_batch = self.model.predict_on_batch(x)
-        return float(state_value_batch[0][0])
+        return [float(state_value_batch[0][0])]
 
-    def run_steps(self, num_steps: int, store: StoreFunc, on_done: DoneCallback):
-        assert self.model is not None
+    # TODO: about on_done
+    def run_steps(self, num_steps: int, on_done: DoneCallback) -> MultiBatch:
+        multi_batch = MultiBatch(1, num_steps)
+        batch = multi_batch.get(0)
         for i in range(num_steps):
-            observation = self.env.observation()
+            observation = self.env.observation
 
-            action, root = mcts.run(self.model, self.env, self.should_sample_action(), self.params)
-            self.env.step(action)
-
-            step_reward = 0.01
-            reward = self.env.last_reward() + step_reward
+            should_sample_action = self.step_n <= self.num_sample_actions
+            action, root = mcts.run(self.model, self.env, should_sample_action, self.params)
+            _, reward, done = self.env.step(action)
             self.episode_reward += reward
-            is_done = self.env.is_done()
 
             sum_visits = sum(np.array([child.num_visits for child in root.children.values()]))
-            action_probs = [
+            action_probs = np.array([
                 root.children[a].num_visits / sum_visits if a in root.children else 0
-                for a in range(self.env.num_actions())
-            ]
-            store(i, observation, action_probs, action, reward, is_done)
+                for a in range(Environment.num_actions)
+            ], dtype=np.float)
 
-            if is_done:
+            batch.set(i, observation, action_probs, action, reward, done)
+
+            if done:
                 on_done(self.episode_n, self.step_n, self.episode_reward)
                 self.episode_n += 1
                 self.step_n = 1
@@ -97,3 +74,5 @@ class Agent:
                 continue
 
             self.step_n += 1
+
+        return multi_batch

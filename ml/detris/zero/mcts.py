@@ -2,6 +2,7 @@ import math
 from typing import Dict, NamedTuple
 import numpy as np
 import tensorflow as tf
+from ..environment import Environment
 from . import util
 
 
@@ -26,9 +27,8 @@ class Node:
         return len(self.children) == 0
 
 
-def expand(node: Node, model, env) -> float:
-    observation = util.normalize_observation(env.observation())
-    x = tf.convert_to_tensor(observation[None, :])
+def expand(node: Node, model: tf.keras.Model, env: Environment) -> float:
+    x = tf.convert_to_tensor(env.observation[None, :])
     action_probs_batch, state_value_batch = model.predict_on_batch(x)
     legal_actions = env.legal_actions()
     action_probs = util.softmax([float(action_probs_batch[0][a]) for a in legal_actions])
@@ -69,7 +69,7 @@ class RunParams(NamedTuple):
     pb_c_init: float
 
 
-def run(model, env, should_sample_action: bool, params: RunParams) -> (int, Node):
+def run(model: tf.keras.Model, env: Environment, should_sample_action: bool, params: RunParams) -> (int, Node):
     root = Node(0)
     expand(root, model, env)
     add_exploration_noise(root, params.root_dirichlet_alpha, params.root_exploration_fraction)

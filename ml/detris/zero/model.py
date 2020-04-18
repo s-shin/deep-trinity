@@ -1,5 +1,6 @@
 from typing import List
 import tensorflow as tf
+from ..environment import Environment
 
 
 # NOTE: AlphaZero's loss function is `(z-v)^2 - pi^sfT log bbp + c norm(sftheta)^2`.
@@ -8,8 +9,8 @@ import tensorflow as tf
 # `c norm(sftheta)^2` ... l2(weight_decay) of each layer
 
 
-def create_model_v1(env, hidden_layer_units: List[int], weight_decay: float):
-    input = tf.keras.Input(shape=(len(env.observation()),))
+def create_model_v1(hidden_layer_units: List[int], weight_decay: float):
+    input = tf.keras.Input(shape=(Environment.observation_size,))
     x = input
     for units in hidden_layer_units:
         x = tf.keras.layers.Dense(
@@ -17,7 +18,7 @@ def create_model_v1(env, hidden_layer_units: List[int], weight_decay: float):
             kernel_regularizer=tf.keras.regularizers.l2(weight_decay),
         )(x)
     action_probs = tf.keras.layers.Dense(
-        env.num_actions(),
+        Environment.num_actions,
         activation='softmax',
         kernel_regularizer=tf.keras.regularizers.l2(weight_decay),
         name='action_probs'
