@@ -14,8 +14,8 @@ class Batch(NamedTuple):
     @classmethod
     def zeros(cls, size: int) -> 'Batch':
         return cls(
-            np.zeros((size, Environment.observation_size), dtype=np.float),
-            np.zeros((size, Environment.num_actions), dtype=np.float),
+            np.zeros((size, Environment.OBSERVATION_SIZE), dtype=np.float),
+            np.zeros((size, Environment.NUM_ACTIONS), dtype=np.float),
             np.zeros((size,), dtype=np.uint32),
             np.zeros((size,), dtype=np.float),
             np.zeros((size,), dtype=np.uint8),
@@ -45,11 +45,19 @@ class MultiBatch(NamedTuple):
     rewards: np.ndarray
     dones: np.ndarray
 
+    @property
+    def num_multi(self):
+        return self.observations.shape[0]
+
+    @property
+    def batch_size(self):
+        return self.observations.shape[1]
+
     @classmethod
     def zeros(cls, n: int, size: int):
         return cls(
-            np.zeros((n, size, Environment.observation_size), dtype=np.float),
-            np.zeros((n, size, Environment.num_actions), dtype=np.float),
+            np.zeros((n, size, Environment.OBSERVATION_SIZE), dtype=np.float),
+            np.zeros((n, size, Environment.NUM_ACTIONS), dtype=np.float),
             np.zeros((n, size), dtype=np.uint32),
             np.zeros((n, size), dtype=np.float),
             np.zeros((n, size), dtype=np.uint8),

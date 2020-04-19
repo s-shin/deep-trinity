@@ -9,8 +9,8 @@ def normalize_observation(observation) -> np.ndarray:
 
 
 class Environment:
-    num_actions: ClassVar[int] = core.Environment.num_actions()
-    observation_size: ClassVar[int] = len(core.Environment().observation())
+    NUM_ACTIONS: ClassVar[int] = core.Environment.num_actions()
+    OBSERVATION_SIZE: ClassVar[int] = len(core.Environment().observation())
     base_step_reward: float
     env: core.Environment
     observation: np.ndarray

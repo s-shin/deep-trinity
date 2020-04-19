@@ -10,7 +10,7 @@ from ..environment import Environment
 
 
 def create_model_v1(hidden_layer_units: List[int], weight_decay: float):
-    input = tf.keras.Input(shape=(Environment.observation_size,))
+    input = tf.keras.Input(shape=(Environment.OBSERVATION_SIZE,))
     x = input
     for units in hidden_layer_units:
         x = tf.keras.layers.Dense(
@@ -18,7 +18,7 @@ def create_model_v1(hidden_layer_units: List[int], weight_decay: float):
             kernel_regularizer=tf.keras.regularizers.l2(weight_decay),
         )(x)
     action_probs = tf.keras.layers.Dense(
-        Environment.num_actions,
+        Environment.NUM_ACTIONS,
         activation='softmax',
         kernel_regularizer=tf.keras.regularizers.l2(weight_decay),
         name='action_probs'

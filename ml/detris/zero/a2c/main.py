@@ -6,6 +6,7 @@ import os
 import shutil
 import tensorflow as tf
 from .. import mcts, util, model as M
+from .agent import ModelLoader, AgentParams
 from .agent.basic_agent import BasicAgent
 
 logger = logging.getLogger(__name__)
@@ -167,7 +168,21 @@ def train(args):
             hyperparams.pb_c_init,
         )
     )
-    agent = BasicAgent(model, params)
+
+    if True:
+        class Loader(ModelLoader):
+            def __init__(self, model: tf.keras.Model):
+                self.model = model
+
+            def load(self) -> tf.keras.Model:
+                return self.model
+
+        agent = BasicAgent(Loader(model), hyperparams.batch_size, params)
+    else:
+        # TODO: MultiprocessAgent
+        raise NotImplementedError()
+
+    agent.sync_model()
     run_state = project.load_run_state()
     tb_summary_writer = tf.summary.create_file_writer(project.tb_log_dir())
 
@@ -185,8 +200,12 @@ def train(args):
         run_state = run_state._replace(episode_n=n + 1)
 
     for _ in range(args.num_updates):
-        multi_batch = agent.run_steps(hyperparams.batch_size, on_done)
-        returns = multi_batch.discounted_cumulative_rewards(hyperparams.discount_rate, agent.next_state_values())
+        multi_batch = agent.run_steps(on_done)
+
+        last_observations = [multi_batch.get(i).observations[-1] for i in range(multi_batch.num_multi)]
+        _, next_state_values = model.predict_on_batch(tf.convert_to_tensor(last_observations))
+        next_state_values = [float(next_state_values[i][0]) for i in range(multi_batch.num_multi)]
+        returns = multi_batch.discounted_cumulative_rewards(hyperparams.discount_rate, next_state_values)
 
         logger.info(f'Update#{run_state.update_n}:')
         model.fit(
@@ -198,7 +217,7 @@ def train(args):
             batch_size=hyperparams.batch_size,
             callbacks=[util.LossLoggingCallback(run_state.update_n, tb_summary_writer)],
         )
-        agent.set_model(model)
+        agent.sync_model()
 
         run_state = run_state._replace(update_n=run_state.update_n + 1)
         save()
