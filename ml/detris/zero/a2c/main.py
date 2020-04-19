@@ -196,7 +196,6 @@ def train_in_this_process(args):
         model.fit(
             multi_batch.observations.reshape((-1, multi_batch.observations.shape[-1])),
             [
-                # TODO: loss value becomes inf
                 multi_batch.action_probs.reshape((-1, multi_batch.action_probs.shape[-1])),
                 returns.reshape((-1,)),
             ],

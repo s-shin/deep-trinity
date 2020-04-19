@@ -35,6 +35,6 @@ def create_model_v1(hidden_layer_units: List[int], weight_decay: float):
 
 def loss_v1():
     return {
-        'action_probs': tf.keras.losses.CategoricalCrossentropy(),
+        'action_probs': tf.keras.losses.CategoricalCrossentropy(from_logits=True),
         'state_value': tf.keras.losses.MeanSquaredError(),
     }
