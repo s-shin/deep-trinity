@@ -1,9 +1,9 @@
-from typing import Callable, List
+from typing import Callable, NamedTuple, List
 import tensorflow as tf
 import numpy as np
-from ...environment import Environment
-from ..batch import MultiBatch
-from .. import mcts
+from ....environment import Environment
+from ...batch import Batch, MultiBatch
+from ... import mcts
 
 DoneCallback = Callable[
     [
@@ -15,46 +15,46 @@ DoneCallback = Callable[
 ]
 
 
-class Agent:
-    model: tf.keras.Model
+class AgentParams(NamedTuple):
     num_sample_actions: int
-    params: mcts.RunParams
+    mcts_run_params: mcts.RunParams
+
+
+class AgentCore:
+    model: tf.keras.Model
+    params: AgentParams
     env: Environment
     episode_n: int
     step_n: int
     episode_reward: float
 
-    def __init__(self, model: tf.keras.Model, num_sample_actions: int, params: mcts.RunParams):
+    def __init__(self, model: tf.keras.Model, params: AgentParams):
         self.model = model
-        self.num_sample_actions = num_sample_actions
         self.params = params
         self.env = Environment()
         self.episode_n = 1  # 1-indexed
         self.step_n = 1  # 1-indexed
         self.episode_reward = 0
 
-    def game_strs(self) -> List[str]:
-        return [self.env.game_str()]
-
     def set_model(self, model: tf.keras.Model):
         self.model = model
 
-    def next_state_values(self) -> List[float]:
+    def game_str(self) -> str:
+        return self.env.game_str()
+
+    def next_state_value(self) -> float:
         if self.env.done:
-            return [0]
+            return 0
         x = tf.convert_to_tensor(self.env.observation[None, :])
         _, state_value_batch = self.model.predict_on_batch(x)
-        return [float(state_value_batch[0][0])]
+        return float(state_value_batch[0][0])
 
-    # TODO: about on_done
-    def run_steps(self, num_steps: int, on_done: DoneCallback) -> MultiBatch:
-        multi_batch = MultiBatch(1, num_steps)
-        batch = multi_batch.get(0)
-        for i in range(num_steps):
+    def run_steps(self, out_batch: Batch, on_done: DoneCallback):
+        for i in range(len(out_batch)):
             observation = self.env.observation
 
-            should_sample_action = self.step_n <= self.num_sample_actions
-            action, root = mcts.run(self.model, self.env, should_sample_action, self.params)
+            should_sample_action = self.step_n <= self.params.num_sample_actions
+            action, root = mcts.run(self.model, self.env, should_sample_action, self.params.mcts_run_params)
             _, reward, done = self.env.step(action)
             self.episode_reward += reward
 
@@ -64,7 +64,7 @@ class Agent:
                 for a in range(Environment.num_actions)
             ], dtype=np.float)
 
-            batch.set(i, observation, action_probs, action, reward, done)
+            out_batch.set(i, observation, action_probs, action, reward, done)
 
             if done:
                 on_done(self.episode_n, self.step_n, self.episode_reward)
@@ -75,4 +75,16 @@ class Agent:
 
             self.step_n += 1
 
-        return multi_batch
+
+class Agent:
+    def set_model(self, model: tf.keras.Model):
+        raise NotImplementeyydError()
+
+    def game_strs(self) -> List[str]:
+        raise NotImplementedError()
+
+    def next_state_values(self) -> List[float]:
+        raise NotImplementedError()
+
+    def run_steps(self, num_steps: int, on_done: DoneCallback) -> MultiBatch:
+        raise NotImplementedError()

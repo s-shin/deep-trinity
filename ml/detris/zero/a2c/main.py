@@ -6,7 +6,7 @@ import os
 import shutil
 import tensorflow as tf
 from .. import mcts, util, model as M
-from .agent import Agent
+from .agent.basic_agent import BasicAgent
 
 logger = logging.getLogger(__name__)
 
@@ -154,24 +154,20 @@ def register_train(p: argparse.ArgumentParser):
 
 
 def train(args):
-    train_in_this_process(args)
-
-
-def train_with_multiprocess():
-    pass
-
-
-def train_in_this_process(args):
     project = Project(args.project_dir)
     hyperparams = project.load_hyperparams()
     model = tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1())
-    agent = Agent(model, hyperparams.num_sampling_steps, mcts.RunParams(
-        hyperparams.num_simulations,
-        hyperparams.root_dirichlet_alpha,
-        hyperparams.root_exploration_fraction,
-        hyperparams.pb_c_base,
-        hyperparams.pb_c_init,
-    ))
+    params = AgentParams(
+        hyperparams.num_sampling_steps,
+        mcts.RunParams(
+            hyperparams.num_simulations,
+            hyperparams.root_dirichlet_alpha,
+            hyperparams.root_exploration_fraction,
+            hyperparams.pb_c_base,
+            hyperparams.pb_c_init,
+        )
+    )
+    agent = BasicAgent(model, params)
     run_state = project.load_run_state()
     tb_summary_writer = tf.summary.create_file_writer(project.tb_log_dir())
 
