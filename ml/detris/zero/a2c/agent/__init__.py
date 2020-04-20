@@ -10,6 +10,7 @@ DoneCallback = Callable[
         int,  # episode_n
         int,  # step_n
         float,  # episode_reward
+        str,  # game_str
     ],
     None,
 ]
@@ -61,7 +62,7 @@ class AgentCore:
             out_batch.set(i, observation, action_probs, action, reward, done)
 
             if done:
-                on_done(self.episode_n, self.step_n, self.episode_reward)
+                on_done(self.episode_n, self.step_n, self.episode_reward, self.env.game_str())
                 self.episode_n += 1
                 self.step_n = 1
                 self.env.reset()
@@ -82,9 +83,6 @@ class Agent:
         self.batch_size = batch_size
 
     def sync_model(self):
-        raise NotImplementedError()
-
-    def game_strs(self) -> List[str]:
         raise NotImplementedError()
 
     def run_steps(self, on_done: DoneCallback) -> MultiBatch:

@@ -48,14 +48,12 @@ class RequestType(enum.Enum):
     EXIT = enum.auto()
     SYNC_MODEL = enum.auto()
     RUN_STEPS = enum.auto()
-    GET_GAME_STR = enum.auto()
 
 
 class EventType(enum.Enum):
     DID_EXIT = enum.auto()
     DID_SYNC_MODEL = enum.auto()
     DID_RUN_STEPS = enum.auto()
-    DID_GET_GAME_STR = enum.auto()
     EPISODE_DONE = enum.auto()
 
 
@@ -65,8 +63,8 @@ def worker(worker_i: int, load_model: LoadModelFunc, params: AgentParams,
     core = AgentCore(params)
     batch = bufs.as_multi_batch().get(worker_i)
 
-    def on_done(episode_n: int, step_n: int, reward: float):
-        ev_queue.put((worker_i, EventType.EPISODE_DONE, episode_n, step_n, reward))
+    def on_done(episode_n: int, step_n: int, reward: float, game_str: str):
+        ev_queue.put((worker_i, EventType.EPISODE_DONE, episode_n, step_n, reward, game_str))
 
     while True:
         req = req_queue.get()
@@ -127,15 +125,6 @@ class MultiprocessAgent(Agent):
         self.request((RequestType.SYNC_MODEL,))
         self.wait_events(EventType.DID_SYNC_MODEL)
 
-    def game_strs(self) -> List[str]:
-        self.request((RequestType.GET_GAME_STR,))
-        strs = [''] * len(self.workers)
-        for _ in range(len(self.workers)):
-            worker_i, ev_type, *values = self.ev_queue.get()
-            assert ev_type == EventType.DID_GET_GAME_STR
-            strs[worker_i] = values[0]
-        return strs
-
     def run_steps(self, on_done: DoneCallback) -> MultiBatch:
         self.request((RequestType.RUN_STEPS,))
         n = 0
@@ -146,5 +135,5 @@ class MultiprocessAgent(Agent):
                 if n == len(self.workers):
                     break
             elif ev_type == EventType.EPISODE_DONE:
-                on_done(values[0], values[1], values[2])
+                on_done(*values)
         return self.bufs.as_multi_batch()

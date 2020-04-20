@@ -190,11 +190,10 @@ def train(args):
         model.save(project.model_file())
         project.save_run_state(run_state)
 
-    def on_done(_episode_n, step_n, episode_reward):
+    def on_done(_episode_n, step_n, episode_reward, game_str):
         nonlocal run_state
         n = run_state.episode_n
-        logger.info(f'Episode#{n}: steps={step_n}, reward={episode_reward:.3f}')
-        logger.info(f'game:\n{agent.game_strs()[0]}')
+        logger.info(f'Episode#{n}: steps={step_n}, reward={episode_reward:.3f}, game=\n{game_str}')
         with tb_summary_writer.as_default():
             tf.summary.scalar('Rewards', episode_reward, step=n)
         run_state = run_state._replace(episode_n=n + 1)
