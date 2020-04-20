@@ -56,7 +56,7 @@ class AgentCore:
             action_probs = np.array([
                 root.children[a].num_visits / sum_visits if a in root.children else 0
                 for a in range(Environment.NUM_ACTIONS)
-            ], dtype=np.float)
+            ], dtype=np.float32)
 
             out_batch.set(i, observation, action_probs, action, reward, done)
 
@@ -70,17 +70,15 @@ class AgentCore:
             self.step_n += 1
 
 
-class ModelLoader:
-    def load(self) -> tf.keras.Model:
-        raise NotImplementedError()
+LoadModelFunc = Callable[[], tf.keras.Model]
 
 
 class Agent:
-    model_loader: ModelLoader
+    load_model: LoadModelFunc
     batch_size: int
 
-    def __init__(self, model_loader: ModelLoader, batch_size: int):
-        self.model_loader = model_loader
+    def __init__(self, load_model: LoadModelFunc, batch_size: int):
+        self.load_model = load_model
         self.batch_size = batch_size
 
     def sync_model(self):
@@ -91,3 +89,6 @@ class Agent:
 
     def run_steps(self, on_done: DoneCallback) -> MultiBatch:
         raise NotImplementedError()
+
+    def exit(self):
+        pass

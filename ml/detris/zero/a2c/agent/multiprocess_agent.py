@@ -2,10 +2,13 @@ from typing import List, NamedTuple
 import enum
 import multiprocessing as mp
 import ctypes
+import logging
 import numpy as np
-from . import Agent, AgentParams, AgentCore, DoneCallback, ModelLoader
+from . import Agent, AgentParams, AgentCore, DoneCallback, LoadModelFunc
 from ...batch import MultiBatch
 from ....environment import Environment
+
+logger = logging.getLogger(__name__)
 
 
 class SharedBuffers(NamedTuple):
@@ -31,11 +34,13 @@ class SharedBuffers(NamedTuple):
 
     def as_multi_batch(self) -> MultiBatch:
         return MultiBatch(
-            np.asarray(self.observations.get_obj(), dtype=np.float).reshape((self.num_workers, self.batch_size, -1)),
-            np.asarray(self.action_probs.get_obj(), dtype=np.float).reshape((self.num_workers, self.batch_size, -1)),
-            np.asarray(self.actions, dtype=np.uint32).reshape((self.num_workers, -1)),
-            np.asarray(self.rewards, dtype=np.float).reshape((self.num_workers, -1)),
-            np.asarray(self.dones, dtype=np.uint8).reshape((self.num_workers, -1)),
+            np.frombuffer(self.observations.get_obj(), dtype=np.float32)
+                .reshape((self.num_workers, self.batch_size, -1)),
+            np.frombuffer(self.action_probs.get_obj(), dtype=np.float32)
+                .reshape((self.num_workers, self.batch_size, -1)),
+            np.frombuffer(self.actions.get_obj(), dtype=np.uint32).reshape((self.num_workers, -1)),
+            np.frombuffer(self.rewards.get_obj(), dtype=np.float32).reshape((self.num_workers, -1)),
+            np.frombuffer(self.dones.get_obj(), dtype=np.uint8).reshape((self.num_workers, -1)),
         )
 
 
@@ -43,17 +48,20 @@ class RequestType(enum.Enum):
     EXIT = enum.auto()
     SYNC_MODEL = enum.auto()
     RUN_STEPS = enum.auto()
+    GET_GAME_STR = enum.auto()
 
 
 class EventType(enum.Enum):
     DID_EXIT = enum.auto()
     DID_SYNC_MODEL = enum.auto()
     DID_RUN_STEPS = enum.auto()
+    DID_GET_GAME_STR = enum.auto()
     EPISODE_DONE = enum.auto()
 
 
-def worker(worker_i: int, model_loader: ModelLoader, params: AgentParams,
+def worker(worker_i: int, load_model: LoadModelFunc, params: AgentParams,
            req_queue: mp.Queue, ev_queue: mp.Queue, bufs: SharedBuffers):
+    logger.info(f'Worker#{worker_i} is started.')
     core = AgentCore(params)
     batch = bufs.as_multi_batch().get(worker_i)
 
@@ -67,11 +75,15 @@ def worker(worker_i: int, model_loader: ModelLoader, params: AgentParams,
             ev_queue.put((worker_i, EventType.DID_EXIT))
             break
         elif req_type == RequestType.SYNC_MODEL:
-            core.set_model(model_loader.load())
+            core.set_model(load_model())
             ev_queue.put((worker_i, EventType.DID_SYNC_MODEL))
         elif req_type == RequestType.RUN_STEPS:
             core.run_steps(batch, on_done)
             ev_queue.put((worker_i, EventType.DID_RUN_STEPS))
+        elif req_type == RequestType.GET_GAME_STR:
+            ev_queue.put((worker_i, EventType.DID_GET_GAME_STR, core.game_str()))
+
+    logger.info(f'Worker#{worker_i} exits.')
 
 
 class MultiprocessAgent(Agent):
@@ -81,7 +93,7 @@ class MultiprocessAgent(Agent):
     workers: List[mp.Process]
     core: AgentCore
 
-    def __init__(self, model_loader: ModelLoader, batch_size: int, num_workers: int, params: AgentParams):
+    def __init__(self, model_loader: LoadModelFunc, batch_size: int, num_workers: int, params: AgentParams):
         super(MultiprocessAgent, self).__init__(model_loader, batch_size)
         self.req_queues = [mp.Queue() for _ in range(num_workers)]
         self.ev_queue = mp.Queue()
@@ -93,39 +105,46 @@ class MultiprocessAgent(Agent):
             ))
             for i in range(num_workers)
         ]
+        for w in self.workers:
+            w.start()
 
     def request(self, *args):
         for q in self.req_queues:
             q.put(*args)
 
     def wait_events(self, ev_type: EventType):
-        n = 0
-        for ev in self.ev_queue.get():
-            assert ev[1] == ev_type
-            n += 1
-            if n == len(self.workers):
-                break
+        for _ in range(len(self.workers)):
+            _, t = self.ev_queue.get()
+            assert t == ev_type
 
     def exit(self):
         self.request((RequestType.EXIT,))
         self.wait_events(EventType.DID_EXIT)
+        for w in self.workers:
+            w.join()
 
     def sync_model(self):
         self.request((RequestType.SYNC_MODEL,))
         self.wait_events(EventType.DID_SYNC_MODEL)
 
     def game_strs(self) -> List[str]:
-        return ['TODO']
+        self.request((RequestType.GET_GAME_STR,))
+        strs = [''] * len(self.workers)
+        for _ in range(len(self.workers)):
+            worker_i, ev_type, *values = self.ev_queue.get()
+            assert ev_type == EventType.DID_GET_GAME_STR
+            strs[worker_i] = values[0]
+        return strs
 
     def run_steps(self, on_done: DoneCallback) -> MultiBatch:
         self.request((RequestType.RUN_STEPS,))
         n = 0
-        for ev in self.ev_queue.get():
-            ev_type = ev[1]
+        while True:
+            worker_i, ev_type, *values = self.ev_queue.get()
             if ev_type == EventType.DID_RUN_STEPS:
                 n += 1
                 if n == len(self.workers):
                     break
             elif ev_type == EventType.EPISODE_DONE:
-                on_done(ev[2], ev[3], ev[4])
+                on_done(values[0], values[1], values[2])
         return self.bufs.as_multi_batch()

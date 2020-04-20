@@ -4,10 +4,10 @@ from typing import NamedTuple, List
 import logging
 import os
 import shutil
+import numpy as np
 import tensorflow as tf
 from .. import mcts, util, model as M
-from .agent import ModelLoader, AgentParams
-from .agent.basic_agent import BasicAgent
+from .agent import AgentParams, basic_agent, multiprocess_agent
 
 logger = logging.getLogger(__name__)
 
@@ -151,13 +151,14 @@ def init(args):
 def register_train(p: argparse.ArgumentParser):
     p.add_argument('--project_dir', default=DEFAULT_PROJECT_DIR)
     p.add_argument('--num_updates', default=100, type=int)
+    p.add_argument('--num_workers', default=1, type=int)  # hyperparam?
     p.set_defaults(func=train)
 
 
 def train(args):
     project = Project(args.project_dir)
+    model = None
     hyperparams = project.load_hyperparams()
-    model = tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1())
     params = AgentParams(
         hyperparams.num_sampling_steps,
         mcts.RunParams(
@@ -169,20 +170,19 @@ def train(args):
         )
     )
 
-    if True:
-        class Loader(ModelLoader):
-            def __init__(self, model: tf.keras.Model):
-                self.model = model
-
-            def load(self) -> tf.keras.Model:
-                return self.model
-
-        agent = BasicAgent(Loader(model), hyperparams.batch_size, params)
+    is_mp = args.num_workers > 1
+    if not is_mp:
+        agent = basic_agent.BasicAgent(lambda: model, hyperparams.batch_size, params)
     else:
-        # TODO: MultiprocessAgent
-        raise NotImplementedError()
+        if hyperparams.batch_size % args.num_workers != 0:
+            logger.error('Invalid num_workers.')
+            exit(1)
+        agent = multiprocess_agent.MultiprocessAgent(
+            lambda: tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1()),
+            hyperparams.batch_size // args.num_workers, args.num_workers, params,
+        )
 
-    agent.sync_model()
+    model = tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1())
     run_state = project.load_run_state()
     tb_summary_writer = tf.summary.create_file_writer(project.tb_log_dir())
 
@@ -200,11 +200,15 @@ def train(args):
         run_state = run_state._replace(episode_n=n + 1)
 
     for _ in range(args.num_updates):
+        agent.sync_model()
         multi_batch = agent.run_steps(on_done)
 
-        last_observations = [multi_batch.get(i).observations[-1] for i in range(multi_batch.num_multi)]
-        _, next_state_values = model.predict_on_batch(tf.convert_to_tensor(last_observations))
-        next_state_values = [float(next_state_values[i][0]) for i in range(multi_batch.num_multi)]
+        mask = np.where(multi_batch.dones[:, -1] == 0)
+        next_state_values = np.zeros((multi_batch.batch_size,))
+        if len(mask) > 0:
+            last_observations = multi_batch.observations[:, -1][mask]
+            _, state_values = model.predict_on_batch(tf.convert_to_tensor(last_observations))
+            next_state_values[mask] = state_values.numpy().reshape((-1,))
         returns = multi_batch.discounted_cumulative_rewards(hyperparams.discount_rate, next_state_values)
 
         logger.info(f'Update#{run_state.update_n}:')
@@ -217,11 +221,11 @@ def train(args):
             batch_size=hyperparams.batch_size,
             callbacks=[util.LossLoggingCallback(run_state.update_n, tb_summary_writer)],
         )
-        agent.sync_model()
 
         run_state = run_state._replace(update_n=run_state.update_n + 1)
         save()
 
+    agent.exit()
     logger.info('Done!')
 
 

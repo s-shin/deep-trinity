@@ -1,4 +1,4 @@
-from typing import Optional, List, NamedTuple
+from typing import List, NamedTuple, Union
 import numpy as np
 from . import util
 from ..environment import Environment
@@ -11,13 +11,17 @@ class Batch(NamedTuple):
     rewards: np.ndarray
     dones: np.ndarray
 
+    @property
+    def batch_size(self) -> int:
+        return self.observations.shape[0]
+
     @classmethod
     def zeros(cls, size: int) -> 'Batch':
         return cls(
-            np.zeros((size, Environment.OBSERVATION_SIZE), dtype=np.float),
-            np.zeros((size, Environment.NUM_ACTIONS), dtype=np.float),
+            np.zeros((size, Environment.OBSERVATION_SIZE), dtype=np.float32),
+            np.zeros((size, Environment.NUM_ACTIONS), dtype=np.float32),
             np.zeros((size,), dtype=np.uint32),
-            np.zeros((size,), dtype=np.float),
+            np.zeros((size,), dtype=np.float32),
             np.zeros((size,), dtype=np.uint8),
         )
 
@@ -32,7 +36,7 @@ class Batch(NamedTuple):
         self.dones[i] = done
 
     def discounted_cumulative_rewards(self, discount_rate: float, next_state_value: float) -> np.ndarray:
-        r = np.append(np.zeros_like(self.rewards, dtype=np.float), next_state_value)
+        r = np.append(np.zeros_like(self.rewards, dtype=np.float32), next_state_value)
         for i in reversed(range(self.rewards.shape[0])):
             r[i] = self.rewards[i] + discount_rate * r[i + 1] * (1 - self.dones[i])
         return util.standalize(r[:-1])
@@ -46,20 +50,20 @@ class MultiBatch(NamedTuple):
     dones: np.ndarray
 
     @property
-    def num_multi(self):
+    def num_multi(self) -> int:
         return self.observations.shape[0]
 
     @property
-    def batch_size(self):
+    def batch_size(self) -> int:
         return self.observations.shape[1]
 
     @classmethod
-    def zeros(cls, n: int, size: int):
+    def zeros(cls, n: int, size: int) -> 'MultiBatch':
         return cls(
-            np.zeros((n, size, Environment.OBSERVATION_SIZE), dtype=np.float),
-            np.zeros((n, size, Environment.NUM_ACTIONS), dtype=np.float),
+            np.zeros((n, size, Environment.OBSERVATION_SIZE), dtype=np.float32),
+            np.zeros((n, size, Environment.NUM_ACTIONS), dtype=np.float32),
             np.zeros((n, size), dtype=np.uint32),
-            np.zeros((n, size), dtype=np.float),
+            np.zeros((n, size), dtype=np.float32),
             np.zeros((n, size), dtype=np.uint8),
         )
 
@@ -72,7 +76,8 @@ class MultiBatch(NamedTuple):
             self.dones.view()[i],
         )
 
-    def discounted_cumulative_rewards(self, discount_rate: float, next_state_values: List[float]) -> np.ndarray:
+    def discounted_cumulative_rewards(self, discount_rate: float,
+                                      next_state_values: Union[List[float], np.ndarray]) -> np.ndarray:
         r = np.empty_like(self.rewards)
         for i in range(len(r)):
             r[i] = self.get(i).discounted_cumulative_rewards(discount_rate, next_state_values[i])
