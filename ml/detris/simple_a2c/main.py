@@ -103,9 +103,9 @@ def train(args):
     for _ in range(args.max_updates):
         update_n += 1
         actions = np.empty((args.batch_size,), dtype=np.int32)
-        rewards = np.empty((args.batch_size,), dtype=np.float)
+        rewards = np.empty((args.batch_size,), dtype=np.float32)
         dones = np.empty((args.batch_size,), dtype=np.bool)
-        state_values = np.empty((args.batch_size,), dtype=np.float)
+        state_values = np.empty((args.batch_size,), dtype=np.float32)
         observations = np.empty((args.batch_size,) + (observation_space,))
 
         for i in range(args.batch_size):
