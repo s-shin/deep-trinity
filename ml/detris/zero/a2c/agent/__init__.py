@@ -65,6 +65,7 @@ class AgentCore:
                 on_done(self.episode_n, self.step_n, self.episode_reward, self.env.game_str())
                 self.episode_n += 1
                 self.step_n = 1
+                self.episode_reward = 0
                 self.env.reset()
                 continue
 
