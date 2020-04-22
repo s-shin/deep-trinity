@@ -1,5 +1,7 @@
 .idea/
 target/
 tmp*/
+.ipynb_checkpoints/
 
 .DS_Store
+
