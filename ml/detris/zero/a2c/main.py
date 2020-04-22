@@ -151,7 +151,7 @@ def init(args):
 def register_train(p: argparse.ArgumentParser):
     p.add_argument('--project_dir', default=DEFAULT_PROJECT_DIR)
     p.add_argument('--num_updates', default=100, type=int)
-    p.add_argument('--num_workers', default=1, type=int)  # hyperparam?
+    p.add_argument('--num_workers', default=0, type=int)  # hyperparam?
     p.set_defaults(func=train)
 
 
@@ -170,7 +170,7 @@ def train(args):
         )
     )
 
-    is_mp = args.num_workers > 1
+    is_mp = args.num_workers > 0
     if not is_mp:
         agent = basic_agent.BasicAgent(lambda: model, hyperparams.batch_size, params)
     else:
@@ -197,6 +197,8 @@ def train(args):
         with tb_summary_writer.as_default():
             tf.summary.scalar('Rewards', episode_reward, step=n)
         run_state = run_state._replace(episode_n=n + 1)
+
+    logger.info('Training started.')
 
     for _ in range(args.num_updates):
         agent.sync_model()
