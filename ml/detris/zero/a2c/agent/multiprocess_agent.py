@@ -4,8 +4,9 @@ import multiprocessing as mp
 import ctypes
 import logging
 import numpy as np
-from . import Agent, AgentParams, AgentCore, DoneCallback, LoadModelFunc
+from . import Agent, AgentParams, AgentCore, DoneCallback
 from ...batch import MultiBatch
+from ...predictor import Predictor
 from ....environment import Environment
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,10 @@ class EventType(enum.Enum):
     EPISODE_DONE = enum.auto()
 
 
-def worker(worker_i: int, load_model: LoadModelFunc, params: AgentParams,
+def worker(worker_i: int, predictor: Predictor, params: AgentParams,
            req_queue: mp.Queue, ev_queue: mp.Queue, bufs: SharedBuffers):
     logger.info(f'Worker#{worker_i} is started.')
-    core = AgentCore(params)
+    core = AgentCore(predictor, params)
     batch = bufs.as_multi_batch().get(worker_i)
 
     def on_done(episode_n: int, step_n: int, reward: float, game_str: str):
@@ -69,11 +70,12 @@ def worker(worker_i: int, load_model: LoadModelFunc, params: AgentParams,
     while True:
         req = req_queue.get()
         req_type = req[0]
+        logger.debug(f'Worker#{worker_i}: {req_type} received.')
         if req_type == RequestType.EXIT:
             ev_queue.put((worker_i, EventType.DID_EXIT))
             break
         elif req_type == RequestType.SYNC_MODEL:
-            core.set_model(load_model())
+            core.sync_model()
             ev_queue.put((worker_i, EventType.DID_SYNC_MODEL))
         elif req_type == RequestType.RUN_STEPS:
             core.run_steps(batch, on_done)
@@ -91,14 +93,14 @@ class MultiprocessAgent(Agent):
     workers: List[mp.Process]
     core: AgentCore
 
-    def __init__(self, model_loader: LoadModelFunc, batch_size: int, num_workers: int, params: AgentParams):
-        super(MultiprocessAgent, self).__init__(model_loader, batch_size)
+    def __init__(self, predictor: Predictor, batch_size: int, num_workers: int, params: AgentParams):
+        super(MultiprocessAgent, self).__init__(batch_size)
         self.req_queues = [mp.Queue() for _ in range(num_workers)]
         self.ev_queue = mp.Queue()
         self.bufs = SharedBuffers.zeros(num_workers, batch_size)
         self.workers = [
             mp.Process(target=worker, args=(
-                i, model_loader, params,
+                i, predictor, params,
                 self.req_queues[i], self.ev_queue, self.bufs,
             ))
             for i in range(num_workers)

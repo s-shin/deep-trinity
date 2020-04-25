@@ -7,6 +7,7 @@ import shutil
 import numpy as np
 import tensorflow as tf
 from .. import mcts, util, model as M
+from ..predictor import BasicPredictor
 from .agent import AgentParams, basic_agent, multiprocess_agent
 
 logger = logging.getLogger(__name__)
@@ -172,13 +173,13 @@ def train(args):
 
     is_mp = args.num_workers > 0
     if not is_mp:
-        agent = basic_agent.BasicAgent(lambda: model, hyperparams.batch_size, params)
+        agent = basic_agent.BasicAgent(BasicPredictor(lambda: model), hyperparams.batch_size, params)
     else:
         if hyperparams.batch_size % args.num_workers != 0:
             logger.error('Invalid num_workers.')
             exit(1)
         agent = multiprocess_agent.MultiprocessAgent(
-            lambda: tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1()),
+            BasicPredictor(lambda: tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1())),
             hyperparams.batch_size // args.num_workers, args.num_workers, params,
         )
 

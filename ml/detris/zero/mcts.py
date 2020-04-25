@@ -1,9 +1,9 @@
 import math
 from typing import Dict, NamedTuple
 import numpy as np
-import tensorflow as tf
 from ..environment import Environment
 from . import util
+from .predictor import Predictor
 
 
 class Node:
@@ -27,14 +27,13 @@ class Node:
         return len(self.children) == 0
 
 
-def expand(node: Node, model: tf.keras.Model, env: Environment) -> float:
-    x = tf.convert_to_tensor(env.observation[None, :])
-    action_probs_batch, state_value_batch = model.predict_on_batch(x)
+def expand(node: Node, predictor: Predictor, env: Environment) -> float:
+    all_action_probs, state_value = predictor.predict(env.observation)
     legal_actions = env.legal_actions()
-    action_probs = util.softmax([float(action_probs_batch[0][a]) for a in legal_actions])
+    action_probs = util.softmax([all_action_probs[a] for a in legal_actions])
     for (i, action) in enumerate(legal_actions):
         node.children[action] = Node(action_probs[i])
-    return float(state_value_batch[0][0])
+    return state_value
 
 
 def add_exploration_noise(node: Node, dirichlet_alpha: float, exploration_fraction: float):
@@ -69,9 +68,9 @@ class RunParams(NamedTuple):
     pb_c_init: float
 
 
-def run(model: tf.keras.Model, env: Environment, should_sample_action: bool, params: RunParams) -> (int, Node):
+def run(predictor: Predictor, env: Environment, should_sample_action: bool, params: RunParams) -> (int, Node):
     root = Node(0)
-    expand(root, model, env)
+    expand(root, predictor, env)
     add_exploration_noise(root, params.root_dirichlet_alpha, params.root_exploration_fraction)
 
     for _ in range(params.num_simulations):
@@ -88,7 +87,7 @@ def run(model: tf.keras.Model, env: Environment, should_sample_action: bool, par
             sim_env.step(action)
             path.append(node)
 
-        value = expand(node, model, sim_env)
+        value = expand(node, predictor, sim_env)
 
         # backpropagate
         for node in path:
