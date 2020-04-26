@@ -153,6 +153,7 @@ def register_train(p: argparse.ArgumentParser):
     p.add_argument('--project_dir', default=DEFAULT_PROJECT_DIR)
     p.add_argument('--num_updates', default=100, type=int)
     p.add_argument('--num_workers', default=0, type=int)  # hyperparam?
+    p.add_argument('--batch_prediction', action='store_true')
     p.set_defaults(func=train)
 
 
@@ -178,10 +179,14 @@ def train(args):
         if hyperparams.batch_size % args.num_workers != 0:
             logger.error('Invalid num_workers.')
             exit(1)
-        agent = multiprocess_agent.MultiprocessAgent(
-            SinglePredictor(lambda: tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1())),
-            hyperparams.batch_size // args.num_workers, args.num_workers, params,
-        )
+        worker_batch = hyperparams.batch_size // args.num_workers
+        if args.batch_prediction:
+            agent = multiprocess_agent.MultiprocessAgent2(lambda: model, worker_batch, args.num_workers, params)
+        else:
+            agent = multiprocess_agent.MultiprocessAgent1(
+                lambda: tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1()),
+                worker_batch, args.num_workers, params,
+            )
 
     model = tf.keras.models.load_model(project.model_file(), custom_objects=M.loss_v1())
     run_state = project.load_run_state()
