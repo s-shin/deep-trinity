@@ -14,7 +14,7 @@ class Predictor:
 LoadModelFunc = Callable[[], tf.keras.Model]
 
 
-class BasicPredictor(Predictor):
+class SinglePredictor(Predictor):
     load_model: LoadModelFunc
     model: Optional[tf.keras.Model]
 
