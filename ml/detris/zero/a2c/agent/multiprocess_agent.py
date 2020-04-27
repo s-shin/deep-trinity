@@ -228,17 +228,22 @@ class MultiprocessAgent2(Agent):
     def run_steps(self, on_done: DoneCallback) -> MultiBatch:
         self.ipc_client.send((EventType.RUN_STEPS,))
         n = 0
+        num_predict_events = 0
         while True:
             worker_i, event_type, *values = self.ipc_client.receive()
             # logger.debug(f'Master: {event_type} received.')
             if event_type == EventType.DID_RUN_STEPS:
+                assert num_predict_events == 0
                 n += 1
                 if n == len(self.workers):
                     break
             elif event_type == EventType.EPISODE_DONE:
                 on_done(*values)
             elif event_type == EventType.PREDICT:
-                self.wait_events(EventType.PREDICT, len(self.workers) - 1)
+                num_predict_events += 1
+                if num_predict_events < len(self.workers):
+                    continue
+                num_predict_events = 0
                 observations, action_probs, state_values = self.pred_bufs.as_numpy()
                 action_probs_batch, state_value_batch = self.model.predict_on_batch(
                     tf.convert_to_tensor(observations))
