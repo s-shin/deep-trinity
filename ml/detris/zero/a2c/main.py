@@ -211,7 +211,7 @@ def train(args):
         multi_batch = agent.run_steps(on_done)
 
         mask = np.where(multi_batch.dones[:, -1] == 0)
-        next_state_values = np.zeros((multi_batch.batch_size,))
+        next_state_values = np.zeros((multi_batch.num_multi,))
         if len(mask) > 0:
             last_observations = multi_batch.observations[:, -1][mask]
             _, state_values = model.predict_on_batch(tf.convert_to_tensor(last_observations))
