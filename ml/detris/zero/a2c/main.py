@@ -40,7 +40,7 @@ class Hyperparams(NamedTuple):
     weight_decay: float = 1e-4
     learning_rate_boundaries: List[int] = [100_000, 300_000, 500_000]
     learning_rate_values: List[float] = [2e-1, 2e-2, 2e-3, 2e-4]
-    discount_rate: float = 0.9
+    discount_rate: float = 0.99
 
 
 class RunState(NamedTuple):

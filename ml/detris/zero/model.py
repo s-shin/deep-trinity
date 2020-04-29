@@ -14,17 +14,21 @@ def create_model_v1(hidden_layer_units: List[int], weight_decay: float):
     x = input
     for units in hidden_layer_units:
         x = tf.keras.layers.Dense(
-            units, activation='relu',
+            units,
+            kernel_initializer='he_normal',
+            activation='relu',
             kernel_regularizer=tf.keras.regularizers.l2(weight_decay),
         )(x)
     action_probs = tf.keras.layers.Dense(
         Environment.NUM_ACTIONS,
+        kernel_initializer='truncated_normal',
         activation='softmax',
         kernel_regularizer=tf.keras.regularizers.l2(weight_decay),
         name='action_probs'
     )(x)
     state_value = tf.keras.layers.Dense(
         1,
+        kernel_initializer='truncated_normal',
         activation='tanh',
         kernel_regularizer=tf.keras.regularizers.l2(weight_decay),
         name='state_value'

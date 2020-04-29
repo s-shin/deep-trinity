@@ -1,5 +1,4 @@
 import math
-import random
 from typing import Dict, NamedTuple
 import numpy as np
 from ..environment import Environment
@@ -77,19 +76,14 @@ def run(predictor: Predictor, env: Environment, should_sample_action: bool, para
     for _ in range(params.num_simulations):
         node = root
         sim_env = env.clone()
-        path = []
+        path = [node]
 
         # select
         while not node.is_expanded():
-            children = sorted(
+            _, action, node = max(
                 (calc_ucb_score(node, child, params.pb_c_base, params.pb_c_init), action, child)
                 for action, child in node.children.items()
             )
-            _, action, node = children[-1] if children[-1][0] > 0 else random.choice(children)
-            # _, action, node = max(
-            #     (calc_ucb_score(node, child, params.pb_c_base, params.pb_c_init), action, child)
-            #     for action, child in node.children.items()
-            # )
             sim_env.step(action)
             path.append(node)
 
