@@ -1,4 +1,5 @@
 import math
+import random
 from typing import Dict, NamedTuple
 import numpy as np
 from ..environment import Environment
@@ -45,7 +46,7 @@ def add_exploration_noise(node: Node, dirichlet_alpha: float, exploration_fracti
 
 
 def calc_ucb_score(parent: Node, child: Node, pb_c_base: int, pb_c_init: float) -> float:
-    pb_c = math.log(float(1 + parent.num_visits + pb_c_base) / pb_c_base) + pb_c_init
+    pb_c = math.log((1 + parent.num_visits + pb_c_base) / pb_c_base) + pb_c_init
     return child.avg_state_value() + pb_c * child.action_prob * math.sqrt(parent.num_visits) / (1 + child.num_visits)
 
 
@@ -80,10 +81,15 @@ def run(predictor: Predictor, env: Environment, should_sample_action: bool, para
 
         # select
         while not node.is_expanded():
-            _, action, node = max(
+            children = sorted(
                 (calc_ucb_score(node, child, params.pb_c_base, params.pb_c_init), action, child)
                 for action, child in node.children.items()
             )
+            _, action, node = children[-1] if children[-1][0] > 0 else random.choice(children)
+            # _, action, node = max(
+            #     (calc_ucb_score(node, child, params.pb_c_base, params.pb_c_init), action, child)
+            #     for action, child in node.children.items()
+            # )
             sim_env.step(action)
             path.append(node)
 
@@ -96,5 +102,9 @@ def run(predictor: Predictor, env: Environment, should_sample_action: bool, para
 
     # select action
     action = select_action(root, should_sample_action)
+
+    # for (a, c) in sorted(root.children.items()):
+    #     print('{:4d} => num_visits={:<4d} action_prob={:.3f} avg_state_value={}'.format(
+    #         a, c.num_visits, c.action_prob, c.avg_state_value()))
 
     return action, root
