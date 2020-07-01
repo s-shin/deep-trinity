@@ -148,13 +148,13 @@ impl GameSession {
         for (i, row) in state.playfield.grid.bit_grid.rows.iter().enumerate() {
             r[i / 2] += (*row as u32) << (16 * (i % 2));
         }
-        // can_hold(2), hold_piece(8), falling_piece(7)
+        // [can_hold(2), hold_piece(8), falling_piece(7)]
         r.push(
             if state.can_hold { 1 } else { 0 }
                 + if let Some(p) = state.hold_piece { p as u32 + 1 } else { 0 } * 2
                 + fp.piece as u32 * 2 * 8
         );
-        // next * N
+        // [next]
         r.push(
             state.next_pieces.pieces.iter()
                 .take(state.next_pieces.visible_num)
@@ -163,6 +163,25 @@ impl GameSession {
                     acc + (*p as u32) * (7 * i as u32)
                 })
         );
+        r
+    }
+    pub fn observation_2d(&self) -> Vec<f32> {
+        let state = &self.game.state;
+        let fp = state.falling_piece.as_ref().unwrap();
+        // [is_block(2), can_hold(2), hold_piece(8), falling_piece(7), next(7) * 5] * num_cells
+        let mut r = Vec::with_capacity(
+            state.playfield.grid.width() as usize * state.playfield.grid.height() as usize * (4 + state.next_pieces.visible_num));
+        for y in 0..state.playfield.grid.height() {
+            for x in 0..state.playfield.grid.width() {
+                r.push(if state.playfield.grid.has_cell(core::upos!(x, y)) { 1.0 } else { 0.0 });
+                r.push(if state.can_hold { 1.0 } else { 0.0 });
+                r.push(if let Some(p) = state.hold_piece { (p as i32 as f32 + 1.0) / 8.0 } else { 0.0 });
+                r.push((fp.piece as i32 as f32) / 7.0);
+                for p in state.next_pieces.pieces.iter().take(state.next_pieces.visible_num) {
+                    r.push((*p as i32 as f32) / 7.0);
+                }
+            }
+        }
         r
     }
     pub fn last_reward(&self) -> f32 { self.last_reward }
