@@ -267,6 +267,21 @@ pub trait Grid: Clone + fmt::Display {
             self.set_cell(upos!(x, y), cell);
         }
     }
+    fn set_str_rows(&mut self, pos: UPos, rows: &[&'static str]) {
+        for (dy, row) in rows.iter().rev().enumerate() {
+            let y = pos.1 + dy as UPosY;
+            if y >= self.height() {
+                return;
+            }
+            for (dx, c) in row.chars().enumerate() {
+                let x = pos.0 + dx as UPosX;
+                if x >= self.width() {
+                    break;
+                }
+                self.set_cell(upos!(x, y), c.into());
+            }
+        }
+    }
     fn num_filled_rows(&self) -> SizeY {
         let mut n = 0;
         for y in 0..self.height() {
@@ -477,15 +492,17 @@ type BitGridRow = u16;
 #[derive(Clone, Debug, Eq)]
 pub struct BitGrid {
     size: Size,
-    // cells: 0000000000
-    // pos x: 9876543210
+    /// The x-axis is the LSB to MSB direction.
+    /// ```ignore
+    /// | T  I| -> 10010 (17)
+    /// ```
     pub rows: Vec<BitGridRow>,
     row_mask: BitGridRow,
 }
 
 impl BitGrid {
     pub fn new(size: Size) -> Self {
-        debug_assert!(size.0 as usize <= std::mem::size_of::<BitGridRow>() * 8);
+        assert!(size.0 as usize <= std::mem::size_of::<BitGridRow>() * 8);
         Self {
             size,
             rows: vec![0; size.1 as usize],
@@ -760,6 +777,8 @@ impl Orientation {
         Self(n as u8)
     }
     pub fn id(self) -> u8 { self.0 % 4 }
+    pub fn is_even(self) -> bool { self.0 % 2 == 0 }
+    pub fn is_odd(self) -> bool { self.0 % 2 == 1 }
 }
 
 //---
@@ -1159,10 +1178,10 @@ fn srs_offset_data_others() -> Vec<Vec<(PosX, PosY)>> {
 
 pub struct PieceSpec {
     /// The index of Vec is orientation.
-    grids: Vec<HybridGrid>,
-    initial_placement: Placement,
+    pub grids: Vec<HybridGrid>,
+    pub initial_placement: Placement,
     /// The index of outer Vec is orientation.
-    srs_offset_data: Vec<Vec<(PosX, PosY)>>,
+    pub srs_offset_data: Vec<Vec<(PosX, PosY)>>,
 }
 
 impl PieceSpec {
@@ -1467,19 +1486,7 @@ impl Playfield {
     pub fn height(&self) -> SizeX { self.grid.height() }
     pub fn is_empty(&self) -> bool { self.grid.is_empty() }
     pub fn set_rows(&mut self, pos: UPos, rows: &[&'static str]) {
-        for (dy, row) in rows.iter().rev().enumerate() {
-            let y = pos.1 + dy as UPosY;
-            if y >= self.grid.height() {
-                return;
-            }
-            for (dx, c) in row.chars().enumerate() {
-                let x = pos.0 + dx as UPosX;
-                if x >= self.grid.width() {
-                    break;
-                }
-                self.grid.set_cell(upos!(x, y), c.into());
-            }
-        }
+        self.grid.set_str_rows(pos, rows);
     }
     // If garbage out, `true` will be returned.
     pub fn append_garbage(&mut self, gap_x_list: &[UPosX]) -> bool {

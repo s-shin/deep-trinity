@@ -4,6 +4,7 @@ use std::error::Error;
 pub mod simple;
 pub mod simple_tree;
 pub mod mcts_puct;
+pub mod advanced;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
