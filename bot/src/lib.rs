@@ -21,7 +21,7 @@ pub fn test_bot<B: Bot>(bot: &mut B, random_seed: u64, max_iterations: usize, de
     use rand::SeedableRng;
     use core::{RandomPieceGenerator, MovePlayer};
 
-    let mut game = Game::new(Default::default());
+    let mut game: Game = Default::default();
     let mut pg = RandomPieceGenerator::new(StdRng::seed_from_u64(random_seed));
     game.supply_next_pieces(&pg.generate());
     game.setup_falling_piece(None).unwrap();

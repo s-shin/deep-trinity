@@ -1985,11 +1985,11 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(rules: GameRules) -> Self {
+    pub fn new(rules: GameRules, state: GameState, stats: Statistics) -> Self {
         Self {
             rules,
-            state: Default::default(),
-            stats: Default::default(),
+            state,
+            stats,
         }
     }
     pub fn get_cell(&self, pos: UPos) -> Cell {
