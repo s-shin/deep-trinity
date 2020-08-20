@@ -267,7 +267,7 @@ pub trait Grid: Clone + fmt::Display {
             self.set_cell(upos!(x, y), cell);
         }
     }
-    fn set_str_rows(&mut self, pos: UPos, rows: &[&'static str]) {
+    fn set_str_rows(&mut self, pos: UPos, rows: &[&str]) {
         for (dy, row) in rows.iter().rev().enumerate() {
             let y = pos.1 + dy as UPosY;
             if y >= self.height() {
@@ -1536,7 +1536,7 @@ impl Playfield {
     pub fn width(&self) -> SizeX { self.grid.width() }
     pub fn height(&self) -> SizeX { self.grid.height() }
     pub fn is_empty(&self) -> bool { self.grid.is_empty() }
-    pub fn set_rows(&mut self, pos: UPos, rows: &[&'static str]) {
+    pub fn set_str_rows(&mut self, pos: UPos, rows: &[&str]) {
         self.grid.set_str_rows(pos, rows);
     }
     // If garbage out, `true` will be returned.
@@ -2474,7 +2474,7 @@ mod tests {
     #[test]
     fn test_reverse_rotation_by_srs() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             "  @@@@@@@@",
             "   @@@@@@@",
             "@ @@@@@@@@",
@@ -2494,7 +2494,7 @@ mod tests {
     #[test]
     fn test_tspin_mini() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             " @@@@@@@@@",
         ]);
         let mut fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_0, pos!(0, 0)));
@@ -2507,7 +2507,7 @@ mod tests {
     #[test]
     fn test_tspin_neo() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             "       @@@",
             "         @",
             "        @@",
@@ -2524,7 +2524,7 @@ mod tests {
     #[test]
     fn test_tspin_fin() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             "       @@@",
             "         @",
             "         @",
@@ -2541,7 +2541,7 @@ mod tests {
     #[test]
     fn test_lockable() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             " @@@@@@@@ ",
             " @@@@@@@@ ",
             " @@@@@@@@ ",
@@ -2558,7 +2558,7 @@ mod tests {
         game.supply_next_pieces(&[Piece::T]);
         assert_ok!(game.setup_falling_piece(None));
         let pf = &mut game.state.playfield;
-        pf.set_rows((0, 0).into(), &[
+        pf.set_str_rows((0, 0).into(), &[
             "          ",
             "          ",
             "@@        ",
@@ -2607,8 +2607,8 @@ mod tests {
         game.supply_next_pieces(&[Piece::I]);
         assert_ok!(game.setup_falling_piece(None));
         let pf = &mut game.state.playfield;
-        pf.set_rows((0, 19).into(), &["       @  "]);
-        pf.set_rows((0, 0).into(), &[" @@@@@@@@ "].repeat(19));
+        pf.set_str_rows((0, 19).into(), &["       @  "]);
+        pf.set_str_rows((0, 0).into(), &[" @@@@@@@@ "].repeat(19));
         let all = game.get_move_candidates();
         assert!(all.is_ok());
         let all = all.unwrap();

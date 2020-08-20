@@ -133,7 +133,7 @@ mod test {
     fn test1() {
         let mut game: Game = Default::default();
         let pf = &mut game.state.playfield;
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             "   @@@@   ",
             "@@@@@@    ",
             "@@@@@@@ @@",
@@ -157,7 +157,7 @@ mod test {
     fn test2() {
         let mut game: Game = Default::default();
         let pf = &mut game.state.playfield;
-        pf.set_rows(upos!(0, 0), &["@@@@@@@@@@"].repeat(20));
+        pf.set_str_rows(upos!(0, 0), &["@@@@@@@@@@"].repeat(20));
         game.supply_next_pieces(&[Piece::T]);
         game.setup_falling_piece(None).unwrap();
         let dst = Placement::new(ORIENTATION_1, pos!(3, 20));
