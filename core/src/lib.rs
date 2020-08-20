@@ -1710,6 +1710,10 @@ impl Playfield {
     }
     // The return placements can include unreachable placements.
     pub fn search_lockable_placements(&self, piece: Piece) -> Vec<Placement> {
+        let max_padding = match piece {
+            Piece::I => 2,
+            _ => 1,
+        };
         let yend = (self.grid.height() - self.grid.top_padding()) as PosY;
         let spec = PieceSpec::of(piece);
         let sub_bit_grids = [
@@ -1719,8 +1723,8 @@ impl Playfield {
             &spec.grids[ORIENTATION_3.id() as usize].bit_grid,
         ];
         let mut r: Vec<Placement> = Vec::new();
-        for y in -1..yend {
-            for x in -2..(self.grid.width() as PosX - 1) {
+        for y in -max_padding..=yend {
+            for x in -max_padding..=(self.grid.width() as PosX - max_padding) {
                 for o in &ORIENTATIONS {
                     let g = sub_bit_grids[o.id() as usize];
                     let can_put = self.grid.bit_grid.can_put_fast((x, y).into(), g);
