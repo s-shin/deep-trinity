@@ -1214,6 +1214,13 @@ impl PieceSpec {
         }
     }
 
+    /// ```ignore
+    /// +---+
+    /// | SS|
+    /// |SS |
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_s() -> Self {
         Self::new(
             Piece::S,
@@ -1223,6 +1230,13 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// |ZZ |
+    /// | ZZ|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_z() -> Self {
         Self::new(
             Piece::Z,
@@ -1232,6 +1246,13 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// |  L|
+    /// |LLL|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_l() -> Self {
         Self::new(
             Piece::L,
@@ -1241,6 +1262,13 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// |J  |
+    /// |JJJ|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_j() -> Self {
         Self::new(
             Piece::J,
@@ -1250,6 +1278,15 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +-----+
+    /// |     |
+    /// |     |
+    /// | IIII|
+    /// |     |
+    /// |     |
+    /// +-----+
+    /// ```
     fn piece_i() -> Self {
         Self::new(
             Piece::I,
@@ -1259,6 +1296,13 @@ impl PieceSpec {
             srs_offset_data_i(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// | T |
+    /// |TTT|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_t() -> Self {
         Self::new(
             Piece::T,
@@ -1268,6 +1312,13 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// | OO|
+    /// | OO|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_o() -> Self {
         Self::new(
             Piece::O,
