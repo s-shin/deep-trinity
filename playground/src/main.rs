@@ -87,14 +87,14 @@ pub mod move_tmpl {
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(rename_all = "snake_case")]
-    pub enum When {
-        Opener
+    pub enum TargetState {
+        Opener,
+        Playfield(Playfield),
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(rename_all = "snake_case")]
     pub enum Constraint {
-        When(When),
         PieceOrder(PieceSequence),
     }
 
@@ -137,6 +137,7 @@ pub mod move_tmpl {
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct Template {
         pub name: String,
+        pub target_state: TargetState,
         pub constraints: Vec<Constraint>,
         pub moves: HashMap<Piece, Vec<Move>>,
         pub examples: Vec<Example>,
@@ -164,7 +165,7 @@ pub mod move_tmpl {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn move_tmpl_test() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().collect();
     let template_file = args.get(1).cloned().unwrap_or("../tmp/templates/tsd_opener_r.yml".into());
     let data = std::fs::read_to_string(template_file)?;
@@ -206,5 +207,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("{}", game);
     }
 
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    move_tmpl_test()?;
     Ok(())
 }

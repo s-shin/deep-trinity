@@ -1079,6 +1079,20 @@ impl From<usize> for Piece {
     }
 }
 
+impl Piece {
+    pub fn to_usize(&self) -> usize {
+        match self {
+            Piece::S => 0,
+            Piece::Z => 1,
+            Piece::L => 2,
+            Piece::J => 3,
+            Piece::I => 4,
+            Piece::T => 5,
+            Piece::O => 6,
+        }
+    }
+}
+
 impl Into<CellTypeId> for Piece {
     fn into(self) -> CellTypeId { CellTypeId(2 + (self as u8)) }
 }
