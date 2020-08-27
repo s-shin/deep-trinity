@@ -11,6 +11,7 @@ use std::ops;
 use rand::seq::SliceRandom;
 
 pub mod move_search;
+pub mod helper;
 
 //---
 
@@ -1070,7 +1071,9 @@ pub enum Piece {
     O,
 }
 
-const PIECES: [Piece; 7] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
+pub const NUM_PIECES: usize = 7;
+
+pub const PIECES: [Piece; NUM_PIECES] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
 
 impl From<usize> for Piece {
     fn from(n: usize) -> Self {
@@ -1147,7 +1150,7 @@ impl From<Cell> for CellTypeId {
 impl From<char> for Cell {
     fn from(c: char) -> Self {
         match c.to_ascii_uppercase() {
-            ' ' => Cell::Empty,
+            ' ' | '_' => Cell::Empty,
             '@' => Cell::Block(Block::Any),
             'S' => Cell::Block(Block::Piece(Piece::S)),
             'Z' => Cell::Block(Block::Piece(Piece::Z)),
@@ -2194,93 +2197,17 @@ impl Game {
         if s.falling_piece.is_none() {
             return Err("no falling piece");
         }
-        let fp = s.falling_piece.as_ref().unwrap();
-        let pf = &s.playfield;
-        let lockable = pf.search_lockable_placements(fp.piece);
-        let search_result = self.search_moves(&mut move_search::bruteforce::BruteForceMoveSearcher::default())?;
-        let mut r = HashSet::new();
-        for p in lockable.iter() {
-            if search_result.contains(p) {
-                if fp.piece == Piece::T {
-                    let mut pp = p.clone();
-                    pp.pos.1 += 1;
-                    if search_result.contains(&pp) {
-                        r.insert(MoveTransition::new(*p, Some(MovePathItem::new(Move::Drop(1), pp))));
-                    }
-                    // Append worthy transitions by rotation.
-                    let dst_fp = FallingPiece::new(fp.piece, *p);
-                    for cw in &[true, false] {
-                        for src in pf.check_reverse_rotation(self.rules.rotation_mode, &dst_fp, *cw).iter() {
-                            if let Some(_) = pf.check_tspin(
-                                &FallingPiece::new_with_one_path_item(
-                                    fp.piece, *src, Move::Rotate(if *cw { 1 } else { -1 }), *p),
-                                self.rules.tspin_judgement_mode,
-                            ) {
-                                r.insert(MoveTransition::new(
-                                    *p,
-                                    Some(MovePathItem::new(
-                                        Move::Rotate(if *cw { 1 } else { -1 }),
-                                        *src,
-                                    )),
-                                ));
-                            }
-                        }
-                    }
-                } else {
-                    r.insert(MoveTransition::new(*p, None));
-                }
-            }
-        }
+        let r = helper::get_move_candidates(&s.playfield, s.falling_piece.as_ref().unwrap(), &self.rules);
         Ok(r)
     }
     pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MovePath, &'static str> {
-        use move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
-        use move_search::astar::AStarMoveSearcher;
-
         let fp = if let Some(fp) = self.state.falling_piece.as_ref() {
             fp
         } else {
             return Err("no falling piece");
         };
 
-        enum Searcher {
-            HumanOptimized,
-            AStar,
-        }
-
-        // NOTE: For special rotations, we should also check the original destination.
-        let mut patterns = Vec::new();
-        if let Some(hint) = last_transition.hint {
-            let dst1 = hint.placement;
-            let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
-            if let Move::Rotate(_) = hint.by {
-                patterns.push((dst2, Searcher::HumanOptimized));
-            }
-            patterns.push((dst2, Searcher::AStar));
-            patterns.push((dst1, Searcher::AStar));
-        } else {
-            let dst1 = last_transition.placement;
-            let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
-            patterns.push((dst2, Searcher::HumanOptimized));
-            patterns.push((dst2, Searcher::AStar));
-            patterns.push((dst1, Searcher::AStar));
-        }
-
-        let mut path = None;
-        for (dst, searcher) in patterns.iter() {
-            let r = match *searcher {
-                Searcher::HumanOptimized => self.search_moves(&mut HumanlyOptimizedMoveSearcher::new(*dst, true)),
-                Searcher::AStar => self.search_moves(&mut AStarMoveSearcher::new(*dst, false)),
-            }?;
-            if let Some(mut p) = r.get(dst) {
-                if let Some(hint) = last_transition.hint {
-                    p.merge_or_push(MovePathItem::new(hint.by, last_transition.placement));
-                }
-                path = Some(p);
-                break;
-            }
-        }
-        if let Some(path) = path {
+        if let Some(path) = helper::get_almost_good_move_path(&self.state.playfield, fp, last_transition, self.rules.rotation_mode) {
             Ok(path)
         } else {
             Err("move path not found")

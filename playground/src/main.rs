@@ -1,3 +1,5 @@
+mod tspin;
+
 use std::error::Error;
 
 pub mod move_tmpl {

@@ -5,6 +5,8 @@ pub mod simple;
 pub mod simple_tree;
 pub mod mcts_puct;
 pub mod advanced;
+pub mod multi;
+pub mod tree;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
