@@ -400,6 +400,17 @@ pub trait Grid: Clone + fmt::Display {
         }
         space
     }
+    /// Example:
+    /// ```
+    /// use core::{Grid, BasicGrid};
+    /// let mut grid = BasicGrid::new((5, 3).into());
+    /// grid.set_str_rows((0, 0).into(), &[
+    ///     "@ @ @",
+    ///     "@@ @ ", // -> 2
+    ///     "  @@ ", // -> 3
+    /// ]);
+    /// assert_eq!(5, grid.num_covered_empty_cells());
+    /// ```
     fn num_covered_empty_cells(&self) -> usize {
         let mut n = 0;
         let mut xs = HashSet::new();
@@ -422,6 +433,29 @@ pub trait Grid: Clone + fmt::Display {
             }
         }
         n
+    }
+    /// Example:
+    /// ```
+    /// use core::{Grid, BasicGrid};
+    /// let mut grid = BasicGrid::new((4, 4).into());
+    /// grid.set_str_rows((0, 0).into(), &[
+    ///     "@   ", // ^
+    ///     "@@  ", // | 3
+    ///     "@@ @", // v
+    ///     "@@@@",
+    /// ]);
+    /// assert_eq!(3, grid.difference_of_elevation());
+    /// ```
+    fn difference_of_elevation(&self) -> usize {
+        let mut xs = vec![0 as usize; self.width() as usize];
+        for y in 0..self.height() {
+            for x in 0..self.width() {
+                if !self.get_cell((x, y).into()).is_empty() {
+                    xs[x as usize] = y as usize;
+                }
+            }
+        }
+        xs.iter().max().unwrap() - xs.iter().min().unwrap()
     }
     fn format(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for y in (0..self.height()).rev() {
@@ -957,22 +991,23 @@ impl LineClear {
     pub fn new(num_lines: u8, tspin: Option<TSpin>) -> Self {
         Self { num_lines, tspin }
     }
+    pub fn tetris() -> Self { Self::new(4, None) }
+    pub fn tst() -> Self { Self::new(3, Some(TSpin::Standard)) }
+    pub fn tsd() -> Self { Self::new(2, Some(TSpin::Standard)) }
+    pub fn tss() -> Self { Self::new(1, Some(TSpin::Standard)) }
+    pub fn tsmd() -> Self { Self::new(2, Some(TSpin::Mini)) }
+    pub fn tsms() -> Self { Self::new(1, Some(TSpin::Mini)) }
+    pub fn tsmz() -> Self { Self::new(0, Some(TSpin::Mini)) }
     pub fn is_normal(&self) -> bool { self.tspin.is_none() }
+    pub fn is_tspin(&self) -> bool { self.tspin.map_or(false, |t| t == TSpin::Standard) }
+    pub fn is_tspin_mini(&self) -> bool { self.tspin.map_or(false, |t| t == TSpin::Mini) }
     pub fn is_tetris(&self) -> bool { self.is_normal() && self.num_lines == 4 }
-    pub fn is_tspin(&self) -> bool {
-        if let Some(tspin) = self.tspin {
-            tspin == TSpin::Standard
-        } else {
-            false
-        }
-    }
-    pub fn is_tspin_mini(&self) -> bool {
-        if let Some(tspin) = self.tspin {
-            tspin == TSpin::Mini
-        } else {
-            false
-        }
-    }
+    pub fn is_tst(&self) -> bool { self.is_tspin() && self.num_lines == 3 }
+    pub fn is_tsd(&self) -> bool { self.is_tspin() && self.num_lines == 2 }
+    pub fn is_tss(&self) -> bool { self.is_tspin() && self.num_lines == 1 }
+    pub fn is_tsmd(&self) -> bool { self.is_tspin_mini() && self.num_lines == 2 }
+    pub fn is_tsms(&self) -> bool { self.is_tspin_mini() && self.num_lines == 1 }
+    pub fn is_tsmz(&self) -> bool { self.is_tspin_mini() && self.num_lines == 0 }
 }
 
 impl fmt::Display for LineClear {

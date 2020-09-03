@@ -1,108 +1,45 @@
 use crate::{Bot, Action};
-use core::{Game, BitGrid, MoveTransition, LineClear, Playfield, Piece, FallingPiece, PIECES, GameRules};
+use core::{Game, FallingPiece, Grid};
 use std::error::Error;
-use std::collections::{HashMap, HashSet};
-use core::helper::get_move_candidates;
 use std::cell::RefCell;
-use std::rc::{Weak, Rc};
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
-struct MoveInfo {
-    move_candidates: HashSet<MoveTransition>,
-    line_clear_moves: HashMap<LineClear, MoveTransition>,
-}
-
-impl MoveInfo {
-    fn collect(pf: &Playfield, piece: Piece, rules: &GameRules) -> Self {
-        let move_candidates = get_move_candidates(pf, &FallingPiece::spawn(piece, Some(pf)), rules);
-        let mut line_clear_moves = HashMap::new();
-        for mt in move_candidates.iter() {
-            let line_clear = pf.check_line_clear(
-                &FallingPiece::new_with_last_move_transition(piece, mt),
-                rules.tspin_judgement_mode);
-            if line_clear.num_lines > 0 {
-                line_clear_moves.insert(line_clear, *mt);
-            }
-        }
-        Self {
-            move_candidates,
-            line_clear_moves,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct PlayfieldInfo {
-    moves: Vec<MoveInfo>,
-}
-
-impl PlayfieldInfo {
-    fn collect(pf: &Playfield, rules: &GameRules) -> Self {
-        let moves = PIECES.iter()
-            .map(|piece| MoveInfo::collect(pf, *piece, rules))
-            .collect();
-        Self { moves }
-    }
-    fn get_move_info(&self, piece: Piece) -> &MoveInfo {
-        self.moves.get(piece.to_usize()).unwrap()
-    }
-}
-
-struct PlayfieldMemory {
-    rules: GameRules,
-    memory: HashMap<BitGrid, PlayfieldInfo>,
-}
-
-impl PlayfieldMemory {
-    fn new(rules: GameRules) -> Self {
-        Self {
-            rules,
-            memory: HashMap::new(),
-        }
-    }
-    fn register(&mut self, pf: &Playfield) {
-        if !self.memory.contains_key(&pf.grid.bit_grid) {
-            self.memory.insert(pf.grid.bit_grid.clone(), PlayfieldInfo::collect(pf, &self.rules));
-        }
-    }
-    fn get(&self, bit_grid: &BitGrid) -> Option<&PlayfieldInfo> {
-        self.memory.get(bit_grid)
-    }
-}
-
-struct Node {
-    parent: Option<Weak<RefCell<Node>>>,
-    children: HashMap<Action, Rc<RefCell<Node>>>,
+struct NodeData {
+    by: Option<Action>,
     game: Game,
+    num_covered_empty_cells: usize,
 }
 
-impl Node {
-    fn new(parent: Option<Weak<RefCell<Node>>>, game: Game) -> Self {
+impl NodeData {
+    fn new(by: Option<Action>, game: Game) -> Self {
+        let num_covered_empty_cells = game.state.playfield.grid.num_covered_empty_cells();
         Self {
-            parent,
-            children: HashMap::new(),
+            by,
             game,
+            num_covered_empty_cells,
         }
     }
 }
 
-fn expand(rc_node: Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
-    let mut node = rc_node.borrow_mut();
-    if node.game.state.can_hold {
-        let mut game = node.game.clone();
+type Node = tree::Node<NodeData>;
+
+fn expand(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
+    if node.borrow().data.game.state.can_hold {
+        let mut game = node.borrow().data.game.clone();
         let ok = game.hold()?;
         assert!(ok);
-        let rc_child = Rc::new(RefCell::new(Node::new(Some(Rc::downgrade(&rc_node)), game)));
-        node.children.insert(Action::Hold, rc_child);
+        let data = NodeData::new(Some(Action::Hold), game);
+        tree::append_child(node, data);
     }
-    let move_candidates = node.game.get_move_candidates()?;
+    let move_candidates = node.borrow().data.game.get_move_candidates()?;
     for mt in move_candidates.iter() {
-        let mut game = node.game.clone();
+        let mut game = node.borrow().data.game.clone();
         let piece = game.state.falling_piece.unwrap().piece;
         game.state.falling_piece = Some(FallingPiece::new_with_last_move_transition(piece, mt));
         game.lock()?;
-        let rc_child = Rc::new(RefCell::new(Node::new(Some(Rc::downgrade(&rc_node)), game)));
-        node.children.insert(Action::Move(*mt), rc_child);
+        let data = NodeData::new(Some(Action::Move(*mt)), game);
+        tree::append_child(node, data);
     }
     Ok(())
 }
@@ -112,14 +49,41 @@ pub struct TreeBot {}
 
 impl Bot for TreeBot {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
-        let candidates = game.get_move_candidates()?;
-        if candidates.is_empty() {
-            return Err("no movable placements".into());
+        let root = tree::new(NodeData::new(None, game.clone()));
+        expand(&root)?;
+
+        struct Context {
+            paths: Vec<Vec<usize>>,
+            min_num_covered_empty_cells: usize,
         }
-        let selected = candidates.iter()
-            .min_by(|mt1, mt2| mt1.placement.pos.1.cmp(&mt2.placement.pos.1))
-            .unwrap();
-        Ok(Action::Move(selected.clone()))
+        let mut ctx = Context {
+            paths: vec![],
+            min_num_covered_empty_cells: 1000000,
+        };
+
+        tree::visit(&root, &mut ctx, |node, ctx, state| {
+            if node.is_root() || matches!(node.data.by, Some(Action::Hold)) {
+                return tree::VisitPlan::Children;
+            }
+            if ctx.min_num_covered_empty_cells >= node.data.num_covered_empty_cells {
+                if ctx.min_num_covered_empty_cells > node.data.num_covered_empty_cells {
+                    ctx.paths.clear();
+                }
+                ctx.paths.push(state.path.clone());
+                ctx.min_num_covered_empty_cells = node.data.num_covered_empty_cells;
+            }
+            if node.data.num_covered_empty_cells == 0 {}
+            // println!("{}{:?}", " ".repeat(state.path.len() * 2), node.data.by);
+            tree::VisitPlan::Children
+        });
+
+        if let Some(path) = ctx.paths.get(0) {
+            let action = tree::get(&root, [path[0]].iter()).unwrap().borrow().data.by.unwrap();
+            return Ok(action);
+        }
+
+        let action = root.borrow().children.get(0).unwrap().borrow().data.by.unwrap();
+        Ok(action)
     }
 }
 
@@ -132,7 +96,7 @@ mod tests {
     fn test_simple_bot() {
         let mut bot = TreeBot::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 100, false).unwrap();
+        let game = test_bot(&mut bot, seed, 10, true).unwrap();
         assert!(game.stats.lock > 40);
     }
 }

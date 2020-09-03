@@ -1,4 +1,6 @@
 mod tspin;
+pub mod tree;
+mod memo;
 
 use std::error::Error;
 

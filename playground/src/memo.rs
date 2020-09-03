@@ -311,3 +311,166 @@
 //         // assert!(game.stats.lock > 40);
 //     }
 // }
+
+
+//---
+
+// use core::{MoveTransition, Placement, Piece, Game};
+// use std::error::Error;
+// use crate::Bot;
+//
+// #[derive(Debug, Clone, Copy)]
+// enum PlacementConstraint {
+//     XRange(i8, i8),
+//     NotXRange(i8, i8),
+// }
+//
+// #[derive(Debug, Clone)]
+// enum Action {
+//     MoveTo(Placement),
+//     MoveToAny(Vec<PlacementConstraint>),
+//     Hold,
+// }
+//
+// #[derive(Debug, Clone)]
+// struct ActionDirection {
+//     actions: [Vec<Action>; 7],
+// }
+//
+// impl ActionDirection {
+//     fn new(s: Vec<Action>, z: Vec<Action>, l: Vec<Action>, j: Vec<Action>, i: Vec<Action>, t: Vec<Action>, o: Vec<Action>) -> Self {
+//         Self { actions: [s, z, l, j, i, t, o] }
+//     }
+//     fn get(&self, p: Piece) -> Option<&Vec<Action>> {
+//         self.actions.iter().nth(p.to_usize())
+//     }
+// }
+//
+// struct ActionDirector {
+//     direction: ActionDirection,
+//     cursors: [usize; 7],
+// }
+//
+// impl ActionDirector {
+//     pub fn next(&mut self, piece: Piece) -> Option<Action> {
+//         let idx: usize = self.cursors[piece.to_usize()];
+//         if let Some(actions) = self.direction.get(piece.into()) {
+//             if let Some(action) = actions.get(idx) {
+//                 self.cursor[piece.to_usize()] = idx + 1;
+//                 Some(action.clone())
+//             } else {
+//                 None
+//             }
+//         } else {
+//             None
+//         }
+//     }
+// }
+//
+// // struct Strategy {
+// //     action_direction: ActionDirection,
+// //     //
+// // }
+// //
+// // trait StrategyDetector {
+// //     fn detect(&mut self, game: &Game) -> Result<Vec<Strategy>, Box<dyn Error>>;
+// // }
+// //
+// // fn collect_strategies(game: &Game, detectors: &mut [Box<dyn StrategyDetector>]) -> Vec<Strategy> {
+// //     detectors.iter_mut()
+// //         .map(|d| {
+// //             match d.detect(game) {
+// //                 Ok(r) => r,
+// //                 Err(e) => {
+// //                     println!("WARNING: {}", e);
+// //                     vec![]
+// //                 }
+// //             }
+// //         })
+// //         .flatten()
+// //         .collect::<Vec<_>>()
+// // }
+// //
+// // //---
+// //
+// //
+// //
+// // //---
+// //
+// // struct MultiBot {
+// //     detectors: Vec<Box<dyn StrategyDetector>>,
+// //     director: Option<ActionDirector>,
+// // }
+// //
+// // impl Bot for MultiBot {
+// //     fn think(&mut self, game: &Game) -> Result<crate::Action, Box<dyn Error>> {
+// //         let _strategies = collect_strategies(game, &mut self.detectors);
+// //         panic!("TODO");
+// //     }
+// // }
+
+//---
+
+// #[derive(Debug, Clone)]
+// struct MoveInfo {
+//     move_candidates: HashSet<MoveTransition>,
+//     line_clear_moves: HashMap<LineClear, MoveTransition>,
+// }
+//
+// impl MoveInfo {
+//     fn collect(pf: &Playfield, piece: Piece, rules: &GameRules) -> Self {
+//         let move_candidates = get_move_candidates(pf, &FallingPiece::spawn(piece, Some(pf)), rules);
+//         let mut line_clear_moves = HashMap::new();
+//         for mt in move_candidates.iter() {
+//             let line_clear = pf.check_line_clear(
+//                 &FallingPiece::new_with_last_move_transition(piece, mt),
+//                 rules.tspin_judgement_mode);
+//             if line_clear.num_lines > 0 {
+//                 line_clear_moves.insert(line_clear, *mt);
+//             }
+//         }
+//         Self {
+//             move_candidates,
+//             line_clear_moves,
+//         }
+//     }
+// }
+//
+// #[derive(Debug, Clone)]
+// struct PlayfieldInfo {
+//     moves: Vec<MoveInfo>,
+// }
+//
+// impl PlayfieldInfo {
+//     fn collect(pf: &Playfield, rules: &GameRules) -> Self {
+//         let moves = PIECES.iter()
+//             .map(|piece| MoveInfo::collect(pf, *piece, rules))
+//             .collect();
+//         Self { moves }
+//     }
+//     fn get_move_info(&self, piece: Piece) -> &MoveInfo {
+//         self.moves.get(piece.to_usize()).unwrap()
+//     }
+// }
+//
+// struct PlayfieldMemory {
+//     rules: GameRules,
+//     memory: HashMap<BitGrid, PlayfieldInfo>,
+// }
+//
+// impl PlayfieldMemory {
+//     fn new(rules: GameRules) -> Self {
+//         Self {
+//             rules,
+//             memory: HashMap::new(),
+//         }
+//     }
+//     fn register(&mut self, pf: &Playfield) {
+//         if !self.memory.contains_key(&pf.grid.bit_grid) {
+//             self.memory.insert(pf.grid.bit_grid.clone(), PlayfieldInfo::collect(pf, &self.rules));
+//         }
+//     }
+//     fn get(&self, bit_grid: &BitGrid) -> Option<&PlayfieldInfo> {
+//         self.memory.get(bit_grid)
+//     }
+// }

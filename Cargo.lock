@@ -12,6 +12,7 @@ version = "0.1.0"
 dependencies = [
  "core",
  "rand",
+ "tree",
 ]
 
 [[package]]
@@ -425,6 +426,10 @@ dependencies = [
  "quote",
  "unicode-xid",
 ]
+
+[[package]]
+name = "tree"
+version = "0.1.0"
 
 [[package]]
 name = "unicode-xid"

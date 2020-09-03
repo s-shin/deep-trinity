@@ -6,5 +6,5 @@ members = [
   "ml-core",
   "py-core",
   "playground",
+  "tree",
 ]
-
