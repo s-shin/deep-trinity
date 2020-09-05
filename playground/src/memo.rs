@@ -1,3 +1,28 @@
+// mod util {
+//     use std::cmp::Ordering;
+//
+//     pub struct ScoredValue<Score: Ord, Value: Eq> {
+//         pub score: Score,
+//         pub value: Value,
+//     }
+//
+//     impl<Score: Ord, Value: Eq> Ord for ScoredValue<Score, Value> {
+//         fn cmp(&self, other: &Self) -> Ordering { self.score.cmp(&other.score) }
+//     }
+//
+//     impl<Score: Ord, Value: Eq> PartialOrd for ScoredValue<Score, Value> {
+//         fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.score.cmp(&other.score)) }
+//     }
+//
+//     impl<Score: Ord, Value: Eq> PartialEq for ScoredValue<Score, Value> {
+//         fn eq(&self, other: &Self) -> bool { self.eq(other) }
+//     }
+//
+//     impl<Score: Ord, Value: Eq> Eq for ScoredValue<Score, Value> {}
+// }
+
+//---
+
 // use core::{Game, Placement, Piece, Grid, FallingPiece, MoveTransition, LineClear, TSpinJudgementMode};
 // use crate::{Action, Bot};
 // use std::error::Error;

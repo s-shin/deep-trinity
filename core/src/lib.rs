@@ -439,23 +439,29 @@ pub trait Grid: Clone + fmt::Display {
     /// use core::{Grid, BasicGrid};
     /// let mut grid = BasicGrid::new((4, 4).into());
     /// grid.set_str_rows((0, 0).into(), &[
-    ///     "@   ", // ^
-    ///     "@@  ", // | 3
-    ///     "@@ @", // v
-    ///     "@@@@",
+    ///     "@   ",
+    ///     "@@ @",
+    ///     "@  @",
+    ///     "@@@ ",
     /// ]);
-    /// assert_eq!(3, grid.difference_of_elevation());
+    /// assert_eq!(vec![3, 2, 0, 2], grid.contour());
     /// ```
-    fn difference_of_elevation(&self) -> usize {
-        let mut xs = vec![0 as usize; self.width() as usize];
+    fn contour(&self) -> Vec<UPosY> {
+        let mut xs = vec![0; self.width() as usize];
         for y in 0..self.height() {
+            if self.is_row_empty(y) {
+                continue;
+            }
             for x in 0..self.width() {
                 if !self.get_cell((x, y).into()).is_empty() {
-                    xs[x as usize] = y as usize;
+                    xs[x as usize] = y;
                 }
             }
         }
-        xs.iter().max().unwrap() - xs.iter().min().unwrap()
+        xs
+    }
+    fn density_without_top_padding(&self) -> f32 {
+        self.num_blocks() as f32 / (self.width() * (self.height() - self.top_padding())) as f32
     }
     fn format(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for y in (0..self.height()).rev() {
@@ -706,6 +712,10 @@ impl Grid for BitGrid {
         };
         self.rows[y as usize] = row;
     }
+    fn num_blocks_of_row(&self, y: UPosY) -> usize {
+        // We can expect the optimization by popcnt.
+        self.rows[y as usize].count_ones() as usize
+    }
 }
 
 impl fmt::Display for BitGrid {
@@ -770,6 +780,7 @@ impl Grid for HybridGrid {
         self.basic_grid.set_cell_to_row(y, cell);
         self.bit_grid.set_cell_to_row(y, cell);
     }
+    fn num_blocks_of_row(&self, y: UPosY) -> usize { self.bit_grid.num_blocks_of_row(y) }
 }
 
 impl fmt::Display for HybridGrid {
