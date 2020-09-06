@@ -130,8 +130,8 @@ impl Bot for TreeBot {
         let (_, path) = paths.iter()
             .map(|&path| {
                 let node = tree::get(&root, path.iter()).unwrap();
-                let dencity = node.borrow().data.game.state.playfield.grid.density_without_top_padding();
-                ((dencity * 10000.0) as u32, path)
+                let density = node.borrow().data.game.state.playfield.grid.density_without_top_padding();
+                ((density * 10000.0) as u32, path)
             })
             .max()
             .unwrap();
