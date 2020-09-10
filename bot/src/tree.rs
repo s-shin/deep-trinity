@@ -9,15 +9,17 @@ struct NodeData {
     by: Option<Action>,
     game: Game,
     num_covered_empty_cells: usize,
+    stop: bool,
 }
 
 impl NodeData {
-    fn new(by: Option<Action>, game: Game) -> Self {
+    fn new(by: Option<Action>, game: Game, stop: bool) -> Self {
         let num_covered_empty_cells = game.state.playfield.grid.num_covered_empty_cells();
         Self {
             by,
             game,
             num_covered_empty_cells,
+            stop,
         }
     }
 }
@@ -30,7 +32,7 @@ fn expand_node(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
         game.stats = Default::default();
         let ok = game.hold()?;
         assert!(ok);
-        let data = NodeData::new(Some(Action::Hold), game);
+        let data = NodeData::new(Some(Action::Hold), game, false);
         tree::append_child(node, data);
     }
     let move_candidates = node.borrow().data.game.get_move_candidates()?;
@@ -40,7 +42,7 @@ fn expand_node(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
         let piece = game.state.falling_piece.unwrap().piece;
         game.state.falling_piece = Some(FallingPiece::new_with_last_move_transition(piece, mt));
         game.lock()?;
-        let data = NodeData::new(Some(Action::Move(*mt)), game);
+        let data = NodeData::new(Some(Action::Move(*mt)), game, false);
         tree::append_child(node, data);
     }
     Ok(())
@@ -51,7 +53,9 @@ fn expand_leaves(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
         if !node.borrow().is_leaf() {
             return tree::VisitPlan::Children;
         }
-        expand_node(node).unwrap_or_default();
+        if !node.borrow().data.stop {
+            expand_node(node).unwrap_or_default();
+        }
         tree::VisitPlan::Sibling
     });
     Ok(())
@@ -132,6 +136,17 @@ impl Filter for FilterChain {
 }
 
 //---
+
+fn exclude_stopped<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
+    paths.iter()
+        .filter(|path| {
+            let node = tree::get(root, path.iter()).unwrap();
+            let stop = node.borrow().data.stop;
+            !stop
+        })
+        .copied()
+        .collect::<Vec<_>>()
+}
 
 fn min_covered_empty_cells<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     paths.iter()
@@ -232,11 +247,35 @@ fn exclude_holds<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<
         .collect()
 }
 
+fn exclude_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
+    const TRENCH_HEIGHT: i8 = 3;
+    const MAX_TRENCHES: i8 = 2;
+    paths.iter()
+        .filter(|path| {
+            let node = tree::get(root, path.iter()).unwrap();
+            let hs = node.borrow().data.game.state.playfield.grid.contour();
+            let mut n = 0;
+            for i in 0..hs.len() {
+                let left = if i == 0 { true } else { (hs[i] as i8 - hs[i - 1] as i8).abs() >= TRENCH_HEIGHT };
+                let right = if i == hs.len() - 1 { true } else { (hs[i] as i8 - hs[i + 1] as i8).abs() >= TRENCH_HEIGHT };
+                if left && right {
+                    n += 1;
+                    if n > MAX_TRENCHES {
+                        return false;
+                    }
+                }
+            }
+            true
+        })
+        .copied()
+        .collect()
+}
+
 fn min_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     const TRENCH_HEIGHT: i8 = 3;
     paths.iter()
         .fold((-1, vec![]), |(min, mut paths), &path| {
-            let node = tree::get(&root, path.iter()).unwrap();
+            let node = tree::get(root, path.iter()).unwrap();
             let hs = node.borrow().data.game.state.playfield.grid.contour();
             let mut n = 0;
             for i in 0..hs.len() {
@@ -255,6 +294,27 @@ fn min_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&
                 (min, paths)
             }
         }).1
+}
+
+fn filter_by_contour<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
+    fn calc_stddev(values: &[u8]) -> f32 {
+        let mean = values.iter().fold(0, |memo, v| memo + v) as f32 / values.len() as f32;
+        let mut sum = 0.0;
+        for v in values {
+            sum += (*v as f32 - mean).powf(2.0);
+        }
+        (sum / values.len() as f32).sqrt()
+    }
+
+    paths.iter()
+        .filter(|path| {
+            let node = tree::get(root, path.iter()).unwrap();
+            let hs = node.borrow().data.game.state.playfield.grid.contour();
+            let stddev = calc_stddev(&hs);
+            stddev < 5.0
+        })
+        .copied()
+        .collect::<Vec<_>>()
 }
 
 fn _min_holds<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
@@ -308,12 +368,26 @@ pub struct TreeBot {
 
 impl Bot for TreeBot {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
-        let root = tree::new(NodeData::new(None, game.clone()));
+        let root = tree::new(NodeData::new(None, game.clone(), false));
         let started_at = std::time::SystemTime::now();
         const NUM_EXPANSIONS: usize = 2;
         for _ in 0..NUM_EXPANSIONS {
             expand_leaves(&root)?;
+
+            let mut initial_num = root.borrow().data.num_covered_empty_cells as i32;
+            tree::visit(&root, &mut initial_num, |node, ctx, _| {
+                if !node.borrow().is_leaf() {
+                    return tree::VisitPlan::Children;
+                }
+                let initial_num = *ctx;
+                if node.borrow().data.num_covered_empty_cells as i32 - initial_num >= 3 {
+                    node.borrow_mut().data.stop = true;
+                }
+                tree::VisitPlan::Sibling
+            });
         }
+
+        // stats
         self.expansion_duration = std::time::SystemTime::now().duration_since(started_at)?;
         self.num_expanded = 0;
         tree::visit(&root, &mut self.num_expanded, |_, ctx, _| {
@@ -328,10 +402,14 @@ impl Bot for TreeBot {
         let paths = paths.iter().map(|path| path).collect::<Vec<_>>();
 
         let mut filter_chain = FilterChain::new(vec![
-            to_box_filter(OrFilter::new(to_box_filter_vec(&[tetris, hold_i, exclude_holds]))),
+            to_box_filter(FunctionFilter(exclude_stopped)),
+            // to_box_filter(OrFilter::new(to_box_filter_vec(&[tetris, hold_i, exclude_holds]))),
+            to_box_filter(OrFilter::new(to_box_filter_vec(&[tetris, hold_i]))),
             to_box_filter(SuppressLineClear::new(10)),
-            to_box_filter(FunctionFilter(min_covered_empty_cells)),
+            // to_box_filter(FunctionFilter(filter_by_contour)),
             // to_box_filter(FunctionFilter(min_trenches)),
+            to_box_filter(FunctionFilter(exclude_trenches)),
+            to_box_filter(FunctionFilter(min_covered_empty_cells)),
             // to_box_filter(FunctionFilter(min_height)),
             to_box_filter(FunctionFilter(max_density)),
         ]);
