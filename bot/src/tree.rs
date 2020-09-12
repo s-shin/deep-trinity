@@ -66,6 +66,12 @@ fn expand_leaves(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
 
 //---
 
+// fn evaluate_flatness(game: &Game) {
+//     //
+// }
+
+//---
+
 trait Filter {
     fn filter<'a>(&mut self, root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path>;
 }
