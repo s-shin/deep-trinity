@@ -116,32 +116,32 @@ pub struct VisitState {
     pub path: Path,
 }
 
-pub type Visitor<Data, Context> = fn(node: &Rc<RefCell<Node<Data>>>, ctx: &mut Context, state: &VisitState) -> VisitPlan;
-
-pub fn visit<Context, Data>(node: &Rc<RefCell<Node<Data>>>, ctx: &mut Context, visitor: Visitor<Data, Context>) {
-    fn visit_internal<Data, Context>(node: &Rc<RefCell<Node<Data>>>, ctx: &mut Context, visitor: Visitor<Data, Context>, state: &VisitState) -> VisitPlan {
-        if matches!(visitor(node, ctx, state), VisitPlan::Children) {
+pub fn visit<Data, Visitor>(node: &Rc<RefCell<Node<Data>>>, mut visitor: Visitor)
+    where Visitor: FnMut(&Rc<RefCell<Node<Data>>>, &VisitState) -> VisitPlan {
+    fn visit_internal<Data, Visitor>(node: &Rc<RefCell<Node<Data>>>, visitor: &mut Visitor, state: &VisitState) -> VisitPlan
+        where Visitor: FnMut(&Rc<RefCell<Node<Data>>>, &VisitState) -> VisitPlan {
+        if matches!(visitor(node, state), VisitPlan::Children) {
             let children = node.borrow().children.clone();
             let mut state = state.clone();
             state.path.indices.push(0); // dummy
             for (idx, child) in children.iter().enumerate() {
                 *state.path.indices.last_mut().unwrap() = idx;
-                if matches!(visit_internal(&child.clone(), ctx, visitor, &state), VisitPlan::End) {
+                if matches!(visit_internal(&child.clone(), visitor, &state), VisitPlan::End) {
                     return VisitPlan::End;
                 }
             }
         }
         VisitPlan::Children
     }
-    visit_internal(node, ctx, visitor, &Default::default());
+    visit_internal(node, &mut visitor, &Default::default());
 }
 
 pub fn get_all_paths_to_leaves<Data>(node: &Rc<RefCell<Node<Data>>>) -> Vec<Path> {
     let mut paths = vec![];
-    visit(node, &mut paths, |node, ctx, state| {
+    visit(node, |node, state| {
         let node = node.borrow();
         if node.is_leaf() {
-            ctx.push(state.path.clone());
+            paths.push(state.path.clone());
         }
         VisitPlan::Children
     });
@@ -159,25 +159,21 @@ mod tests {
         append_child(&c1, 111);
         append_child(&root, 120);
 
-        struct Context {
-            path: Path,
-        }
-        let mut ctx = Context { path: Default::default() };
-
-        visit(&root, &mut ctx, |_node, ctx, state| {
-            if ctx.path.len() < state.path.len() {
-                ctx.path = state.path.clone();
+        let mut path: Path = Default::default();
+        visit(&root, |_node, state| {
+            if path.len() < state.path.len() {
+                path = state.path.clone();
             }
             // println!("{}{}", " ".repeat(state.path.len() * 2), node.data);
             VisitPlan::Children
         });
 
-        assert_eq!(vec![0, 0], ctx.path.indices);
+        assert_eq!(vec![0, 0], path.indices);
 
-        let found = get(&root, ctx.path.iter());
+        let found = get(&root, path.iter());
         assert_eq!(Some(111), found.map(|node| node.borrow().data));
 
-        let values = ChildNodeIterator::new(&root, ctx.path.iter())
+        let values = ChildNodeIterator::new(&root, path.iter())
             .map(|node| node.borrow().data)
             .collect::<Vec<_>>();
         assert_eq!(vec![110, 111], values);

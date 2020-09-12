@@ -49,7 +49,7 @@ fn expand_node(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
 }
 
 fn expand_leaves(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
-    tree::visit(node, &mut (), |node, _, _| {
+    tree::visit(node, |node, _| {
         if !node.borrow().is_leaf() {
             return tree::VisitPlan::Children;
         }
@@ -370,28 +370,35 @@ impl Bot for TreeBot {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
         let root = tree::new(NodeData::new(None, game.clone(), false));
         let started_at = std::time::SystemTime::now();
-        const NUM_EXPANSIONS: usize = 2;
+        const NUM_EXPANSIONS: usize = 3;
         for _ in 0..NUM_EXPANSIONS {
             expand_leaves(&root)?;
 
             let mut initial_num = root.borrow().data.num_covered_empty_cells as i32;
-            tree::visit(&root, &mut initial_num, |node, ctx, _| {
+            tree::visit(&root, |node, _| {
                 if !node.borrow().is_leaf() {
                     return tree::VisitPlan::Children;
                 }
-                let initial_num = *ctx;
                 if node.borrow().data.num_covered_empty_cells as i32 - initial_num >= 3 {
                     node.borrow_mut().data.stop = true;
                 }
                 tree::VisitPlan::Sibling
             });
         }
+        // tree::visit(&root, |node, _| {
+        //     if !node.borrow().is_leaf() {
+        //         return tree::VisitPlan::Children;
+        //     }
+        //     println!("{}", node.borrow().data.game);
+        //     tree::VisitPlan::Sibling
+        // });
+        // assert!(false);
 
         // stats
         self.expansion_duration = std::time::SystemTime::now().duration_since(started_at)?;
         self.num_expanded = 0;
-        tree::visit(&root, &mut self.num_expanded, |_, ctx, _| {
-            *ctx += 1;
+        tree::visit(&root, |_, _| {
+            self.num_expanded += 1;
             tree::VisitPlan::Children
         });
         if self.num_expanded > 0 {
@@ -408,7 +415,7 @@ impl Bot for TreeBot {
             to_box_filter(SuppressLineClear::new(10)),
             // to_box_filter(FunctionFilter(filter_by_contour)),
             // to_box_filter(FunctionFilter(min_trenches)),
-            to_box_filter(FunctionFilter(exclude_trenches)),
+            // to_box_filter(FunctionFilter(exclude_trenches)),
             to_box_filter(FunctionFilter(min_covered_empty_cells)),
             // to_box_filter(FunctionFilter(min_height)),
             to_box_filter(FunctionFilter(max_density)),
