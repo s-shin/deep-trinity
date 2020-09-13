@@ -1,5 +1,6 @@
 use crate::{Bot, Action};
-use core::{Game, FallingPiece, Grid, Piece, LineClear};
+use core::{Game, FallingPiece, Piece, LineClear};
+use core::grid::Grid;
 use std::error::Error;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -206,11 +207,11 @@ fn tetris<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tre
 }
 
 struct SuppressLineClear {
-    height: core::SizeY,
+    height: core::grid::Y,
 }
 
 impl SuppressLineClear {
-    fn new(height: core::SizeY) -> Self {
+    fn new(height: core::grid::Y) -> Self {
         Self { height }
     }
 }
@@ -303,7 +304,7 @@ fn min_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&
 }
 
 fn filter_by_contour<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
-    fn calc_stddev(values: &[u8]) -> f32 {
+    fn calc_stddev(values: &[i8]) -> f32 {
         let mean = values.iter().fold(0, |memo, v| memo + v) as f32 / values.len() as f32;
         let mut sum = 0.0;
         for v in values {
@@ -376,7 +377,7 @@ impl Bot for TreeBot {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
         let root = tree::new(NodeData::new(None, game.clone(), false));
         let started_at = std::time::SystemTime::now();
-        const NUM_EXPANSIONS: usize = 3;
+        const NUM_EXPANSIONS: usize = 2;
         for _ in 0..NUM_EXPANSIONS {
             expand_leaves(&root)?;
 
@@ -441,10 +442,10 @@ mod tests {
     use crate::test_bot;
 
     #[test]
-    fn test_simple_bot() {
+    fn test_tree_bot() {
         let mut bot = TreeBot::default();
         let seed = 0;
-        let _game = test_bot(&mut bot, seed, 40, true).unwrap();
+        let _game = test_bot(&mut bot, seed, 5, false).unwrap();
         // assert!(game.stats.lock > 40);
     }
 }

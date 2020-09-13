@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use core::Grid;
+use core::grid::{Grid, CellTrait};
 
 #[cfg(feature = "async_session")]
 pub mod async_session;
@@ -173,7 +173,7 @@ impl GameSession {
             state.playfield.grid.width() as usize * state.playfield.grid.height() as usize * (4 + state.next_pieces.visible_num));
         for y in 0..state.playfield.grid.height() {
             for x in 0..state.playfield.grid.width() {
-                r.push(if state.playfield.grid.has_cell(core::upos!(x, y)) { 1.0 } else { 0.0 });
+                r.push(if state.playfield.grid.cell((x, y).into()).is_empty() { 0.0 } else { 1.0 });
                 r.push(if state.can_hold { 1.0 } else { 0.0 });
                 r.push(if let Some(p) = state.hold_piece { (p as i32 as f32 + 1.0) / 8.0 } else { 0.0 });
                 r.push((fp.piece as i32 as f32) / 7.0);

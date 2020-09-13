@@ -1,5 +1,6 @@
 use super::Bot;
-use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, Grid, MoveTransition};
+use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, MoveTransition};
+use core::grid::Grid;
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 use std::collections::HashMap;

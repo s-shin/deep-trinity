@@ -73,7 +73,7 @@ impl MoveSearcher for BruteForceMoveSearcher {
 
 #[cfg(test)]
 mod test {
-    use crate::{Game, Piece, Placement, RotationMode, MovePlayer, upos, pos, ORIENTATION_1};
+    use crate::{Game, Piece, Placement, RotationMode, MovePlayer, ORIENTATION_1};
     use super::*;
 
     #[test]
@@ -82,7 +82,7 @@ mod test {
         game.supply_next_pieces(&[Piece::I]);
         game.setup_falling_piece(None).unwrap();
         let pf = &mut game.state.playfield;
-        pf.set_str_rows(upos!(0, 0), &[
+        pf.set_rows_with_strs((0, 0).into(), &[
             " @@@@@@@@@",
             " @@@@@@@@@",
             " @@@@@@@@@",
@@ -93,7 +93,7 @@ mod test {
         ]);
         let fp = game.state.falling_piece.as_ref().unwrap();
         let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
-        let dst = Placement::new(ORIENTATION_1, pos!(-2, 0));
+        let dst = Placement::new(ORIENTATION_1, (-2, 0).into());
         let r = search_moves(&conf, false);
         let path = r.get(&dst);
         assert!(path.is_some());

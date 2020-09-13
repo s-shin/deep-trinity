@@ -27,21 +27,26 @@ impl cmp::Ord for Vec2 {
     }
 }
 
-pub trait Cell: Copy + Clone + From<char> {
+impl fmt::Display for Vec2 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
+    }
+}
+
+pub trait CellTrait: Copy + Clone + From<char> {
     fn empty() -> Self;
     fn is_empty(&self) -> bool;
     fn char(&self) -> char;
 }
 
-pub trait Grid<C: Cell>: Clone {
+pub trait Grid<C: CellTrait>: Clone {
     fn width(&self) -> X;
     fn height(&self) -> Y;
-    fn cell(&self, pos: Vec2) -> Option<&C>;
-    fn cell_mut(&mut self, pos: Vec2) -> Option<&mut C>;
+    fn cell(&self, pos: Vec2) -> C;
+    /// NOTE: `cell` may be transformed to another corresponding to internal data structure.
+    /// This is the reason why the interface of mutating a cell isn't `cell_mut`.
+    fn set_cell(&mut self, pos: Vec2, cell: C);
     fn size(&self) -> Vec2 { Vec2(self.width(), self.height()) }
-    fn has_cell(&self, pos: Vec2) -> bool { self.cell(pos).is_some() }
-    fn has_empty_cell(&self, pos: Vec2) -> bool { self.cell(pos).map_or(false, |c| c.is_empty()) }
-    fn has_non_empty_cell(&self, pos: Vec2) -> bool { self.cell(pos).map_or(false, |c| !c.is_empty()) }
     fn is_empty(&self) -> bool { self.bottom_padding() == self.height() }
     fn is_inside(&self, pos: Vec2) -> bool {
         0 <= pos.0 && pos.0 < self.width() && 0 <= pos.1 && pos.1 < self.height()
@@ -52,7 +57,7 @@ pub trait Grid<C: Cell>: Clone {
         for sub_y in 0..sub.height() {
             for sub_x in 0..sub.width() {
                 let sub_pos = (sub_x, sub_y).into();
-                let sub_cell = sub.cell(sub_pos).unwrap();
+                let sub_cell = sub.cell(sub_pos);
                 if sub_cell.is_empty() {
                     continue;
                 }
@@ -61,11 +66,11 @@ pub trait Grid<C: Cell>: Clone {
                     dirty = true;
                     continue;
                 }
-                let cell = self.cell_mut(p).unwrap();
+                let cell = self.cell(p);
                 if !cell.is_empty() {
                     dirty = true;
                 }
-                *cell = *sub_cell;
+                self.set_cell(p, sub_cell);
             }
         }
         !dirty
@@ -74,14 +79,14 @@ pub trait Grid<C: Cell>: Clone {
         for sub_y in 0..sub.height() {
             for sub_x in 0..sub.width() {
                 let sub_pos = (sub_x, sub_y).into();
-                if !sub.has_non_empty_cell(sub_pos) {
+                if sub.cell(sub_pos).is_empty() {
                     continue;
                 }
                 let p = pos + sub_pos;
                 if !self.is_inside(p) {
                     return false;
                 }
-                if self.has_non_empty_cell(p) {
+                if !self.cell(p).is_empty() {
                     return false;
                 }
             }
@@ -91,12 +96,12 @@ pub trait Grid<C: Cell>: Clone {
     fn fill_row(&mut self, y: Y, cell: C) {
         debug_assert!(0 <= y && y < self.height());
         for x in 0..self.width() {
-            *self.cell_mut((x, y).into()).unwrap() = cell;
+            self.set_cell((x, y).into(), cell);
         }
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, SampleGrid};
+    /// use core::grid::{Grid, CellTrait, SampleGrid};
     ///
     /// let mut grid = SampleGrid::new((3, 3).into());
     /// grid.set_rows_with_strs((1, 1).into(), &[
@@ -104,9 +109,9 @@ pub trait Grid<C: Cell>: Clone {
     ///     "@",
     /// ]);
     ///
-    /// assert!(grid.has_non_empty_cell((1, 1).into()));
-    /// assert!(grid.has_non_empty_cell((1, 2).into()));
-    /// assert!(grid.has_non_empty_cell((2, 2).into()));
+    /// assert!(!grid.cell((1, 1).into()).is_empty());
+    /// assert!(!grid.cell((1, 2).into()).is_empty());
+    /// assert!(!grid.cell((2, 2).into()).is_empty());
     /// ```
     fn set_rows_with_strs(&mut self, pos: Vec2, rows: &[&str]) {
         for (dy, row) in rows.iter().rev().enumerate() {
@@ -119,7 +124,7 @@ pub trait Grid<C: Cell>: Clone {
                 if x < 0 || x >= self.width() {
                     break;
                 }
-                *self.cell_mut((x, y).into()).unwrap() = c.into();
+                self.set_cell((x, y).into(), c.into());
             }
         }
     }
@@ -136,7 +141,7 @@ pub trait Grid<C: Cell>: Clone {
     fn is_row_filled(&self, y: Y) -> bool {
         debug_assert!(0 <= y && y < self.height());
         for x in 0..self.width() {
-            if !self.has_non_empty_cell((x, y).into()) {
+            if !self.cell((x, y).into()).is_empty() {
                 return false;
             }
         }
@@ -145,7 +150,7 @@ pub trait Grid<C: Cell>: Clone {
     fn is_row_empty(&self, y: Y) -> bool {
         debug_assert!(0 <= y && y < self.height());
         for x in 0..self.width() {
-            if self.has_non_empty_cell((x, y).into()) {
+            if !self.cell((x, y).into()).is_empty() {
                 return false;
             }
         }
@@ -154,7 +159,7 @@ pub trait Grid<C: Cell>: Clone {
     fn is_col_filled(&self, x: X) -> bool {
         debug_assert!(0 <= x && x < self.width());
         for y in 0..self.height() {
-            if !self.has_non_empty_cell((x, y).into()) {
+            if self.cell((x, y).into()).is_empty() {
                 return false;
             }
         }
@@ -163,7 +168,7 @@ pub trait Grid<C: Cell>: Clone {
     fn is_col_empty(&self, x: X) -> bool {
         debug_assert!(0 <= x && x < self.width());
         for y in 0..self.height() {
-            if self.has_non_empty_cell((x, y).into()) {
+            if !self.cell((x, y).into()).is_empty() {
                 return false;
             }
         }
@@ -216,10 +221,10 @@ pub trait Grid<C: Cell>: Clone {
             return;
         }
         for x in 0..self.width() {
-            let c1 = *self.cell((x, y1).into()).unwrap();
-            let c2 = *self.cell((x, y2).into()).unwrap();
-            *self.cell_mut((x, y1).into()).unwrap() = c2;
-            *self.cell_mut((x, y2).into()).unwrap() = c1;
+            let c1 = self.cell((x, y1).into());
+            let c2 = self.cell((x, y2).into());
+            self.set_cell((x, y1).into(), c2);
+            self.set_cell((x, y2).into(), c1);
         }
     }
     fn num_filled_rows(&self) -> Y {
@@ -277,7 +282,7 @@ pub trait Grid<C: Cell>: Clone {
         }
         let mut n = 0;
         for x in 0..self.width() {
-            if !self.cell((x, y).into()).unwrap().is_empty() {
+            if !self.cell((x, y).into()).is_empty() {
                 n += 1;
             }
         }
@@ -303,7 +308,7 @@ pub trait Grid<C: Cell>: Clone {
             let ok = unchecked.remove(&p);
             debug_assert!(ok);
             checked.insert(p);
-            if self.cell(p).unwrap().is_empty() {
+            if self.cell(p).is_empty() {
                 space.insert(p);
             } else {
                 continue;
@@ -361,7 +366,7 @@ pub trait Grid<C: Cell>: Clone {
                 n += xs.len();
             } else {
                 for x in 0..self.width() {
-                    if self.cell((x, y).into()).unwrap().is_empty() {
+                    if self.cell((x, y).into()).is_empty() {
                         if xs.contains(&x) {
                             n += 1;
                         }
@@ -392,7 +397,7 @@ pub trait Grid<C: Cell>: Clone {
                 continue;
             }
             for x in 0..self.width() {
-                if !self.cell((x, y).into()).unwrap().is_empty() {
+                if !self.cell((x, y).into()).is_empty() {
                     xs[x as usize] = y;
                 }
             }
@@ -408,7 +413,7 @@ pub trait Grid<C: Cell>: Clone {
     fn format(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for y in (0..self.height()).rev() {
             for x in 0..self.width() {
-                let c = self.cell((x, y).into()).unwrap().char();
+                let c = self.cell((x, y).into()).char();
                 write!(f, "{}", c)?;
             }
             if y == 0 {
@@ -420,7 +425,9 @@ pub trait Grid<C: Cell>: Clone {
     }
 }
 
-//---
+//--------------------------------------------------------------------------------------------------
+// Sample Implementations
+//--------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Copy, Clone)]
 pub enum SampleCell {
@@ -428,7 +435,7 @@ pub enum SampleCell {
     Block,
 }
 
-impl Cell for SampleCell {
+impl CellTrait for SampleCell {
     fn empty() -> Self { Self::Empty }
     fn is_empty(&self) -> bool { matches!(self, Self::Empty) }
     fn char(&self) -> char {
@@ -469,12 +476,12 @@ impl SampleGrid {
 impl Grid<SampleCell> for SampleGrid {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
-    fn cell(&self, pos: Vec2) -> Option<&SampleCell> {
-        self.cells.get(self.cell_index(pos))
+    fn cell(&self, pos: Vec2) -> SampleCell {
+        *self.cells.get(self.cell_index(pos)).unwrap()
     }
-    fn cell_mut(&mut self, pos: Vec2) -> Option<&mut SampleCell> {
+    fn set_cell(&mut self, pos: Vec2, cell: SampleCell) {
         let idx = self.cell_index(pos);
-        self.cells.get_mut(idx)
+        *self.cells.get_mut(idx).unwrap() = cell;
     }
 }
 
@@ -482,8 +489,6 @@ impl Grid<SampleCell> for SampleGrid {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test() {
         //
