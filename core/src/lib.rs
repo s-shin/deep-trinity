@@ -12,6 +12,7 @@ use rand::seq::SliceRandom;
 
 pub mod move_search;
 pub mod helper;
+pub mod grid;
 
 //---
 
