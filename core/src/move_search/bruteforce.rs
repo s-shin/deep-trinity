@@ -82,7 +82,7 @@ mod test {
         game.supply_next_pieces(&[Piece::I]);
         game.setup_falling_piece(None).unwrap();
         let pf = &mut game.state.playfield;
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             " @@@@@@@@@",
             " @@@@@@@@@",
             " @@@@@@@@@",

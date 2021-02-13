@@ -11,6 +11,7 @@ use std::ops;
 use rand::seq::SliceRandom;
 
 pub mod move_search;
+pub mod helper;
 
 //---
 
@@ -267,6 +268,21 @@ pub trait Grid: Clone + fmt::Display {
             self.set_cell(upos!(x, y), cell);
         }
     }
+    fn set_str_rows(&mut self, pos: UPos, rows: &[&str]) {
+        for (dy, row) in rows.iter().rev().enumerate() {
+            let y = pos.1 + dy as UPosY;
+            if y >= self.height() {
+                return;
+            }
+            for (dx, c) in row.chars().enumerate() {
+                let x = pos.0 + dx as UPosX;
+                if x >= self.width() {
+                    break;
+                }
+                self.set_cell(upos!(x, y), c.into());
+            }
+        }
+    }
     fn num_filled_rows(&self) -> SizeY {
         let mut n = 0;
         for y in 0..self.height() {
@@ -384,6 +400,17 @@ pub trait Grid: Clone + fmt::Display {
         }
         space
     }
+    /// Example:
+    /// ```
+    /// use core::{Grid, BasicGrid};
+    /// let mut grid = BasicGrid::new((5, 3).into());
+    /// grid.set_str_rows((0, 0).into(), &[
+    ///     "@ @ @",
+    ///     "@@ @ ", // -> 2
+    ///     "  @@ ", // -> 3
+    /// ]);
+    /// assert_eq!(5, grid.num_covered_empty_cells());
+    /// ```
     fn num_covered_empty_cells(&self) -> usize {
         let mut n = 0;
         let mut xs = HashSet::new();
@@ -406,6 +433,35 @@ pub trait Grid: Clone + fmt::Display {
             }
         }
         n
+    }
+    /// Example:
+    /// ```
+    /// use core::{Grid, BasicGrid};
+    /// let mut grid = BasicGrid::new((4, 4).into());
+    /// grid.set_str_rows((0, 0).into(), &[
+    ///     "@   ",
+    ///     "@@ @",
+    ///     "@  @",
+    ///     "@@@ ",
+    /// ]);
+    /// assert_eq!(vec![3, 2, 0, 2], grid.contour());
+    /// ```
+    fn contour(&self) -> Vec<UPosY> {
+        let mut xs = vec![0; self.width() as usize];
+        for y in 0..self.height() {
+            if self.is_row_empty(y) {
+                continue;
+            }
+            for x in 0..self.width() {
+                if !self.get_cell((x, y).into()).is_empty() {
+                    xs[x as usize] = y;
+                }
+            }
+        }
+        xs
+    }
+    fn density_without_top_padding(&self) -> f32 {
+        self.num_blocks() as f32 / (self.width() * (self.height() - self.top_padding())) as f32
     }
     fn format(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for y in (0..self.height()).rev() {
@@ -477,15 +533,17 @@ type BitGridRow = u16;
 #[derive(Clone, Debug, Eq)]
 pub struct BitGrid {
     size: Size,
-    // cells: 0000000000
-    // pos x: 9876543210
+    /// The x-axis is the LSB to MSB direction.
+    /// ```ignore
+    /// | T  I| -> 10010 (17)
+    /// ```
     pub rows: Vec<BitGridRow>,
     row_mask: BitGridRow,
 }
 
 impl BitGrid {
     pub fn new(size: Size) -> Self {
-        debug_assert!(size.0 as usize <= std::mem::size_of::<BitGridRow>() * 8);
+        assert!(size.0 as usize <= std::mem::size_of::<BitGridRow>() * 8);
         Self {
             size,
             rows: vec![0; size.1 as usize],
@@ -654,6 +712,10 @@ impl Grid for BitGrid {
         };
         self.rows[y as usize] = row;
     }
+    fn num_blocks_of_row(&self, y: UPosY) -> usize {
+        // We can expect the optimization by popcnt.
+        self.rows[y as usize].count_ones() as usize
+    }
 }
 
 impl fmt::Display for BitGrid {
@@ -718,6 +780,7 @@ impl Grid for HybridGrid {
         self.basic_grid.set_cell_to_row(y, cell);
         self.bit_grid.set_cell_to_row(y, cell);
     }
+    fn num_blocks_of_row(&self, y: UPosY) -> usize { self.bit_grid.num_blocks_of_row(y) }
 }
 
 impl fmt::Display for HybridGrid {
@@ -760,6 +823,8 @@ impl Orientation {
         Self(n as u8)
     }
     pub fn id(self) -> u8 { self.0 % 4 }
+    pub fn is_even(self) -> bool { self.0 % 2 == 0 }
+    pub fn is_odd(self) -> bool { self.0 % 2 == 1 }
 }
 
 //---
@@ -937,22 +1002,23 @@ impl LineClear {
     pub fn new(num_lines: u8, tspin: Option<TSpin>) -> Self {
         Self { num_lines, tspin }
     }
+    pub fn tetris() -> Self { Self::new(4, None) }
+    pub fn tst() -> Self { Self::new(3, Some(TSpin::Standard)) }
+    pub fn tsd() -> Self { Self::new(2, Some(TSpin::Standard)) }
+    pub fn tss() -> Self { Self::new(1, Some(TSpin::Standard)) }
+    pub fn tsmd() -> Self { Self::new(2, Some(TSpin::Mini)) }
+    pub fn tsms() -> Self { Self::new(1, Some(TSpin::Mini)) }
+    pub fn tsmz() -> Self { Self::new(0, Some(TSpin::Mini)) }
     pub fn is_normal(&self) -> bool { self.tspin.is_none() }
+    pub fn is_tspin(&self) -> bool { self.tspin.map_or(false, |t| t == TSpin::Standard) }
+    pub fn is_tspin_mini(&self) -> bool { self.tspin.map_or(false, |t| t == TSpin::Mini) }
     pub fn is_tetris(&self) -> bool { self.is_normal() && self.num_lines == 4 }
-    pub fn is_tspin(&self) -> bool {
-        if let Some(tspin) = self.tspin {
-            tspin == TSpin::Standard
-        } else {
-            false
-        }
-    }
-    pub fn is_tspin_mini(&self) -> bool {
-        if let Some(tspin) = self.tspin {
-            tspin == TSpin::Mini
-        } else {
-            false
-        }
-    }
+    pub fn is_tst(&self) -> bool { self.is_tspin() && self.num_lines == 3 }
+    pub fn is_tsd(&self) -> bool { self.is_tspin() && self.num_lines == 2 }
+    pub fn is_tss(&self) -> bool { self.is_tspin() && self.num_lines == 1 }
+    pub fn is_tsmd(&self) -> bool { self.is_tspin_mini() && self.num_lines == 2 }
+    pub fn is_tsms(&self) -> bool { self.is_tspin_mini() && self.num_lines == 1 }
+    pub fn is_tsmz(&self) -> bool { self.is_tspin_mini() && self.num_lines == 0 }
 }
 
 impl fmt::Display for LineClear {
@@ -1051,12 +1117,28 @@ pub enum Piece {
     O,
 }
 
-const PIECES: [Piece; 7] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
+pub const NUM_PIECES: usize = 7;
+
+pub const PIECES: [Piece; NUM_PIECES] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
 
 impl From<usize> for Piece {
     fn from(n: usize) -> Self {
         assert!(n < 7);
         PIECES[n]
+    }
+}
+
+impl Piece {
+    pub fn to_usize(&self) -> usize {
+        match self {
+            Piece::S => 0,
+            Piece::Z => 1,
+            Piece::L => 2,
+            Piece::J => 3,
+            Piece::I => 4,
+            Piece::T => 5,
+            Piece::O => 6,
+        }
     }
 }
 
@@ -1114,7 +1196,7 @@ impl From<Cell> for CellTypeId {
 impl From<char> for Cell {
     fn from(c: char) -> Self {
         match c.to_ascii_uppercase() {
-            ' ' => Cell::Empty,
+            ' ' | '_' => Cell::Empty,
             '@' => Cell::Block(Block::Any),
             'S' => Cell::Block(Block::Piece(Piece::S)),
             'Z' => Cell::Block(Block::Piece(Piece::Z)),
@@ -1159,10 +1241,10 @@ fn srs_offset_data_others() -> Vec<Vec<(PosX, PosY)>> {
 
 pub struct PieceSpec {
     /// The index of Vec is orientation.
-    grids: Vec<HybridGrid>,
-    initial_placement: Placement,
+    pub grids: Vec<HybridGrid>,
+    pub initial_placement: Placement,
     /// The index of outer Vec is orientation.
-    srs_offset_data: Vec<Vec<(PosX, PosY)>>,
+    pub srs_offset_data: Vec<Vec<(PosX, PosY)>>,
 }
 
 impl PieceSpec {
@@ -1195,6 +1277,13 @@ impl PieceSpec {
         }
     }
 
+    /// ```ignore
+    /// +---+
+    /// | SS|
+    /// |SS |
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_s() -> Self {
         Self::new(
             Piece::S,
@@ -1204,6 +1293,13 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// |ZZ |
+    /// | ZZ|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_z() -> Self {
         Self::new(
             Piece::Z,
@@ -1213,6 +1309,13 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// |  L|
+    /// |LLL|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_l() -> Self {
         Self::new(
             Piece::L,
@@ -1222,6 +1325,13 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// |J  |
+    /// |JJJ|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_j() -> Self {
         Self::new(
             Piece::J,
@@ -1231,6 +1341,15 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +-----+
+    /// |     |
+    /// |     |
+    /// | IIII|
+    /// |     |
+    /// |     |
+    /// +-----+
+    /// ```
     fn piece_i() -> Self {
         Self::new(
             Piece::I,
@@ -1240,6 +1359,13 @@ impl PieceSpec {
             srs_offset_data_i(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// | T |
+    /// |TTT|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_t() -> Self {
         Self::new(
             Piece::T,
@@ -1249,6 +1375,13 @@ impl PieceSpec {
             srs_offset_data_others(),
         )
     }
+    /// ```ignore
+    /// +---+
+    /// | OO|
+    /// | OO|
+    /// |   |
+    /// +---+
+    /// ```
     fn piece_o() -> Self {
         Self::new(
             Piece::O,
@@ -1466,20 +1599,8 @@ impl Playfield {
     pub fn width(&self) -> SizeX { self.grid.width() }
     pub fn height(&self) -> SizeX { self.grid.height() }
     pub fn is_empty(&self) -> bool { self.grid.is_empty() }
-    pub fn set_rows(&mut self, pos: UPos, rows: &[&'static str]) {
-        for (dy, row) in rows.iter().rev().enumerate() {
-            let y = pos.1 + dy as UPosY;
-            if y >= self.grid.height() {
-                return;
-            }
-            for (dx, c) in row.chars().enumerate() {
-                let x = pos.0 + dx as UPosX;
-                if x >= self.grid.width() {
-                    break;
-                }
-                self.grid.set_cell(upos!(x, y), c.into());
-            }
-        }
+    pub fn set_str_rows(&mut self, pos: UPos, rows: &[&str]) {
+        self.grid.set_str_rows(pos, rows);
     }
     // If garbage out, `true` will be returned.
     pub fn append_garbage(&mut self, gap_x_list: &[UPosX]) -> bool {
@@ -1652,6 +1773,10 @@ impl Playfield {
     }
     // The return placements can include unreachable placements.
     pub fn search_lockable_placements(&self, piece: Piece) -> Vec<Placement> {
+        let max_padding = match piece {
+            Piece::I => 2,
+            _ => 1,
+        };
         let yend = (self.grid.height() - self.grid.top_padding()) as PosY;
         let spec = PieceSpec::of(piece);
         let sub_bit_grids = [
@@ -1661,8 +1786,8 @@ impl Playfield {
             &spec.grids[ORIENTATION_3.id() as usize].bit_grid,
         ];
         let mut r: Vec<Placement> = Vec::new();
-        for y in -1..yend {
-            for x in -2..(self.grid.width() as PosX - 1) {
+        for y in -max_padding..=yend {
+            for x in -max_padding..=(self.grid.width() as PosX - max_padding) {
                 for o in &ORIENTATIONS {
                     let g = sub_bit_grids[o.id() as usize];
                     let can_put = self.grid.bit_grid.can_put_fast((x, y).into(), g);
@@ -1923,11 +2048,11 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(rules: GameRules) -> Self {
+    pub fn new(rules: GameRules, state: GameState, stats: Statistics) -> Self {
         Self {
             rules,
-            state: Default::default(),
-            stats: Default::default(),
+            state,
+            stats,
         }
     }
     pub fn get_cell(&self, pos: UPos) -> Cell {
@@ -2118,93 +2243,17 @@ impl Game {
         if s.falling_piece.is_none() {
             return Err("no falling piece");
         }
-        let fp = s.falling_piece.as_ref().unwrap();
-        let pf = &s.playfield;
-        let lockable = pf.search_lockable_placements(fp.piece);
-        let search_result = self.search_moves(&mut move_search::bruteforce::BruteForceMoveSearcher::default())?;
-        let mut r = HashSet::new();
-        for p in lockable.iter() {
-            if search_result.contains(p) {
-                if fp.piece == Piece::T {
-                    let mut pp = p.clone();
-                    pp.pos.1 += 1;
-                    if search_result.contains(&pp) {
-                        r.insert(MoveTransition::new(*p, Some(MovePathItem::new(Move::Drop(1), pp))));
-                    }
-                    // Append worthy transitions by rotation.
-                    let dst_fp = FallingPiece::new(fp.piece, *p);
-                    for cw in &[true, false] {
-                        for src in pf.check_reverse_rotation(self.rules.rotation_mode, &dst_fp, *cw).iter() {
-                            if let Some(_) = pf.check_tspin(
-                                &FallingPiece::new_with_one_path_item(
-                                    fp.piece, *src, Move::Rotate(if *cw { 1 } else { -1 }), *p),
-                                self.rules.tspin_judgement_mode,
-                            ) {
-                                r.insert(MoveTransition::new(
-                                    *p,
-                                    Some(MovePathItem::new(
-                                        Move::Rotate(if *cw { 1 } else { -1 }),
-                                        *src,
-                                    )),
-                                ));
-                            }
-                        }
-                    }
-                } else {
-                    r.insert(MoveTransition::new(*p, None));
-                }
-            }
-        }
+        let r = helper::get_move_candidates(&s.playfield, s.falling_piece.as_ref().unwrap(), &self.rules);
         Ok(r)
     }
     pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MovePath, &'static str> {
-        use move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
-        use move_search::astar::AStarMoveSearcher;
-
         let fp = if let Some(fp) = self.state.falling_piece.as_ref() {
             fp
         } else {
             return Err("no falling piece");
         };
 
-        enum Searcher {
-            HumanOptimized,
-            AStar,
-        }
-
-        // NOTE: For special rotations, we should also check the original destination.
-        let mut patterns = Vec::new();
-        if let Some(hint) = last_transition.hint {
-            let dst1 = hint.placement;
-            let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
-            if let Move::Rotate(_) = hint.by {
-                patterns.push((dst2, Searcher::HumanOptimized));
-            }
-            patterns.push((dst2, Searcher::AStar));
-            patterns.push((dst1, Searcher::AStar));
-        } else {
-            let dst1 = last_transition.placement;
-            let dst2 = get_nearest_placement_alias(fp.piece, &dst1, &fp.placement, None);
-            patterns.push((dst2, Searcher::HumanOptimized));
-            patterns.push((dst2, Searcher::AStar));
-            patterns.push((dst1, Searcher::AStar));
-        }
-
-        let mut path = None;
-        for (dst, searcher) in patterns.iter() {
-            let r = match *searcher {
-                Searcher::HumanOptimized => self.search_moves(&mut HumanlyOptimizedMoveSearcher::new(*dst, true)),
-                Searcher::AStar => self.search_moves(&mut AStarMoveSearcher::new(*dst, false)),
-            }?;
-            if let Some(mut p) = r.get(dst) {
-                if let Some(hint) = last_transition.hint {
-                    p.merge_or_push(MovePathItem::new(hint.by, last_transition.placement));
-                }
-                path = Some(p);
-                break;
-            }
-        }
-        if let Some(path) = path {
+        if let Some(path) = helper::get_almost_good_move_path(&self.state.playfield, fp, last_transition, self.rules.rotation_mode) {
             Ok(path)
         } else {
             Err("move path not found")
@@ -2412,7 +2461,7 @@ mod tests {
     #[test]
     fn test_reverse_rotation_by_srs() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             "  @@@@@@@@",
             "   @@@@@@@",
             "@ @@@@@@@@",
@@ -2432,7 +2481,7 @@ mod tests {
     #[test]
     fn test_tspin_mini() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             " @@@@@@@@@",
         ]);
         let mut fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_0, pos!(0, 0)));
@@ -2445,7 +2494,7 @@ mod tests {
     #[test]
     fn test_tspin_neo() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             "       @@@",
             "         @",
             "        @@",
@@ -2462,7 +2511,7 @@ mod tests {
     #[test]
     fn test_tspin_fin() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             "       @@@",
             "         @",
             "         @",
@@ -2479,7 +2528,7 @@ mod tests {
     #[test]
     fn test_lockable() {
         let mut pf = Playfield::default();
-        pf.set_rows(upos!(0, 0), &[
+        pf.set_str_rows(upos!(0, 0), &[
             " @@@@@@@@ ",
             " @@@@@@@@ ",
             " @@@@@@@@ ",
@@ -2496,7 +2545,7 @@ mod tests {
         game.supply_next_pieces(&[Piece::T]);
         assert_ok!(game.setup_falling_piece(None));
         let pf = &mut game.state.playfield;
-        pf.set_rows((0, 0).into(), &[
+        pf.set_str_rows((0, 0).into(), &[
             "          ",
             "          ",
             "@@        ",
@@ -2545,8 +2594,8 @@ mod tests {
         game.supply_next_pieces(&[Piece::I]);
         assert_ok!(game.setup_falling_piece(None));
         let pf = &mut game.state.playfield;
-        pf.set_rows((0, 19).into(), &["       @  "]);
-        pf.set_rows((0, 0).into(), &[" @@@@@@@@ "].repeat(19));
+        pf.set_str_rows((0, 19).into(), &["       @  "]);
+        pf.set_str_rows((0, 0).into(), &[" @@@@@@@@ "].repeat(19));
         let all = game.get_move_candidates();
         assert!(all.is_ok());
         let all = all.unwrap();

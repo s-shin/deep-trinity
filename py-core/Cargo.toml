@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 [dependencies]
 core = { path = "../core" }
 ml-core = { path = "../ml-core" }
-pyo3 = "0.10"
+pyo3 = "0.11"
 rand = "0.7"
 
 [features]

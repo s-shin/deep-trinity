@@ -1,10 +1,14 @@
 [package]
-name = "bot"
+name = "playground"
 version = "0.1.0"
 authors = ["Shintaro Seki <s2pch.luck@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 core = { path = "../core" }
-tree = { path = "../tree" }
+bot = { path = "../bot" }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8"
 rand = "0.7"
+termion = "1.5"
+anyhow = "1.0"

@@ -163,7 +163,7 @@ impl Game {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            game: core::Game::new(Default::default()),
+            game: Default::default(),
         }
     }
     pub fn width(&self) -> core::SizeX { self.game.state.playfield.width() }
