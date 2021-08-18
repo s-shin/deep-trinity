@@ -1,6 +1,7 @@
 pub mod move_search;
 pub mod helper;
 pub mod grid;
+pub mod bitgrid;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
@@ -112,6 +113,7 @@ impl From<char> for Cell {
 
 impl CellTrait for Cell {
     fn empty() -> Self { Self::Empty }
+    fn any_block() -> Self { Self::Block(Block::Any) }
     fn is_empty(&self) -> bool { *self == Self::Empty }
     fn char(&self) -> char {
         let id = CellTypeId::from(*self);
@@ -1136,8 +1138,7 @@ impl Playfield {
     }
     // If garbage out, `true` will be returned.
     pub fn append_garbage(&mut self, gap_x_list: &[X]) -> bool {
-        let ok = self.grid.insert_cell_to_rows(0, Cell::Block(Block::Garbage),
-                                               gap_x_list.len() as Y, true);
+        let ok = self.grid.insert_rows_of_cell(0, Cell::Block(Block::Garbage), gap_x_list.len() as Y);
         for (y, x) in gap_x_list.iter().enumerate() {
             self.grid.set_cell((*x, y as Y).into(), Cell::Empty);
         }

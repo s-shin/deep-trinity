@@ -49,7 +49,6 @@ pub fn search_moves(conf: &SearchConfiguration, debug: bool) -> SearchResult {
         }
         debug_println!("=> checked.");
     }
-    ;
 
     search(conf, &FallingPiece::new(conf.piece, conf.src), 0, &mut found, debug);
 

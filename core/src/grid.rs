@@ -35,7 +35,9 @@ impl fmt::Display for Vec2 {
 
 pub trait CellTrait: Copy + Clone + From<char> {
     fn empty() -> Self;
+    fn any_block() -> Self;
     fn is_empty(&self) -> bool;
+    fn is_block(&self) -> bool { !self.is_empty() }
     fn char(&self) -> char;
 }
 
@@ -141,7 +143,7 @@ pub trait Grid<C: CellTrait>: Clone {
     fn is_row_filled(&self, y: Y) -> bool {
         debug_assert!(0 <= y && y < self.height());
         for x in 0..self.width() {
-            if !self.cell((x, y).into()).is_empty() {
+            if self.cell((x, y).into()).is_empty() {
                 return false;
             }
         }
@@ -249,14 +251,11 @@ pub trait Grid<C: CellTrait>: Clone {
         n
     }
     /// `false` will be returned if any non-empty cells are disposed.
-    fn insert_cell_to_rows(&mut self, y: Y, cell: C, n: Y, force: bool) -> bool {
+    fn insert_rows_of_cell(&mut self, y: Y, cell: C, n: Y) -> bool {
         debug_assert!(self.height() >= y + n);
         let mut are_cells_disposed = false;
         for y in (self.height() - n)..self.height() {
             if !self.is_row_empty(y) {
-                if !force {
-                    return false;
-                }
                 are_cells_disposed = true;
             }
             self.fill_row(y, cell);
@@ -426,17 +425,18 @@ pub trait Grid<C: CellTrait>: Clone {
 }
 
 //--------------------------------------------------------------------------------------------------
-// Sample Implementations
+// BitCell
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Copy, Clone)]
-pub enum SampleCell {
+pub enum BitCell {
     Empty,
     Block,
 }
 
-impl CellTrait for SampleCell {
+impl CellTrait for BitCell {
     fn empty() -> Self { Self::Empty }
+    fn any_block() -> Self { Self::Block }
     fn is_empty(&self) -> bool { matches!(self, Self::Empty) }
     fn char(&self) -> char {
         match self {
@@ -446,7 +446,7 @@ impl CellTrait for SampleCell {
     }
 }
 
-impl From<char> for SampleCell {
+impl From<char> for BitCell {
     fn from(c: char) -> Self {
         match c {
             '@' => Self::Block,
@@ -455,17 +455,21 @@ impl From<char> for SampleCell {
     }
 }
 
+//--------------------------------------------------------------------------------------------------
+// SampleGrid
+//--------------------------------------------------------------------------------------------------
+
 #[derive(Clone)]
 pub struct SampleGrid {
     size: Vec2,
-    cells: Vec<SampleCell>,
+    cells: Vec<BitCell>,
 }
 
 impl SampleGrid {
     pub fn new(size: Vec2) -> Self {
         Self {
             size,
-            cells: vec![SampleCell::empty(); (size.0 * size.1) as usize],
+            cells: vec![BitCell::empty(); (size.0 * size.1) as usize],
         }
     }
     fn cell_index(&self, pos: Vec2) -> usize {
@@ -473,15 +477,49 @@ impl SampleGrid {
     }
 }
 
-impl Grid<SampleCell> for SampleGrid {
+impl Grid<BitCell> for SampleGrid {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
-    fn cell(&self, pos: Vec2) -> SampleCell {
+    fn cell(&self, pos: Vec2) -> BitCell {
+        debug_assert!(self.is_inside(pos));
         *self.cells.get(self.cell_index(pos)).unwrap()
     }
-    fn set_cell(&mut self, pos: Vec2, cell: SampleCell) {
+    fn set_cell(&mut self, pos: Vec2, cell: BitCell) {
         let idx = self.cell_index(pos);
         *self.cells.get_mut(idx).unwrap() = cell;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+// TestHelper
+//--------------------------------------------------------------------------------------------------
+
+pub struct TestHelper<G: Grid<BitCell>> {
+    new_empty_grid: fn() -> G,
+}
+
+impl<G: Grid<BitCell>> TestHelper<G> {
+    pub fn new(new_empty_grid: fn() -> G) -> Self {
+        let g = new_empty_grid();
+        assert!(g.is_empty());
+        assert!(g.size() >= (3, 3).into());
+        Self { new_empty_grid }
+    }
+    fn new_empty_grid(&self) -> G { (self.new_empty_grid)() }
+    pub fn basic(&self) {
+        let mut g = self.new_empty_grid();
+        assert!(g.is_empty());
+        g.set_cell((1, 1).into(), BitCell::Block);
+        assert!(g.cell((1, 1).into()).is_block());
+        assert_eq!(1, g.num_blocks());
+        assert!(!g.is_row_empty(1));
+        assert!(!g.is_row_filled(1));
+        g.fill_row(1, BitCell::Block);
+        assert_eq!(g.width() as usize, g.num_blocks());
+        assert_eq!(g.width() as usize, g.num_blocks_of_row(1));
+        assert!(g.is_row_filled(1));
+        g.fill_row(1, BitCell::Empty);
+        assert!(g.is_empty());
     }
 }
 
@@ -489,8 +527,11 @@ impl Grid<SampleCell> for SampleGrid {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn test() {
-        //
+    fn basic() {
+        let helper = TestHelper::new(|| SampleGrid::new((3, 3).into()));
+        helper.basic();
     }
 }
