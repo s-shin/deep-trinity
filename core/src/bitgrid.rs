@@ -293,31 +293,45 @@ impl<Int: PrimInt> Grid<BinaryCell> for PrimBitGrid<Int> {
 
 //---
 
-// #[derive(Clone)]
-// struct BitGrid<Int: PrimInt> {
-//     size: Vec2,
-//     prim_grids: Vec<PrimBitGrid<Int>>,
-// }
-//
-// impl<Int: PrimInt> BitGrid<Int> {
-//     pub fn new(size: Vec2) -> Self {
-//         //
-//     }
-//     pub fn prim_grid_height(&self) -> Y { self.prim_grids[0].height() }
-// }
-//
-// impl<Int: PrimInt> Grid<BinaryCell> for BitGrid<Int> {
-//     fn width(&self) -> X { self.size.0 }
-//     fn height(&self) -> Y { self.size.1 }
-//
-//     fn cell(&self, pos: Vec2) -> BinaryCell {
-//         todo!()
-//     }
-//
-//     fn set_cell(&mut self, pos: Vec2, cell: BinaryCell) {
-//         todo!()
-//     }
-// }
+#[derive(Clone)]
+struct BitGrid<Int: PrimInt> {
+    size: Vec2,
+    prim_grids: Vec<PrimBitGrid<Int>>,
+}
+
+impl<Int: PrimInt> BitGrid<Int> {
+    pub fn new(size: Vec2) -> Self {
+        let constants = Rc::new(Box::new(PrimBitGridConstants::new(size.0, None)));
+        let edge_grid_height = size.1 % constants.height;
+        let edge_grid_constants = if edge_grid_height == constants.height {
+            constants.clone()
+        } else {
+            Rc::new(Box::new(PrimBitGridConstants::new(size.0, Some(edge_grid_height))))
+        };
+        let num_prim_grids = size.1 / constants.height;
+        let mut prim_grids = Vec::with_capacity(num_prim_grids as usize + 1);
+        for _ in 0..num_prim_grids {
+            prim_grids.push(PrimBitGrid::from_constants(constants.clone()));
+        }
+        prim_grids.push(PrimBitGrid::from_constants(edge_grid_constants));
+        Self { size, prim_grids }
+    }
+    fn prim_grid_index(&self, y: Y) -> usize {
+        debug_assert!(0 <= y && y < self.height());
+        (y / self.prim_grids[0].height()) as usize
+    }
+}
+
+impl<Int: PrimInt> Grid<BinaryCell> for BitGrid<Int> {
+    fn width(&self) -> X { self.size.0 }
+    fn height(&self) -> Y { self.size.1 }
+    fn cell(&self, pos: Vec2) -> BinaryCell {
+        todo!()
+    }
+    fn set_cell(&mut self, pos: Vec2, cell: BinaryCell) {
+        todo!()
+    }
+}
 
 //---
 
@@ -331,6 +345,9 @@ mod tests {
     fn test_prim_bit_grid_constants() {
         let c = PrimBitGridConstants::<u32>::new(10, None);
 
+        assert_eq!(32, c.num_bits);
+        assert_eq!(10, c.width);
+        assert_eq!(3, c.max_height);
         assert_eq!(3, c.height);
 
         assert_eq!(&[
