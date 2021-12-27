@@ -1858,6 +1858,8 @@ impl fmt::Display for Game {
 
 //---
 
+// TODO: Rename since "Player" is a confusing word.
+// Also can this be implemented as Iterator?
 #[derive(Clone, Debug)]
 pub struct MovePlayer {
     path: MovePath,

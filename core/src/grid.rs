@@ -45,6 +45,7 @@ pub trait CellTrait: Copy + Clone + From<char> {
 pub trait Grid<C: CellTrait>: Clone {
     fn width(&self) -> X;
     fn height(&self) -> Y;
+    // TODO: Ideally, return with err.
     fn cell(&self, pos: Vec2) -> C;
     /// NOTE: `cell` may be transformed to another corresponding to internal data structure.
     /// This is the reason why the interface of mutating a cell isn't `cell_mut`.
