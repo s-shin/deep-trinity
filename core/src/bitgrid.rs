@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::rc::Rc;
 use num_traits::PrimInt;
 use crate::grid::{Grid, BinaryCell, CellTrait, Vec2, X, Y};
@@ -36,7 +37,7 @@ impl<Int: PrimInt> PrimBitGridConstants<Int> {
             (0..width).map(|x| m << x as usize).collect::<Vec<_>>()
         };
         let cells_mask = {
-            let num_unused_bits = (num_bits % width as u32) as usize;
+            let num_unused_bits = (num_bits - (width * height) as u32) as usize;
             ((!Int::zero()) << num_unused_bits) >> num_unused_bits
         };
         let lhs_cols_masks = {
@@ -144,22 +145,23 @@ impl<Int: PrimInt> PrimBitGridConstants<Int> {
 }
 
 #[derive(Clone)]
-pub struct PrimBitGrid<Int: PrimInt> {
+pub struct PrimBitGrid<Int: PrimInt, C: CellTrait = BinaryCell> {
     constants: Rc<Box<PrimBitGridConstants<Int>>>,
     cells: Int,
+    phantom: PhantomData<fn() -> C>,
 }
 
-impl<Int: PrimInt> PrimBitGrid<Int> {
+impl<Int: PrimInt, C: CellTrait> PrimBitGrid<Int, C> {
     pub fn new(width: X, height: Option<Y>) -> Self {
         Self::from_constants(Rc::new(Box::new(PrimBitGridConstants::new(width, height))))
     }
     pub fn from_constants(constants: Rc<Box<PrimBitGridConstants<Int>>>) -> Self {
-        Self { constants, cells: Int::zero() }
+        Self { constants, cells: Int::zero(), phantom: PhantomData }
     }
     pub fn constants(&self) -> Rc<Box<PrimBitGridConstants<Int>>> { self.constants.clone() }
     fn bit_index(&self, pos: Vec2) -> u32 { (self.width() * pos.1 + pos.0) as u32 }
     fn cell_mask(&self, pos: Vec2) -> Int { Int::one() << self.bit_index(pos) as usize }
-    fn put_same_width(&mut self, pos: Vec2, sub: &PrimBitGrid<Int>) {
+    fn put_same_width(&mut self, pos: Vec2, sub: &PrimBitGrid<Int, C>) {
         debug_assert_eq!(self.width(), sub.width());
         let Vec2(x, y) = pos;
         let sub_cells = if x == 0 {
@@ -178,7 +180,7 @@ impl<Int: PrimInt> PrimBitGrid<Int> {
                 sub_cells.unsigned_shr((self.width() * -y) as u32)
             };
     }
-    fn can_put_same_width(&self, pos: Vec2, sub: &PrimBitGrid<Int>) -> bool {
+    fn can_put_same_width(&self, pos: Vec2, sub: &PrimBitGrid<Int, C>) -> bool {
         debug_assert_eq!(self.width(), sub.width());
         let Vec2(x, y) = pos;
         let sub_cells = if x == 0 {
@@ -208,34 +210,51 @@ impl<Int: PrimInt> PrimBitGrid<Int> {
             sub_cells.unsigned_shr((self.width() * -y) as u32)
         } == Int::zero()
     }
-    pub fn put_fast(&mut self, pos: Vec2, sub: &PrimBitGrid<Int>) {
+    pub fn put_fast(&mut self, pos: Vec2, sub: &PrimBitGrid<Int, C>) {
         if self.width() == sub.width() {
             return self.put_same_width(pos, sub);
         }
         todo!()
     }
-    pub fn can_put_fast(&self, pos: Vec2, sub: &PrimBitGrid<Int>) -> bool {
+    pub fn can_put_fast(&self, pos: Vec2, sub: &PrimBitGrid<Int, C>) -> bool {
         if self.width() == sub.width() {
             return self.can_put_same_width(pos, sub);
         }
         todo!()
     }
-    pub fn num_droppable_rows_fast(&self, _pos: Vec2, _sub: &PrimBitGrid<Int>) -> Y {
+    pub fn num_droppable_rows_fast(&self, _pos: Vec2, _sub: &PrimBitGrid<Int, C>) -> Y {
         todo!()
+    }
+    pub fn swap_row_with_same_width(&mut self, y: Y, other: &mut PrimBitGrid<Int, C>, other_y: Y) {
+        debug_assert_eq!(self.width(), other.width());
+        let mask = self.constants.row_mask(y);
+        let row = self.cells & mask;
+        let other_mask = other.constants.row_mask(other_y);
+        let other_row = other.cells & other_mask;
+        self.cells = (self.cells & !mask) | if y == other_y {
+            other_row
+        } else if y > other_y {
+            other_row << (y - other_y) as usize
+        } else {
+            other_row.unsigned_shr((other_y - y) as u32)
+        };
+        other.cells = (other.cells & !other_mask) | if y == other_y {
+            row
+        } else if other_y > y {
+            row << (other_y - y) as usize
+        } else {
+            row.unsigned_shr((y - other_y) as u32)
+        };
     }
 }
 
-impl<Int: PrimInt> Grid<BinaryCell> for PrimBitGrid<Int> {
+impl<Int: PrimInt, C: CellTrait> Grid<C> for PrimBitGrid<Int, C> {
     fn width(&self) -> X { self.constants.width }
     fn height(&self) -> Y { self.constants.height }
-    fn cell(&self, pos: Vec2) -> BinaryCell {
-        if self.cells & self.cell_mask(pos) == Int::zero() {
-            BinaryCell::Empty
-        } else {
-            BinaryCell::Block
-        }
+    fn cell(&self, pos: Vec2) -> C {
+        if self.cells & self.cell_mask(pos) == Int::zero() { C::empty() } else { C::any_block() }
     }
-    fn set_cell(&mut self, pos: Vec2, cell: BinaryCell) {
+    fn set_cell(&mut self, pos: Vec2, cell: C) {
         let m = self.cell_mask(pos);
         if cell.is_empty() {
             self.cells = self.cells & !m;
@@ -243,13 +262,16 @@ impl<Int: PrimInt> Grid<BinaryCell> for PrimBitGrid<Int> {
             self.cells = self.cells | m;
         }
     }
-    fn fill_row(&mut self, y: Y, cell: BinaryCell) {
+    fn fill_row(&mut self, y: Y, cell: C) {
         let m = self.constants.row_mask(y);
         if cell.is_empty() {
             self.cells = self.cells & !m;
         } else {
             self.cells = self.cells | m;
         }
+    }
+    fn fill_all(&mut self, cell: C) {
+        self.cells = if cell.is_empty() { Int::zero() } else { self.constants.cells_mask };
     }
     fn is_row_filled(&self, y: Y) -> bool {
         let m = self.constants.row_mask(y);
@@ -294,12 +316,12 @@ impl<Int: PrimInt> Grid<BinaryCell> for PrimBitGrid<Int> {
 //---
 
 #[derive(Clone)]
-struct BitGrid<Int: PrimInt> {
+pub struct BitGrid<Int: PrimInt, C: CellTrait = BinaryCell> {
     size: Vec2,
-    prim_grids: Vec<PrimBitGrid<Int>>,
+    prim_grids: Vec<PrimBitGrid<Int, C>>,
 }
 
-impl<Int: PrimInt> BitGrid<Int> {
+impl<Int: PrimInt, C: CellTrait> BitGrid<Int, C> {
     pub fn new(size: Vec2) -> Self {
         let constants = Rc::new(Box::new(PrimBitGridConstants::new(size.0, None)));
         let edge_grid_height = size.1 % constants.height;
@@ -316,20 +338,85 @@ impl<Int: PrimInt> BitGrid<Int> {
         prim_grids.push(PrimBitGrid::from_constants(edge_grid_constants));
         Self { size, prim_grids }
     }
-    fn prim_grid_index(&self, y: Y) -> usize {
-        debug_assert!(0 <= y && y < self.height());
-        (y / self.prim_grids[0].height()) as usize
+    pub fn prim_grid_index(&self, y: Y) -> (usize, Y) {
+        let h = self.prim_grids.first().unwrap().height();
+        ((y / h) as usize, y % h)
     }
 }
 
-impl<Int: PrimInt> Grid<BinaryCell> for BitGrid<Int> {
+impl<Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<Int, C> {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
-    fn cell(&self, pos: Vec2) -> BinaryCell {
-        todo!()
+    fn cell(&self, pos: Vec2) -> C {
+        let (i, y) = self.prim_grid_index(pos.1);
+        self.prim_grids.get(i).unwrap().cell((pos.0, y).into())
     }
-    fn set_cell(&mut self, pos: Vec2, cell: BinaryCell) {
-        todo!()
+    fn set_cell(&mut self, pos: Vec2, cell: C) {
+        let (i, y) = self.prim_grid_index(pos.1);
+        self.prim_grids.get_mut(i).unwrap().set_cell((pos.0, y).into(), cell);
+    }
+    fn fill_row(&mut self, y: Y, cell: C) {
+        let (i, y) = self.prim_grid_index(y);
+        self.prim_grids.get_mut(i).unwrap().fill_row(y, cell);
+    }
+    fn fill_all(&mut self, cell: C) {
+        for g in self.prim_grids.iter_mut() {
+            g.fill_all(cell);
+        }
+    }
+    fn is_row_filled(&self, y: Y) -> bool {
+        let (i, y) = self.prim_grid_index(y);
+        self.prim_grids.get(i).unwrap().is_row_filled(y)
+    }
+    fn is_row_empty(&self, y: Y) -> bool {
+        let (i, y) = self.prim_grid_index(y);
+        self.prim_grids.get(i).unwrap().is_row_empty(y)
+    }
+    fn is_col_filled(&self, x: X) -> bool {
+        for g in self.prim_grids.iter() {
+            if !g.is_col_filled(x) {
+                return false;
+            }
+        }
+        true
+    }
+    fn is_col_empty(&self, x: X) -> bool {
+        for g in self.prim_grids.iter() {
+            if !g.is_col_empty(x) {
+                return false;
+            }
+        }
+        true
+    }
+    fn swap_rows(&mut self, mut y1: Y, mut y2: Y) {
+        if y1 == y2 {
+            return;
+        }
+        if y1 > y2 {
+            std::mem::swap(&mut y1, &mut y2);
+        }
+        let (i1, y1) = self.prim_grid_index(y1);
+        let (i2, y2) = self.prim_grid_index(y2);
+        if i1 == i2 {
+            self.prim_grids.get_mut(i1).unwrap().swap_rows(y1, y2);
+        } else {
+            debug_assert!(i1 < i2);
+            let (left, right) = self.prim_grids.split_at_mut(i1 + 1);
+            let g1 = left.get_mut(0).unwrap();
+            let g2 = right.get_mut(i2 - i1 - 1).unwrap();
+            g1.swap_row_with_same_width(y1, g2, y2);
+        }
+    }
+    fn num_blocks_of_row(&self, y: Y) -> usize {
+        let (i, y) = self.prim_grid_index(y);
+        self.prim_grids.get(i).unwrap().num_blocks_of_row(y)
+    }
+    fn num_blocks(&self) -> usize {
+        let mut n = 0;
+        for g in self.prim_grids.iter() {
+            n += g.num_blocks();
+        }
+        n
     }
 }
 
@@ -338,8 +425,7 @@ impl<Int: PrimInt> Grid<BinaryCell> for BitGrid<Int> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CellTrait, Grid};
-    use crate::grid::TestHelper;
+    use crate::grid::{CellTrait, Grid, TestHelper};
 
     #[test]
     fn test_prim_bit_grid_constants() {
@@ -455,5 +541,11 @@ mod tests {
         assert!(!g1.can_put_fast((0, -2).into(), &g2));
         g1.put_fast((-1, -1).into(), &g2);
         assert!(!g1.can_put_fast((-1, -1).into(), &g2));
+    }
+
+    #[test]
+    fn test_bit_grid_basic() {
+        let helper = TestHelper::new(|| BitGrid::<u32>::new((10, 10).into()));
+        helper.basic();
     }
 }

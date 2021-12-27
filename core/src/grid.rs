@@ -1,5 +1,6 @@
 use std::{fmt, ops, cmp};
 use std::collections::HashSet;
+use std::marker::PhantomData;
 
 pub type X = i8;
 pub type Y = i8;
@@ -101,6 +102,11 @@ pub trait Grid<C: CellTrait>: Clone {
         debug_assert!(0 <= y && y < self.height());
         for x in 0..self.width() {
             self.set_cell((x, y).into(), cell);
+        }
+    }
+    fn fill_all(&mut self, cell: C) {
+        for y in 0..self.height() {
+            self.fill_row(y, cell);
         }
     }
     /// Example:
@@ -468,16 +474,16 @@ impl From<char> for BinaryCell {
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Clone)]
-pub struct SimpleGrid {
+pub struct SimpleGrid<C> {
     size: Vec2,
-    cells: Vec<BinaryCell>,
+    cells: Vec<C>,
 }
 
-impl SimpleGrid {
+impl<C: CellTrait> SimpleGrid<C> {
     pub fn new(size: Vec2) -> Self {
         Self {
             size,
-            cells: vec![BinaryCell::empty(); (size.0 * size.1) as usize],
+            cells: vec![C::empty(); (size.0 * size.1) as usize],
         }
     }
     fn cell_index(&self, pos: Vec2) -> usize {
@@ -485,14 +491,14 @@ impl SimpleGrid {
     }
 }
 
-impl Grid<BinaryCell> for SimpleGrid {
+impl<C: CellTrait> Grid<C> for SimpleGrid<C> {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
-    fn cell(&self, pos: Vec2) -> BinaryCell {
+    fn cell(&self, pos: Vec2) -> C {
         debug_assert!(self.is_inside(pos));
         *self.cells.get(self.cell_index(pos)).unwrap()
     }
-    fn set_cell(&mut self, pos: Vec2, cell: BinaryCell) {
+    fn set_cell(&mut self, pos: Vec2, cell: C) {
         let idx = self.cell_index(pos);
         *self.cells.get_mut(idx).unwrap() = cell;
     }
@@ -502,31 +508,46 @@ impl Grid<BinaryCell> for SimpleGrid {
 // TestHelper
 //--------------------------------------------------------------------------------------------------
 
-pub struct TestHelper<G: Grid<BinaryCell>, F: Fn() -> G> {
+pub struct TestHelper<C: CellTrait, G: Grid<C>, F: Fn() -> G> {
     new_empty_grid: F,
+    phantom: PhantomData<fn() -> C>,
 }
 
-impl<G: Grid<BinaryCell>, F: Fn() -> G> TestHelper<G, F> {
+impl<C: CellTrait, G: Grid<C>, F: Fn() -> G> TestHelper<C, G, F> {
     pub fn new(new_empty_grid: F) -> Self {
         let g = new_empty_grid();
         assert!(g.is_empty());
-        assert!(g.size() >= (3, 3).into());
-        Self { new_empty_grid }
+        assert!(g.size() >= (5, 5).into());
+        Self { new_empty_grid, phantom: PhantomData }
     }
     fn new_empty_grid(&self) -> G { (self.new_empty_grid)() }
     pub fn basic(&self) {
         let mut g = self.new_empty_grid();
         assert!(g.is_empty());
-        g.set_cell((1, 1).into(), BinaryCell::Block);
+
+        g.set_cell((1, 1).into(), C::any_block());
         assert!(g.cell((1, 1).into()).is_block());
         assert_eq!(1, g.num_blocks());
         assert!(!g.is_row_empty(1));
         assert!(!g.is_row_filled(1));
-        g.fill_row(1, BinaryCell::Block);
-        assert_eq!(g.width() as usize, g.num_blocks());
+
+        g.fill_row(4, C::any_block());
+        assert_eq!(g.width() as usize + 1, g.num_blocks());
+        assert_eq!(g.width() as usize, g.num_blocks_of_row(4));
+        assert!(g.is_row_filled(4));
+
+        g.swap_rows(1, 4);
         assert_eq!(g.width() as usize, g.num_blocks_of_row(1));
-        assert!(g.is_row_filled(1));
-        g.fill_row(1, BinaryCell::Empty);
+        assert_eq!(1, g.num_blocks_of_row(4));
+
+        g.drop_filled_rows();
+        assert_eq!(1, g.num_blocks());
+        assert_eq!(1, g.num_blocks_of_row(3));
+
+        g.fill_all(C::any_block());
+        assert_eq!((g.width() * g.height()) as usize, g.num_blocks());
+
+        g.fill_all(C::empty());
         assert!(g.is_empty());
     }
 }
@@ -539,7 +560,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        let helper = TestHelper::new(|| SimpleGrid::new((3, 3).into()));
+        let helper = TestHelper::new(|| SimpleGrid::<BinaryCell>::new((5, 5).into()));
         helper.basic();
     }
 }
