@@ -54,6 +54,7 @@ pub trait Grid<C: CellTrait>: Clone {
         0 <= pos.0 && pos.0 < self.width() && 0 <= pos.1 && pos.1 < self.height()
     }
     /// If the all non-empty cells in the `sub` grid were put on this grid, `true` is returned.
+    /// TODO: Make no return value.
     fn put<G: Grid<C>>(&mut self, pos: Vec2, sub: &G) -> bool {
         let mut dirty = false;
         for sub_y in 0..sub.height() {
@@ -77,6 +78,7 @@ pub trait Grid<C: CellTrait>: Clone {
         }
         !dirty
     }
+    /// If the cells in the sub grid were put outside of this, returns false.
     fn can_put<G: Grid<C>>(&self, pos: Vec2, sub: &G) -> bool {
         for sub_y in 0..sub.height() {
             for sub_x in 0..sub.width() {
@@ -103,17 +105,17 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, CellTrait, SampleGrid};
+    /// use core::grid::{Grid, CellTrait, SimpleGrid};
     ///
-    /// let mut grid = SampleGrid::new((3, 3).into());
+    /// let mut grid = SimpleGrid::new((3, 3).into());
     /// grid.set_rows_with_strs((1, 1).into(), &[
     ///     "@@",
     ///     "@",
     /// ]);
     ///
-    /// assert!(!grid.cell((1, 1).into()).is_empty());
-    /// assert!(!grid.cell((1, 2).into()).is_empty());
-    /// assert!(!grid.cell((2, 2).into()).is_empty());
+    /// assert!(grid.cell((1, 1).into()).is_block());
+    /// assert!(grid.cell((1, 2).into()).is_block());
+    /// assert!(grid.cell((2, 2).into()).is_block());
     /// ```
     fn set_rows_with_strs(&mut self, pos: Vec2, rows: &[&str]) {
         for (dy, row) in rows.iter().rev().enumerate() {
@@ -251,6 +253,7 @@ pub trait Grid<C: CellTrait>: Clone {
         n
     }
     /// `false` will be returned if any non-empty cells are disposed.
+    /// TODO: rename to insert_rows
     fn insert_rows_of_cell(&mut self, y: Y, cell: C, n: Y) -> bool {
         debug_assert!(self.height() >= y + n);
         let mut are_cells_disposed = false;
@@ -345,8 +348,8 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, SampleGrid};
-    /// let mut grid = SampleGrid::new((5, 3).into());
+    /// use core::grid::{Grid, SimpleGrid};
+    /// let mut grid = SimpleGrid::new((5, 3).into());
     /// grid.set_rows_with_strs((0, 0).into(), &[
     ///     "@ @ @",
     ///     "@@ @ ", // -> 2
@@ -379,8 +382,8 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, SampleGrid};
-    /// let mut grid = SampleGrid::new((4, 4).into());
+    /// use core::grid::{Grid, SimpleGrid};
+    /// let mut grid = SimpleGrid::new((4, 4).into());
     /// grid.set_rows_with_strs((0, 0).into(), &[
     ///     "@   ",
     ///     "@@ @",
@@ -409,32 +412,37 @@ pub trait Grid<C: CellTrait>: Clone {
     fn density_without_top_padding(&self) -> f32 {
         self.num_blocks() as f32 / (self.width() * (self.height() - self.top_padding())) as f32
     }
-    fn format(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn format<Writer: std::fmt::Write>(&self, w: &mut Writer) -> fmt::Result {
         for y in (0..self.height()).rev() {
             for x in 0..self.width() {
                 let c = self.cell((x, y).into()).char();
-                write!(f, "{}", c)?;
+                write!(w, "{}", c)?;
             }
             if y == 0 {
                 break;
             }
-            write!(f, "\n")?;
+            write!(w, "\n")?;
         }
         Ok(())
+    }
+    fn to_string(&self) -> String {
+        let mut s = String::new();
+        self.format(&mut s).unwrap();
+        s
     }
 }
 
 //--------------------------------------------------------------------------------------------------
-// BitCell
+// BinaryCell
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Copy, Clone)]
-pub enum BitCell {
+pub enum BinaryCell {
     Empty,
     Block,
 }
 
-impl CellTrait for BitCell {
+impl CellTrait for BinaryCell {
     fn empty() -> Self { Self::Empty }
     fn any_block() -> Self { Self::Block }
     fn is_empty(&self) -> bool { matches!(self, Self::Empty) }
@@ -446,7 +454,7 @@ impl CellTrait for BitCell {
     }
 }
 
-impl From<char> for BitCell {
+impl From<char> for BinaryCell {
     fn from(c: char) -> Self {
         match c {
             '@' => Self::Block,
@@ -456,20 +464,20 @@ impl From<char> for BitCell {
 }
 
 //--------------------------------------------------------------------------------------------------
-// SampleGrid
+// SimpleGrid
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Clone)]
-pub struct SampleGrid {
+pub struct SimpleGrid {
     size: Vec2,
-    cells: Vec<BitCell>,
+    cells: Vec<BinaryCell>,
 }
 
-impl SampleGrid {
+impl SimpleGrid {
     pub fn new(size: Vec2) -> Self {
         Self {
             size,
-            cells: vec![BitCell::empty(); (size.0 * size.1) as usize],
+            cells: vec![BinaryCell::empty(); (size.0 * size.1) as usize],
         }
     }
     fn cell_index(&self, pos: Vec2) -> usize {
@@ -477,14 +485,14 @@ impl SampleGrid {
     }
 }
 
-impl Grid<BitCell> for SampleGrid {
+impl Grid<BinaryCell> for SimpleGrid {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
-    fn cell(&self, pos: Vec2) -> BitCell {
+    fn cell(&self, pos: Vec2) -> BinaryCell {
         debug_assert!(self.is_inside(pos));
         *self.cells.get(self.cell_index(pos)).unwrap()
     }
-    fn set_cell(&mut self, pos: Vec2, cell: BitCell) {
+    fn set_cell(&mut self, pos: Vec2, cell: BinaryCell) {
         let idx = self.cell_index(pos);
         *self.cells.get_mut(idx).unwrap() = cell;
     }
@@ -494,12 +502,12 @@ impl Grid<BitCell> for SampleGrid {
 // TestHelper
 //--------------------------------------------------------------------------------------------------
 
-pub struct TestHelper<G: Grid<BitCell>> {
-    new_empty_grid: fn() -> G,
+pub struct TestHelper<G: Grid<BinaryCell>, F: Fn() -> G> {
+    new_empty_grid: F,
 }
 
-impl<G: Grid<BitCell>> TestHelper<G> {
-    pub fn new(new_empty_grid: fn() -> G) -> Self {
+impl<G: Grid<BinaryCell>, F: Fn() -> G> TestHelper<G, F> {
+    pub fn new(new_empty_grid: F) -> Self {
         let g = new_empty_grid();
         assert!(g.is_empty());
         assert!(g.size() >= (3, 3).into());
@@ -509,16 +517,16 @@ impl<G: Grid<BitCell>> TestHelper<G> {
     pub fn basic(&self) {
         let mut g = self.new_empty_grid();
         assert!(g.is_empty());
-        g.set_cell((1, 1).into(), BitCell::Block);
+        g.set_cell((1, 1).into(), BinaryCell::Block);
         assert!(g.cell((1, 1).into()).is_block());
         assert_eq!(1, g.num_blocks());
         assert!(!g.is_row_empty(1));
         assert!(!g.is_row_filled(1));
-        g.fill_row(1, BitCell::Block);
+        g.fill_row(1, BinaryCell::Block);
         assert_eq!(g.width() as usize, g.num_blocks());
         assert_eq!(g.width() as usize, g.num_blocks_of_row(1));
         assert!(g.is_row_filled(1));
-        g.fill_row(1, BitCell::Empty);
+        g.fill_row(1, BinaryCell::Empty);
         assert!(g.is_empty());
     }
 }
@@ -531,7 +539,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        let helper = TestHelper::new(|| SampleGrid::new((3, 3).into()));
+        let helper = TestHelper::new(|| SimpleGrid::new((3, 3).into()));
         helper.basic();
     }
 }
