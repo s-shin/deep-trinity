@@ -114,9 +114,9 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, CellTrait, BasicGrid};
+    /// use grid::{Grid, CellTrait, BasicGrid, BinaryCell};
     ///
-    /// let mut grid = BasicGrid::new((3, 3).into());
+    /// let mut grid = BasicGrid::<BinaryCell>::new((3, 3).into());
     /// grid.set_rows_with_strs((1, 1).into(), &[
     ///     "@@",
     ///     "@",
@@ -357,8 +357,8 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, BasicGrid};
-    /// let mut grid = BasicGrid::new((5, 3).into());
+    /// use grid::{Grid, BasicGrid, BinaryCell};
+    /// let mut grid = BasicGrid::<BinaryCell>::new((5, 3).into());
     /// grid.set_rows_with_strs((0, 0).into(), &[
     ///     "@ @ @",
     ///     "@@ @ ", // -> 2
@@ -391,8 +391,8 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, BasicGrid};
-    /// let mut grid = BasicGrid::new((4, 4).into());
+    /// use grid::{Grid, BasicGrid, BinaryCell};
+    /// let mut grid = BasicGrid::<BinaryCell>::new((4, 4).into());
     /// grid.set_rows_with_strs((0, 0).into(), &[
     ///     "@   ",
     ///     "@@ @",
@@ -477,7 +477,7 @@ impl From<char> for BinaryCell {
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BasicGrid<C> {
+pub struct BasicGrid<C: CellTrait> {
     size: Vec2,
     cells: Vec<C>,
 }
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        let helper = TestSuite::new(|| BasicGrid::<BinaryCell>::new((5, 5).into()));
-        helper.basic();
+        let suite = TestSuite::new(|| BasicGrid::<BinaryCell>::new((5, 5).into()));
+        suite.basic();
     }
 }
