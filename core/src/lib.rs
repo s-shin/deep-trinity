@@ -1,7 +1,5 @@
 pub mod move_search;
 pub mod helper;
-// pub mod grid;
-// pub mod bitgrid;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
