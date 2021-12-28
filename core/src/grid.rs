@@ -112,9 +112,9 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, CellTrait, SimpleGrid};
+    /// use core::grid::{Grid, CellTrait, BasicGrid};
     ///
-    /// let mut grid = SimpleGrid::new((3, 3).into());
+    /// let mut grid = BasicGrid::new((3, 3).into());
     /// grid.set_rows_with_strs((1, 1).into(), &[
     ///     "@@",
     ///     "@",
@@ -355,8 +355,8 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, SimpleGrid};
-    /// let mut grid = SimpleGrid::new((5, 3).into());
+    /// use core::grid::{Grid, BasicGrid};
+    /// let mut grid = BasicGrid::new((5, 3).into());
     /// grid.set_rows_with_strs((0, 0).into(), &[
     ///     "@ @ @",
     ///     "@@ @ ", // -> 2
@@ -389,8 +389,8 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use core::grid::{Grid, SimpleGrid};
-    /// let mut grid = SimpleGrid::new((4, 4).into());
+    /// use core::grid::{Grid, BasicGrid};
+    /// let mut grid = BasicGrid::new((4, 4).into());
     /// grid.set_rows_with_strs((0, 0).into(), &[
     ///     "@   ",
     ///     "@@ @",
@@ -471,38 +471,51 @@ impl From<char> for BinaryCell {
 }
 
 //--------------------------------------------------------------------------------------------------
-// SimpleGrid
+// BasicGrid
 //--------------------------------------------------------------------------------------------------
 
-#[derive(Clone)]
-pub struct SimpleGrid<C> {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BasicGrid<C> {
     size: Vec2,
     cells: Vec<C>,
 }
 
-impl<C: CellTrait> SimpleGrid<C> {
+impl<C: CellTrait> BasicGrid<C> {
     pub fn new(size: Vec2) -> Self {
         Self {
             size,
-            cells: vec![C::empty(); (size.0 * size.1) as usize],
+            cells: vec![C::empty(); size.0 as usize * size.1 as usize],
         }
     }
     fn cell_index(&self, pos: Vec2) -> usize {
-        (pos.0 + pos.1 * self.size.0) as usize
+        debug_assert!(self.is_inside(pos));
+        pos.0 as usize + pos.1 as usize * self.size.0 as usize
+    }
+    pub fn rotate_cw(&self) -> Self {
+        let mut g = Self::new((self.height(), self.width()).into());
+        for y in 0..self.height() {
+            for x in 0..self.width() {
+                g.set_cell((y, self.width() - 1 - x).into(), self.cell((x, y).into()));
+            }
+        }
+        g
     }
 }
 
-impl<C: CellTrait> Grid<C> for SimpleGrid<C> {
+impl<C: CellTrait> Grid<C> for BasicGrid<C> {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
     fn cell(&self, pos: Vec2) -> C {
-        debug_assert!(self.is_inside(pos));
         *self.cells.get(self.cell_index(pos)).unwrap()
     }
     fn set_cell(&mut self, pos: Vec2, cell: C) {
         let idx = self.cell_index(pos);
         *self.cells.get_mut(idx).unwrap() = cell;
     }
+}
+
+impl<C: CellTrait> fmt::Display for BasicGrid<C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -561,7 +574,7 @@ mod tests {
 
     #[test]
     fn basic() {
-        let helper = TestHelper::new(|| SimpleGrid::<BinaryCell>::new((5, 5).into()));
+        let helper = TestHelper::new(|| BasicGrid::<BinaryCell>::new((5, 5).into()));
         helper.basic();
     }
 }

@@ -123,53 +123,9 @@ impl CellTrait for Cell {
 
 //---
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BasicGrid {
-    size: Vec2,
-    cells: Vec<Cell>,
-}
-
-impl BasicGrid {
-    pub fn new(size: Vec2) -> Self {
-        Self {
-            size,
-            cells: vec![Cell::Empty; size.0 as usize * size.1 as usize],
-        }
-    }
-    fn pos_to_index(&self, pos: Vec2) -> usize {
-        debug_assert!(0 <= pos.0 && pos.0 < self.width());
-        debug_assert!(0 <= pos.1 && pos.1 < self.height());
-        pos.0 as usize + pos.1 as usize * self.width() as usize
-    }
-    pub fn rotate_cw(&self) -> Self {
-        let mut g = Self::new((self.height(), self.width()).into());
-        for y in 0..self.height() {
-            for x in 0..self.width() {
-                g.set_cell((y, self.width() - 1 - x).into(), self.cell((x, y).into()));
-            }
-        }
-        g
-    }
-}
-
-impl Grid<Cell> for BasicGrid {
-    fn width(&self) -> X { self.size.0 }
-    fn height(&self) -> Y { self.size.1 }
-    fn cell(&self, pos: Vec2) -> Cell {
-        let idx = self.pos_to_index(pos);
-        self.cells[idx]
-    }
-    fn set_cell(&mut self, pos: Vec2, cell: Cell) {
-        let idx = self.pos_to_index(pos);
-        self.cells[idx] = cell;
-    }
-}
-
-impl fmt::Display for BasicGrid {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
-}
-
-//---
+type BasicGrid = grid::BasicGrid<Cell>;
+// type PrimBitGrid = bitgrid::PrimBitGrid<'static, u64, Cell>;
+// type BitGrid = bitgrid::BitGrid<'static, u64, Cell>;
 
 type BitGridRow = u16;
 

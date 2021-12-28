@@ -1,9 +1,13 @@
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::rc::Rc;
+use std::fmt;
 use num_traits::PrimInt;
+use once_cell::sync::Lazy;
 use crate::grid::{Grid, BinaryCell, CellTrait, Vec2, X, Y};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PrimBitGridConstants<Int: PrimInt> {
     pub num_bits: u32,
     pub width: X,
@@ -144,21 +148,18 @@ impl<Int: PrimInt> PrimBitGridConstants<Int> {
     }
 }
 
-#[derive(Clone)]
-pub struct PrimBitGrid<Int: PrimInt, C: CellTrait = BinaryCell> {
-    constants: Rc<Box<PrimBitGridConstants<Int>>>,
+#[derive(Clone, Debug)]
+pub struct PrimBitGrid<'a, Int: PrimInt, C: CellTrait = BinaryCell> {
+    constants: &'a PrimBitGridConstants<Int>,
     cells: Int,
     phantom: PhantomData<fn() -> C>,
 }
 
-impl<Int: PrimInt, C: CellTrait> PrimBitGrid<Int, C> {
-    pub fn new(width: X, height: Option<Y>) -> Self {
-        Self::from_constants(Rc::new(Box::new(PrimBitGridConstants::new(width, height))))
-    }
-    pub fn from_constants(constants: Rc<Box<PrimBitGridConstants<Int>>>) -> Self {
+impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
+    pub fn new(constants: &'a PrimBitGridConstants<Int>) -> Self {
         Self { constants, cells: Int::zero(), phantom: PhantomData }
     }
-    pub fn constants(&self) -> Rc<Box<PrimBitGridConstants<Int>>> { self.constants.clone() }
+    pub fn constants(&self) -> &'a PrimBitGridConstants<Int> { self.constants }
     fn bit_index(&self, pos: Vec2) -> u32 { (self.width() * pos.1 + pos.0) as u32 }
     fn cell_mask(&self, pos: Vec2) -> Int { Int::one() << self.bit_index(pos) as usize }
     fn put_same_width(&mut self, pos: Vec2, sub: &PrimBitGrid<Int, C>) {
@@ -248,7 +249,7 @@ impl<Int: PrimInt, C: CellTrait> PrimBitGrid<Int, C> {
     }
 }
 
-impl<Int: PrimInt, C: CellTrait> Grid<C> for PrimBitGrid<Int, C> {
+impl<Int: PrimInt, C: CellTrait> Grid<C> for PrimBitGrid<'_, Int, C> {
     fn width(&self) -> X { self.constants.width }
     fn height(&self) -> Y { self.constants.height }
     fn cell(&self, pos: Vec2) -> C {
@@ -313,38 +314,59 @@ impl<Int: PrimInt, C: CellTrait> Grid<C> for PrimBitGrid<Int, C> {
     }
 }
 
+impl<Int: PrimInt, C: CellTrait> fmt::Display for PrimBitGrid<'_, Int, C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
+}
+
+impl<Int: PrimInt, C: CellTrait> PartialEq for PrimBitGrid<'_, Int, C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.size() == other.size() && self.cells == other.cells
+    }
+}
+
+impl<Int: PrimInt, C: CellTrait> Eq for PrimBitGrid<'_, Int, C> {}
+
+impl<Int: PrimInt + Hash, C: CellTrait> Hash for PrimBitGrid<'_, Int, C> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.size().hash(state);
+        self.cells.hash(state);
+    }
+}
+
 //---
 
 #[derive(Clone)]
-pub struct BitGrid<Int: PrimInt, C: CellTrait = BinaryCell> {
+pub struct BitGrid<'a, Int: PrimInt, C: CellTrait = BinaryCell> {
     size: Vec2,
-    prim_grids: Vec<PrimBitGrid<Int, C>>,
+    prim_grids: Vec<PrimBitGrid<'a, Int, C>>,
 }
 
-impl<Int: PrimInt, C: CellTrait> BitGrid<Int, C> {
-    pub fn new(size: Vec2) -> Self {
-        let constants = Rc::new(Box::new(PrimBitGridConstants::new(size.0, None)));
-        let edge_grid_height = size.1 % constants.height;
-        let edge_grid_constants = if edge_grid_height == constants.height {
-            constants.clone()
-        } else {
-            Rc::new(Box::new(PrimBitGridConstants::new(size.0, Some(edge_grid_height))))
-        };
-        let num_prim_grids = size.1 / constants.height;
-        let mut prim_grids = Vec::with_capacity(num_prim_grids as usize + 1);
-        for _ in 0..num_prim_grids {
-            prim_grids.push(PrimBitGrid::from_constants(constants.clone()));
+impl<'a, Int: PrimInt, C: CellTrait> BitGrid<'a, Int, C> {
+    pub fn new(repeated: &'a PrimBitGridConstants<Int>, n: Y, edge: Option<&'a PrimBitGridConstants<Int>>) -> Self {
+        debug_assert!(n >= 0);
+        debug_assert!(edge.is_none() || repeated.width == edge.unwrap().width);
+        let size = Vec2(repeated.width, repeated.height * n + edge.map_or(0, |c| c.height));
+        let num_prim_grids = (n + edge.map_or(0, |_| 1)) as usize;
+        let mut prim_grids = Vec::with_capacity(num_prim_grids);
+        for _ in 0..n {
+            prim_grids.push(PrimBitGrid::new(repeated));
         }
-        prim_grids.push(PrimBitGrid::from_constants(edge_grid_constants));
+        if let Some(c) = edge {
+            prim_grids.push(PrimBitGrid::new(c));
+        }
+        debug_assert_eq!(num_prim_grids, prim_grids.len());
         Self { size, prim_grids }
     }
     pub fn prim_grid_index(&self, y: Y) -> (usize, Y) {
         let h = self.prim_grids.first().unwrap().height();
         ((y / h) as usize, y % h)
     }
+    pub fn put_prim_same_width(&self, _pos: Vec2, _grid: &PrimBitGrid<Int, C>) {
+        todo!();
+    }
 }
 
-impl<Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<Int, C> {
+impl<Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<'_, Int, C> {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
     fn cell(&self, pos: Vec2) -> C {
@@ -418,6 +440,39 @@ impl<Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<Int, C> {
         }
         n
     }
+}
+
+impl<Int: PrimInt, C: CellTrait> fmt::Display for BitGrid<'_, Int, C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
+}
+
+impl<Int: PrimInt, C: CellTrait> PartialEq for BitGrid<'_, Int, C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.size() == other.size() && self.prim_grids == other.prim_grids
+    }
+}
+
+impl<Int: PrimInt, C: CellTrait> Eq for BitGrid<'_, Int, C> {}
+
+impl<Int: PrimInt + Hash, C: CellTrait> Hash for BitGrid<'_, Int, C> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.size().hash(state);
+        self.prim_grids.hash(state);
+    }
+}
+
+//---
+
+static PRIM_BIT_GRID_CONSTANTS_U64_10X6: Lazy<PrimBitGridConstants<u64>> = Lazy::new(|| {
+    PrimBitGridConstants::new(10, Some(6))
+});
+
+static PRIM_BIT_GRID_CONSTANTS_U64_10X4: Lazy<PrimBitGridConstants<u64>> = Lazy::new(|| {
+    PrimBitGridConstants::new(10, Some(4))
+});
+
+pub fn new_bit_grid_u64_10x40<C: CellTrait>() -> BitGrid<'static, u64, C> {
+    BitGrid::new(&PRIM_BIT_GRID_CONSTANTS_U64_10X6, 6, Some(&PRIM_BIT_GRID_CONSTANTS_U64_10X4))
 }
 
 //---
@@ -494,13 +549,13 @@ mod tests {
 
     #[test]
     fn test_prim_bit_grid_basic() {
-        let helper = TestHelper::new(|| PrimBitGrid::<u64>::new(10, None));
+        let helper = TestHelper::new(|| PrimBitGrid::<_>::new(&PRIM_BIT_GRID_CONSTANTS_U64_10X6));
         helper.basic();
     }
 
     #[test]
     fn test_prim_big_grid_put_fast() {
-        let mut g1 = PrimBitGrid::<u64>::new(10, None);
+        let mut g1 = PrimBitGrid::<_>::new(&PRIM_BIT_GRID_CONSTANTS_U64_10X6);
         let mut g2 = g1.clone();
         g2.set_rows_with_strs((1, 1).into(), &[
             " @@ ",
@@ -528,7 +583,7 @@ mod tests {
 
     #[test]
     fn test_prim_big_grid_can_put_fast() {
-        let mut g1 = PrimBitGrid::<u64>::new(10, None);
+        let mut g1 = PrimBitGrid::<_>::new(&PRIM_BIT_GRID_CONSTANTS_U64_10X6);
         let mut g2 = g1.clone();
         g2.set_rows_with_strs((1, 1).into(), &[
             " @@ ",
@@ -545,7 +600,9 @@ mod tests {
 
     #[test]
     fn test_bit_grid_basic() {
-        let helper = TestHelper::new(|| BitGrid::<u32>::new((10, 10).into()));
+        let c10x3 = PrimBitGridConstants::<u32>::new(10, Some(3));
+        let c10x1 = PrimBitGridConstants::<u32>::new(10, Some(1));
+        let helper = TestHelper::new(|| BitGrid::<u32>::new(&c10x3, 3, Some(&c10x1)));
         helper.basic();
     }
 }
