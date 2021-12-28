@@ -1,7 +1,7 @@
 pub mod move_search;
 pub mod helper;
-pub mod grid;
-pub mod bitgrid;
+// pub mod grid;
+// pub mod bitgrid;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
@@ -10,7 +10,9 @@ use std::ops;
 use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use grid::{CellTrait, Grid, X, Y, Vec2};
+use grid::bitgrid::prim_bit_grid_constants_u64_w10;
 
 //---
 
@@ -124,219 +126,8 @@ impl CellTrait for Cell {
 //---
 
 type BasicGrid = grid::BasicGrid<Cell>;
-// type PrimBitGrid = bitgrid::PrimBitGrid<'static, u64, Cell>;
-// type BitGrid = bitgrid::BitGrid<'static, u64, Cell>;
-
-type BitGridRow = u16;
-
-#[derive(Clone, Debug, Eq)]
-pub struct BitGrid {
-    size: Vec2,
-    /// The x-axis is the LSB to MSB direction.
-    /// ```ignore
-    /// | T  I| -> 10010 (17)
-    /// ```
-    pub rows: Vec<BitGridRow>,
-    row_mask: BitGridRow,
-}
-
-impl BitGrid {
-    pub fn new(size: Vec2) -> Self {
-        assert!(size.0 as usize <= std::mem::size_of::<BitGridRow>() * 8);
-        Self {
-            size,
-            rows: vec![0; size.1 as usize],
-            row_mask: !(!0 << (size.0 as BitGridRow)),
-        }
-    }
-    pub fn put_fast(&mut self, pos: Vec2, sub: &BitGrid) -> bool {
-        debug_assert!(self.width() >= sub.width());
-        debug_assert!(self.height() >= sub.height());
-        let mut dirty = false;
-        let nshift = if pos.0 < 0 { -pos.0 } else { pos.0 } as BitGridRow;
-        let to_right = pos.0 >= 0;
-        let edge_checker = if to_right {
-            1 << (self.width() - 1) as BitGridRow
-        } else {
-            1
-        };
-        for sub_y in 0..sub.height() {
-            let mut row = sub.rows[sub_y as usize];
-            if dirty {
-                if to_right {
-                    row <<= nshift;
-                } else {
-                    row >>= nshift;
-                }
-            } else {
-                for _ in 0..nshift {
-                    if row & edge_checker != 0 {
-                        dirty = true;
-                    }
-                    if to_right {
-                        row <<= 1;
-                    } else {
-                        row >>= 1;
-                    }
-                }
-            }
-            let y = pos.1 + sub_y as Y;
-            if y < 0 || self.height() as Y <= y {
-                if row != 0 {
-                    dirty = true;
-                }
-                continue;
-            }
-            let y = y as usize;
-            if !dirty && self.rows[y] & row != 0 {
-                dirty = true;
-            }
-            self.rows[y] |= row;
-        }
-        dirty
-    }
-    pub fn can_put_fast(&self, pos: Vec2, sub: &BitGrid) -> bool {
-        debug_assert!(self.width() >= sub.width());
-        debug_assert!(self.height() >= sub.height());
-        let nshift = pos.0.abs() as BitGridRow;
-        let to_right = pos.0 >= 0;
-        let edge_checker = if to_right {
-            1 << (self.width() - 1) as BitGridRow
-        } else {
-            1
-        };
-        for sub_y in 0..sub.height() {
-            let mut row = sub.rows[sub_y as usize];
-            let y = pos.1 + sub_y as Y;
-            if y < 0 || y >= self.height() as Y {
-                if row != 0 {
-                    return false;
-                }
-                continue;
-            }
-            for _ in 0..nshift {
-                if row & edge_checker != 0 {
-                    return false;
-                }
-                if to_right {
-                    row <<= 1;
-                } else {
-                    row >>= 1;
-                }
-            }
-            if self.rows[y as usize] & row != 0 {
-                return false;
-            }
-        }
-        true
-    }
-    pub fn num_droppable_rows_fast(&self, pos: Vec2, sub: &BitGrid) -> Y {
-        if !self.can_put_fast(pos, sub) {
-            return 0;
-        }
-        let mut rows_cache: Vec<BitGridRow> = Vec::with_capacity(sub.height() as usize);
-        let to_right = pos.0 > 0;
-        for row in &sub.rows {
-            rows_cache.push(if to_right {
-                *row << pos.0
-            } else {
-                *row >> (-pos.0)
-            })
-        }
-        let mut n: Y = 1;
-        loop {
-            let mut can_put = true;
-            for sub_y in 0..sub.height() {
-                let row = rows_cache[sub_y as usize];
-                let y = pos.1 as Y - n as Y + sub_y as Y;
-                if y < 0 || y >= self.height() as Y {
-                    if row != 0 {
-                        can_put = false;
-                        break;
-                    }
-                    continue;
-                }
-                if self.rows[y as usize] & rows_cache[sub_y as usize] != 0 {
-                    can_put = false;
-                    break;
-                }
-            }
-            if can_put {
-                n += 1;
-            } else {
-                break;
-            }
-        }
-        n - 1
-    }
-}
-
-impl Grid<Cell> for BitGrid {
-    fn width(&self) -> X { self.size.0 }
-    fn height(&self) -> Y { self.size.1 }
-    fn cell(&self, pos: Vec2) -> Cell {
-        debug_assert!(pos.0 < self.width());
-        debug_assert!(pos.1 < self.height());
-        let row = self.rows[pos.1 as usize];
-        if row & (1 << pos.0) as BitGridRow != 0 {
-            Cell::Block(Block::Any)
-        } else {
-            Cell::Empty
-        }
-    }
-    fn set_cell(&mut self, pos: Vec2, cell: Cell) {
-        debug_assert!(pos.0 < self.width());
-        debug_assert!(pos.1 < self.height());
-        let row = self.rows[pos.1 as usize];
-        self.rows[pos.1 as usize] = if !cell.is_empty() {
-            row | (1 << pos.0) as BitGridRow
-        } else {
-            row & !((1 << pos.0) as BitGridRow)
-        };
-    }
-    fn is_row_filled(&self, y: Y) -> bool {
-        self.rows[y as usize] & self.row_mask == self.row_mask
-    }
-    fn is_row_empty(&self, y: Y) -> bool {
-        self.rows[y as usize] & self.row_mask == 0
-    }
-    fn swap_rows(&mut self, y1: Y, y2: Y) {
-        let r1 = self.rows[y1 as usize];
-        self.rows[y1 as usize] = self.rows[y2 as usize];
-        self.rows[y2 as usize] = r1;
-    }
-    fn fill_row(&mut self, y: Y, cell: Cell) {
-        debug_assert!(0 <= y && y < self.height());
-        let row = match cell {
-            Cell::Empty => 0,
-            _ => self.row_mask,
-        };
-        self.rows[y as usize] = row;
-    }
-    fn num_blocks_of_row(&self, y: Y) -> usize {
-        // We can expect the optimization by popcnt.
-        self.rows[y as usize].count_ones() as usize
-    }
-}
-
-impl fmt::Display for BitGrid {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
-}
-
-impl PartialEq for BitGrid {
-    fn eq(&self, other: &Self) -> bool {
-        self.size == other.size && self.rows == other.rows
-    }
-}
-
-impl Hash for BitGrid {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.size.hash(state);
-        self.rows.hash(state);
-    }
-}
-
-//---
+type PrimBitGrid = bitgrid::PrimBitGrid<'static, u64, Cell>;
+type BitGrid = bitgrid::BitGrid<'static, u64, Cell>;
 
 #[derive(Clone, Debug, Eq)]
 pub struct HybridGrid {
@@ -729,9 +520,20 @@ fn srs_offset_data_others() -> Vec<Vec<(X, Y)>> {
     ]
 }
 
+pub struct PieceGrids {
+    pub basic_grid: BasicGrid,
+    pub prim_bit_grid: PrimBitGrid,
+}
+
+impl PieceGrids {
+    pub fn new(basic_grid: BasicGrid, prim_bit_grid: PrimBitGrid) -> Self {
+        Self { basic_grid, prim_bit_grid }
+    }
+}
+
 pub struct PieceSpec {
     /// The index of Vec is orientation.
-    pub grids: Vec<HybridGrid>,
+    pub grids: Vec<PieceGrids>,
     pub initial_placement: Placement,
     /// The index of outer Vec is orientation.
     pub srs_offset_data: Vec<Vec<(X, Y)>>,
@@ -754,11 +556,11 @@ impl PieceSpec {
             grid_deg180,
             grid_deg270,
         ];
-        let mut grids: Vec<HybridGrid> = Vec::with_capacity(basic_grids.len());
+        let mut grids: Vec<PieceGrids> = Vec::with_capacity(basic_grids.len());
         for basic_grid in basic_grids {
-            let mut bit_grid = BitGrid::new(basic_grid.size());
-            bit_grid.put((0, 0).into(), &basic_grid);
-            grids.push(HybridGrid::with_grids(basic_grid, bit_grid));
+            let mut g = PrimBitGrid::new(prim_bit_grid_constants_u64_w10(size.1));
+            g.put((0, 0).into(), &basic_grid);
+            grids.push(PieceGrids::new(basic_grid, bit_grid));
         }
         Self {
             grids,
@@ -896,9 +698,7 @@ fn gen_piece_specs() -> Vec<PieceSpec> {
     ]
 }
 
-lazy_static! {
-    pub static ref PIECE_SPECS: Vec<PieceSpec> = gen_piece_specs();
-}
+pub static PIECE_SPECS: Lazy<Vec<PieceSpec>> = Lazy::new(|| gen_piece_specs());
 
 pub fn get_placement_aliases(piece: Piece, placement: &Placement) -> Vec<Placement> {
     match piece {
@@ -1016,7 +816,7 @@ impl FallingPiece {
         }
         fp
     }
-    pub fn grid(&self) -> &'static HybridGrid {
+    pub fn grid(&self) -> &'static PieceGrids {
         &PieceSpec::of(self.piece).grids[self.placement.orientation.id() as usize]
     }
     pub fn apply_move(&mut self, mv: Move, pf: &Playfield, mode: RotationMode) -> bool {
@@ -1072,6 +872,11 @@ impl FallingPiece {
 }
 
 //---
+
+pub struct PlayfieldGrid {
+    pub basic_grid: BasicGrid,
+    pub bit_grid: BitGrid,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Playfield {
