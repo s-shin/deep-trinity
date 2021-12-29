@@ -152,7 +152,7 @@ impl GameSession {
         r.push(
             if state.can_hold { 1 } else { 0 }
                 + if let Some(p) = state.hold_piece { p as u32 + 1 } else { 0 } * 2
-                + fp.piece as u32 * 2 * 8
+                + fp.piece() as u32 * 2 * 8
         );
         // [next]
         r.push(
@@ -176,7 +176,7 @@ impl GameSession {
                 r.push(if state.playfield.grid.cell((x, y).into()).is_empty() { 0.0 } else { 1.0 });
                 r.push(if state.can_hold { 1.0 } else { 0.0 });
                 r.push(if let Some(p) = state.hold_piece { (p as i32 as f32 + 1.0) / 8.0 } else { 0.0 });
-                r.push((fp.piece as i32 as f32) / 7.0);
+                r.push((fp.piece() as i32 as f32) / 7.0);
                 for p in state.next_pieces.pieces.iter().take(state.next_pieces.visible_num) {
                     r.push((*p as i32 as f32) / 7.0);
                 }

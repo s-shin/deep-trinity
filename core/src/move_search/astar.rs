@@ -79,7 +79,7 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
         debug_println!("target: placement: {:?}, f: {:?}, g: {}", target_placement, target_f, target_g);
 
         for mv in &MOVES {
-            let mut fp = FallingPiece::new(conf.piece, target_placement);
+            let mut fp = FallingPiece::new(conf.piece_spec, target_placement);
             if fp.apply_move(*mv, conf.pf, conf.mode) {
                 let f = target_g + cost_func(&conf.src, &target_placement, *mv) + heuristic_func(&fp.placement, &dst);
                 if !open_list.contains_key(&f) {

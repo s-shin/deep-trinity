@@ -22,7 +22,7 @@ pub fn edge_plan() -> Vec<Vec<Move>> {
 
 pub fn normal_plan(conf: &SearchConfiguration) -> Vec<Vec<Move>> {
     let pf = &conf.pf;
-    let fp = FallingPiece::new(conf.piece, conf.src);
+    let fp = FallingPiece::new(conf.piece_spec, conf.src);
     let num_r = pf.num_shiftable_cols(&fp, true) as i8;
     let num_l = pf.num_shiftable_cols(&fp, false) as i8;
     let mut first_mvs = Vec::new();
@@ -54,7 +54,7 @@ fn enumerate_index_patterns(patterns: &[usize], a: Vec<usize>, out: &mut Vec<Vec
 fn search_moves(conf: &SearchConfiguration, plan: &[Vec<Move>]) -> SearchResult {
     let mut found = MoveDestinations::new();
     let pf = &conf.pf;
-    let fp = FallingPiece::new(conf.piece, conf.src);
+    let fp = FallingPiece::new(conf.piece_spec, conf.src);
 
     let mut idx_patterns = Vec::new();
     enumerate_index_patterns(
@@ -140,13 +140,13 @@ mod test {
     fn test_das_optim_plan() {
         let plan = das_optim_plan();
         let pf = Playfield::default();
-        let fp = FallingPiece::spawn(Piece::I, None);
-        let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
+        let fp = FallingPiece::spawn(Piece::I.default_spec(), None);
+        let conf = SearchConfiguration::new(&pf, fp.piece_spec, fp.placement, RotationMode::Srs);
         let r = search_moves(&conf, &plan);
         for p in r.found.keys() {
             // println!("{:?}", p);
             let mut g = Game::default();
-            g.state.playfield.grid.put(p.pos, FallingPiece::new(fp.piece, *p).grid());
+            g.state.playfield.grid.put(p.pos, FallingPiece::new(fp.piece_spec, *p).grid());
             println!("{}", g);
         }
     }
