@@ -181,7 +181,10 @@ impl<Int: PrimInt> PrimBitGridConstantsStore<Int> {
             self.prepare_for_prim_bit_grid(size);
         } else {
             self.prepare_for_prim_bit_grid((size.0, self.prim_max_height).into());
-            self.prepare_for_prim_bit_grid((size.0, (size.1 % self.prim_max_height)).into())
+            let edge_height = size.1 % self.prim_max_height;
+            if edge_height > 0 {
+                self.prepare_for_prim_bit_grid((size.0, edge_height).into())
+            }
         }
     }
     pub fn get(&self, size: Vec2) -> Option<&PrimBitGridConstants<Int>> { self.constants_map.get(&size) }
@@ -567,11 +570,13 @@ impl<'a, Int: PrimInt, C: CellTrait> BitGridTrait<'a, Int, C> for BasicBitGrid<'
             if c1.is_none() {
                 return None;
             }
-            let c2 = store.get((size.0, size.1 % store.prim_max_height).into());
-            if c2.is_none() {
-                return None;
-            }
-            Some(Self::new(c1.unwrap(), size.1 / store.prim_max_height, Some(c2.unwrap())))
+            let edge_height = size.1 % store.prim_max_height;
+            let c2 = if edge_height > 0 {
+                store.get((size.0, edge_height).into())
+            } else {
+                None
+            };
+            Some(Self::new(c1.unwrap(), size.1 / store.prim_max_height, c2))
         }
     }
     fn put_prim_bit_grid(&mut self, pos: Vec2, other: &PrimBitGrid<Int, C>) {
@@ -699,15 +704,8 @@ impl<'a, Int: PrimInt + Hash, C: CellTrait> Hash for BasicBitGrid<'a, Int, C> {
 
 #[cfg(test)]
 mod tests {
-    use once_cell::sync::Lazy;
     use super::*;
     use crate::{Vec2, CellTrait, Grid, TestSuite};
-
-    static CONSTANTS_REGISTRY: Lazy<PrimBitGridConstantsStore<u64>> = Lazy::new(|| {
-        let mut r = PrimBitGridConstantsStore::new(10);
-        r.prepare_for_bit_grid((10, 6).into());
-        r
-    });
 
     #[test]
     fn test_prim_bit_grid_constants_u32_10_none_none() {
@@ -824,13 +822,23 @@ mod tests {
 
     #[test]
     fn test_prim_bit_grid_basic() {
-        let helper = TestSuite::new(|| BasicBitGrid::<_, BinaryCell>::with_store(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap());
+        let store = {
+            let mut r = PrimBitGridConstantsStore::<u64>::new(10);
+            r.prepare_for_prim_bit_grid((10, 6).into());
+            r
+        };
+        let helper = TestSuite::new(|| BasicBitGrid::<_, BinaryCell>::with_store(&store, (10, 6).into()).unwrap());
         helper.basic();
     }
 
     #[test]
     fn test_prim_bit_grid_put_same_stride() {
-        let mut g1 = PrimBitGrid::<_, BinaryCell>::with_store(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap();
+        let store = {
+            let mut r = PrimBitGridConstantsStore::<u64>::new(10);
+            r.prepare_for_prim_bit_grid((10, 6).into());
+            r
+        };
+        let mut g1 = PrimBitGrid::<_, BinaryCell>::with_store(&store, (10, 6).into()).unwrap();
         let mut g2 = g1.clone();
         g2.set_rows_with_strs((1, 1).into(), &[
             " @@ ",
@@ -858,7 +866,12 @@ mod tests {
 
     #[test]
     fn test_prim_bit_grid_can_put_same_stride() {
-        let mut g1 = PrimBitGrid::<_, BinaryCell>::with_store(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap();
+        let store = {
+            let mut r = PrimBitGridConstantsStore::<u64>::new(10);
+            r.prepare_for_prim_bit_grid((10, 6).into());
+            r
+        };
+        let mut g1 = PrimBitGrid::<_, BinaryCell>::with_store(&store, (10, 6).into()).unwrap();
         let mut g2 = g1.clone();
         g2.set_rows_with_strs((1, 1).into(), &[
             " @@ ",
@@ -875,22 +888,59 @@ mod tests {
 
     #[test]
     fn test_basic_bit_grid_basic() {
-        let c10x3 = PrimBitGridConstants::<u32>::new(10, Some(3), None);
-        let c10x1 = PrimBitGridConstants::<u32>::new(10, Some(1), None);
-        let helper = TestSuite::new(|| BasicBitGrid::<u32>::new(&c10x3, 3, Some(&c10x1)));
+        let store = {
+            let mut r = PrimBitGridConstantsStore::<u32>::new(10);
+            r.prepare_for_bit_grid((10, 6).into());
+            r
+        };
+        let helper = TestSuite::new(|| BasicBitGrid::<_>::with_store(&store, (10, 6).into()).unwrap());
         helper.basic();
     }
 
     #[test]
     fn test_basic_bit_grid_put_same_stride_prim() {
-        let c10x3 = PrimBitGridConstants::<u32>::new(10, Some(3), None);
-        let c10x1 = PrimBitGridConstants::<u32>::new(10, Some(1), None);
-        let mut g1 = BasicBitGrid::<u32>::new(&c10x3, 3, Some(&c10x1));
-        let mut g2 = PrimBitGrid::<u32>::new(&c10x3);
+        let store = {
+            let mut r = PrimBitGridConstantsStore::<u32>::new(10);
+            r.prepare_for_prim_bit_grid((10, 3).into());
+            r.prepare_for_bit_grid((10, 6).into());
+            r
+        };
+        let mut g1 = BasicBitGrid::<_>::with_store(&store, (10, 6).into()).unwrap();
+        let mut g2 = PrimBitGrid::<_>::with_store(&store, (10, 3).into()).unwrap();
         g2.set_rows_with_strs((1, 1).into(), &["@", "@"]);
         g1.put_same_stride_prim((1, 1).into(), &g2);
         assert!(g1.cell((2, 2).into()).is_block());
         assert!(g1.cell((2, 3).into()).is_block());
+    }
+
+    #[test]
+    fn test_basic_bit_grid_can_put_same_stride_prim() {
+        let store = {
+            let mut r = PrimBitGridConstantsStore::<u64>::new(10);
+            r.prepare_for_bit_grid((10, 20).into());
+            r.prepare_for_prim_bit_grid((10, 6).into());
+            r
+        };
+        let mut g1 = BasicBitGrid::<_>::with_store(&store, (10, 20).into()).unwrap();
+        let mut g2 = PrimBitGrid::<_>::with_store(&store, (10, 6).into()).unwrap();
+        g2.fill_all(BinaryCell::Block);
+        for param in [
+            // ((1, 0), false),
+            // ((-1, 0), false),
+            ((0, -1), false),
+            ((0, 0), true),
+            ((0, 1), true),
+            ((0, 2), true),
+            ((0, 3), true),
+            ((0, 4), true),
+            ((0, 5), true),
+            ((0, 6), true),
+            ((0, 13), true),
+            ((0, 14), false),
+        ].iter() {
+            let pos = Vec2::from(param.0);
+            assert_eq!(param.1, g1.can_put_same_stride_prim(pos, &g2), "{}", pos);
+        }
     }
 
     #[test]
