@@ -5,6 +5,7 @@ use std::fmt;
 use num_traits::PrimInt;
 use crate::{Grid, BinaryCell, CellTrait, Vec2, X, Y};
 
+/// This struct contains many constant values to be used by [PrimBitGrid].
 #[derive(Clone, Debug)]
 pub struct PrimBitGridConstants<Int: PrimInt> {
     pub num_bits: u32,
@@ -15,8 +16,8 @@ pub struct PrimBitGridConstants<Int: PrimInt> {
     pub cells_mask: Int,
     row_masks: Vec<Int>,
     col_masks: Vec<Int>,
-    lhs_cols_masks: Vec<Int>,
-    rhs_cols_masks: Vec<Int>,
+    left_side_cols_masks: Vec<Int>,
+    right_side_cols_masks: Vec<Int>,
     bottom_side_rows_masks: Vec<Int>,
     top_side_rows_masks: Vec<Int>,
 }
@@ -48,7 +49,7 @@ impl<Int: PrimInt> PrimBitGridConstants<Int> {
             }
             m
         };
-        let lhs_cols_masks = {
+        let left_side_cols_masks = {
             let w = width as usize;
             let mut r = Vec::with_capacity(w);
             let mut t = Int::zero();
@@ -58,7 +59,7 @@ impl<Int: PrimInt> PrimBitGridConstants<Int> {
             }
             r
         };
-        let rhs_cols_masks = {
+        let right_side_cols_masks = {
             let w = width as usize;
             let mut r = Vec::with_capacity(w);
             let mut t = Int::zero();
@@ -97,8 +98,8 @@ impl<Int: PrimInt> PrimBitGridConstants<Int> {
             cells_mask,
             row_masks,
             col_masks,
-            lhs_cols_masks,
-            rhs_cols_masks,
+            left_side_cols_masks,
+            right_side_cols_masks,
             bottom_side_rows_masks,
             top_side_rows_masks,
         }
@@ -111,55 +112,57 @@ impl<Int: PrimInt> PrimBitGridConstants<Int> {
         debug_assert!(0 <= x && x < self.width);
         self.col_masks[x as usize]
     }
-    pub fn lhs_cols_mask(&self, num_blocks: X) -> Int {
+    pub fn left_side_cols_mask(&self, num_blocks: X) -> Int {
         let n = num_blocks;
-        debug_assert!(0 < n && n < self.width - 1);
-        self.lhs_cols_masks[(n - 1) as usize]
+        debug_assert!(0 < n && n < self.width);
+        self.left_side_cols_masks[(n - 1) as usize]
     }
-    pub fn rhs_cols_mask(&self, num_blocks: X) -> Int {
+    pub fn right_side_cols_mask(&self, num_blocks: X) -> Int {
         let n = num_blocks;
-        debug_assert!(0 < n && n < self.width - 1);
-        self.rhs_cols_masks[(n - 1) as usize]
+        debug_assert!(0 < n && n < self.width);
+        self.right_side_cols_masks[(n - 1) as usize]
     }
-    pub fn lhs_empty_cols_mask(&self, num_empty_cells: X) -> Int {
+    pub fn left_side_empty_cols_mask(&self, num_empty_cells: X) -> Int {
         let n = num_empty_cells;
-        debug_assert!(0 < n && n < self.width - 1);
-        self.rhs_cols_masks[((self.width - 1) - n) as usize]
+        debug_assert!(0 < n && n < self.width);
+        self.right_side_cols_masks[((self.width - 1) - n) as usize]
     }
-    pub fn rhs_empty_cols_mask(&self, num_empty_cells: X) -> Int {
+    pub fn right_side_empty_cols_mask(&self, num_empty_cells: X) -> Int {
         let n = num_empty_cells;
-        debug_assert!(0 < n && n < self.width - 1);
-        self.lhs_cols_masks[((self.width - 1) - n) as usize]
+        debug_assert!(0 < n && n < self.width);
+        self.left_side_cols_masks[((self.width - 1) - n) as usize]
     }
     pub fn top_side_rows_mask(&self, num_blocks: Y) -> Int {
         let n = num_blocks;
-        debug_assert!(0 < n && n < self.height - 1);
+        debug_assert!(0 < n && n < self.height);
         self.top_side_rows_masks[(n - 1) as usize]
     }
     pub fn bottom_side_rows_mask(&self, num_blocks: Y) -> Int {
         let n = num_blocks;
-        debug_assert!(0 < n && n < self.height - 1);
+        debug_assert!(0 < n && n < self.height);
         self.bottom_side_rows_masks[(n - 1) as usize]
     }
     pub fn top_side_empty_rows_mask(&self, num_empty_cells: Y) -> Int {
         let n = num_empty_cells;
-        debug_assert!(0 < n && n < self.height - 1);
+        debug_assert!(0 < n && n < self.height);
         self.bottom_side_rows_masks[((self.height - 1) - n) as usize]
     }
     pub fn bottom_side_empty_rows_mask(&self, num_empty_cells: Y) -> Int {
         let n = num_empty_cells;
-        debug_assert!(0 < n && n < self.height - 1);
+        debug_assert!(0 < n && n < self.height);
         self.top_side_rows_masks[((self.height - 1) - n) as usize]
     }
 }
 
-pub struct PrimBitGridConstantsCache<Int: PrimInt> {
+/// Generally, all [PrimBitGridConstants] instances are global (static) data.
+/// This struct helps us generate and save these constants.
+pub struct PrimBitGridConstantsStore<Int: PrimInt> {
     pub stride: X,
     pub prim_max_height: Y,
     constants_map: HashMap<Vec2, PrimBitGridConstants<Int>>,
 }
 
-impl<Int: PrimInt> PrimBitGridConstantsCache<Int> {
+impl<Int: PrimInt> PrimBitGridConstantsStore<Int> {
     pub fn new(stride: X) -> Self {
         let prim_num_bits = Int::zero().count_zeros();
         let prim_max_height = prim_num_bits as Y / stride;
@@ -184,6 +187,23 @@ impl<Int: PrimInt> PrimBitGridConstantsCache<Int> {
     pub fn get(&self, size: Vec2) -> Option<&PrimBitGridConstants<Int>> { self.constants_map.get(&size) }
 }
 
+//---
+
+pub trait BitGridTrait<'a, Int: PrimInt, C: CellTrait>: Grid<C> {
+    fn with_store(store: &'a PrimBitGridConstantsStore<Int>, size: Vec2) -> Option<Self>;
+    fn put_prim_bit_grid(&mut self, pos: Vec2, other: &PrimBitGrid<Int, C>) {
+        self.put(pos, other);
+    }
+    fn can_put_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> bool {
+        self.can_put(pos, other)
+    }
+    fn num_droppable_rows_of_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> Y {
+        self.num_droppable_rows(pos, other)
+    }
+}
+
+//---
+
 #[derive(Clone, Debug)]
 pub struct PrimBitGrid<'a, Int: PrimInt, C: CellTrait = BinaryCell> {
     constants: &'a PrimBitGridConstants<Int>,
@@ -195,14 +215,10 @@ impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
     pub fn new(constants: &'a PrimBitGridConstants<Int>) -> Self {
         Self { constants, cells: Int::zero(), phantom: PhantomData }
     }
-    pub fn with_cache<'b: 'a>(cache: &'b PrimBitGridConstantsCache<Int>, size: Vec2) -> Option<Self> {
-        cache.get(size).map(|c| Self::new(c))
-    }
     pub fn constants(&self) -> &'a PrimBitGridConstants<Int> { self.constants }
     fn bit_index(&self, pos: Vec2) -> u32 { (self.constants.width * pos.1 + pos.0) as u32 }
     fn cell_mask(&self, pos: Vec2) -> Int { Int::one() << self.bit_index(pos) as usize }
-    fn put_same_stride<OtherInt: PrimInt, OtherCell: CellTrait>(&mut self, pos: Vec2, other: &PrimBitGrid<OtherInt, OtherCell>) {
-        assert!(self.constants.num_bits >= other.constants.num_bits);
+    fn put_same_stride<OtherCell: CellTrait>(&mut self, pos: Vec2, other: &PrimBitGrid<Int, OtherCell>) {
         assert_eq!(self.constants.stride, other.constants.stride);
         let Vec2(x, y) = pos;
         let other_cells = Int::from(other.cells).unwrap();
@@ -210,9 +226,10 @@ impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
             if x == 0 {
                 other_cells
             } else if x > 0 {
-                (other_cells & self.constants.rhs_empty_cols_mask(x)) << x as usize
+                // NOTE: If not clear before bit shift, bits can be pushed to the next row.
+                (other_cells & self.constants.right_side_empty_cols_mask(x)) << x as usize
             } else {
-                (other_cells & self.constants.lhs_empty_cols_mask(-x)).unsigned_shr(-x as u32)
+                (other_cells & self.constants.left_side_empty_cols_mask(-x)).unsigned_shr(-x as u32)
             };
         let other_cells =
             if y == 0 {
@@ -224,21 +241,25 @@ impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
             };
         self.cells = self.cells | other_cells;
     }
-    fn can_put_same_stride<OtherInt: PrimInt, OtherCell: CellTrait>(&self, pos: Vec2, other: &PrimBitGrid<OtherInt, OtherCell>) -> bool {
-        assert!(self.constants.num_bits >= other.constants.num_bits);
+    fn can_put_same_stride<OtherCell: CellTrait>(&self, pos: Vec2, other: &PrimBitGrid<Int, OtherCell>) -> bool {
         assert_eq!(self.constants.stride, other.constants.stride);
         let Vec2(x, y) = pos;
+        // 012345
+        //      012345
+        if x.abs() >= self.constants.width || y.abs() >= self.constants.height {
+            return false;
+        }
         let other_cells = Int::from(other.cells).unwrap();
         let other_cells =
             if x == 0 {
                 other_cells
             } else if x > 0 {
-                if other_cells & self.constants.rhs_cols_mask(x) != Int::zero() {
+                if other_cells & self.constants.right_side_cols_mask(x) != Int::zero() {
                     return false;
                 }
                 other_cells << x as usize
             } else {
-                if other_cells & self.constants.lhs_cols_mask(-x) != Int::zero() {
+                if other_cells & self.constants.left_side_cols_mask(-x) != Int::zero() {
                     return false;
                 }
                 other_cells.unsigned_shr(-x as u32)
@@ -259,22 +280,12 @@ impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
             };
         self.cells & other_cells == Int::zero()
     }
-    pub fn put_fast<OtherInt: PrimInt, OtherCell: CellTrait>(&mut self, pos: Vec2, other: &PrimBitGrid<OtherInt, OtherCell>) {
-        if self.constants.num_bits >= other.constants.num_bits && self.constants.stride == other.constants.stride {
-            return self.put_same_stride(pos, other);
+    fn num_droppable_rows_same_stride(&self, pos: Vec2, sub: &PrimBitGrid<Int, C>) -> Y {
+        let mut n = 0;
+        while self.can_put_same_stride((pos.0, pos.1 - n).into(), sub) {
+            n += 1;
         }
-        // TODO: optimization
-        self.put(pos, other);
-    }
-    pub fn can_put_fast(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> bool {
-        if self.constants.num_bits >= other.constants.num_bits && self.constants.stride == other.constants.stride {
-            return self.can_put_same_stride(pos, other);
-        }
-        // TODO: optimization
-        self.can_put(pos, other)
-    }
-    pub fn num_droppable_rows_fast(&self, _pos: Vec2, _sub: &PrimBitGrid<Int, C>) -> Y {
-        todo!()
+        n
     }
     pub fn swap_row_with_other<OtherCell: CellTrait>(&mut self, y: Y, other: &mut PrimBitGrid<Int, OtherCell>, other_y: Y) {
         assert_eq!(self.constants.stride, other.constants.stride);
@@ -303,6 +314,33 @@ impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
     }
 }
 
+impl<'a, Int: PrimInt, C: CellTrait> BitGridTrait<'a, Int, C> for PrimBitGrid<'a, Int, C> {
+    fn with_store(store: &'a PrimBitGridConstantsStore<Int>, size: Vec2) -> Option<Self> {
+        store.get(size).map(|c| Self::new(c))
+    }
+    fn put_prim_bit_grid(&mut self, pos: Vec2, other: &PrimBitGrid<Int, C>) {
+        if self.constants.stride == other.constants.stride {
+            return self.put_same_stride(pos, other);
+        }
+        // TODO: more optimization
+        self.put(pos, other);
+    }
+    fn can_put_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> bool {
+        if self.constants.stride == other.constants.stride {
+            return self.can_put_same_stride(pos, &other);
+        }
+        // TODO: more optimization
+        self.can_put(pos, other)
+    }
+    fn num_droppable_rows_of_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> Y {
+        if self.constants.stride == other.constants.stride {
+            return self.num_droppable_rows_same_stride(pos, &other);
+        }
+        // TODO
+        self.num_droppable_rows(pos, other)
+    }
+}
+
 impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for PrimBitGrid<'a, Int, C> {
     fn width(&self) -> X { self.constants.width }
     fn height(&self) -> Y { self.constants.height }
@@ -327,6 +365,32 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for PrimBitGrid<'a, Int, C> {
     }
     fn fill_all(&mut self, cell: C) {
         self.cells = if cell.is_empty() { Int::zero() } else { self.constants.cells_mask };
+    }
+    fn fill_top(&mut self, n: Y, cell: C) {
+        if n <= 0 {
+            return;
+        }
+        if n >= self.constants.height {
+            return self.fill_all(cell);
+        }
+        self.cells = if cell.is_empty() {
+            self.cells & self.constants.top_side_empty_rows_mask(n)
+        } else {
+            self.cells & self.constants.top_side_rows_mask(n)
+        };
+    }
+    fn fill_bottom(&mut self, n: Y, cell: C) {
+        if n <= 0 {
+            return;
+        }
+        if n >= self.constants.height {
+            return self.fill_all(cell);
+        }
+        self.cells = if cell.is_empty() {
+            self.cells & self.constants.bottom_side_empty_rows_mask(n)
+        } else {
+            self.cells & self.constants.bottom_side_rows_mask(n)
+        };
     }
     fn is_row_filled(&self, y: Y) -> bool {
         let m = self.constants.row_mask(y);
@@ -368,19 +432,19 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for PrimBitGrid<'a, Int, C> {
     }
 }
 
-impl<Int: PrimInt, C: CellTrait> fmt::Display for PrimBitGrid<'_, Int, C> {
+impl<'a, Int: PrimInt, C: CellTrait> fmt::Display for PrimBitGrid<'a, Int, C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
 }
 
-impl<Int: PrimInt, C: CellTrait> PartialEq for PrimBitGrid<'_, Int, C> {
+impl<'a, Int: PrimInt, C: CellTrait> PartialEq for PrimBitGrid<'a, Int, C> {
     fn eq(&self, other: &Self) -> bool {
         self.size() == other.size() && self.cells == other.cells
     }
 }
 
-impl<Int: PrimInt, C: CellTrait> Eq for PrimBitGrid<'_, Int, C> {}
+impl<'a, Int: PrimInt, C: CellTrait> Eq for PrimBitGrid<'a, Int, C> {}
 
-impl<Int: PrimInt + Hash, C: CellTrait> Hash for PrimBitGrid<'_, Int, C> {
+impl<'a, Int: PrimInt + Hash, C: CellTrait> Hash for PrimBitGrid<'a, Int, C> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.size().hash(state);
         self.cells.hash(state);
@@ -389,19 +453,20 @@ impl<Int: PrimInt + Hash, C: CellTrait> Hash for PrimBitGrid<'_, Int, C> {
 
 //---
 
-#[derive(Clone)]
-pub struct BitGrid<'a, Int: PrimInt, C: CellTrait = BinaryCell> {
+#[derive(Clone, Debug)]
+pub struct BasicBitGrid<'a, Int: PrimInt, C: CellTrait = BinaryCell> {
     size: Vec2,
     prim_grids: Vec<PrimBitGrid<'a, Int, C>>,
     prim_height: Y,
-    edge_height: Y,
 }
 
-impl<'a, Int: PrimInt, C: CellTrait> BitGrid<'a, Int, C> {
+impl<'a, Int: PrimInt, C: CellTrait> BasicBitGrid<'a, Int, C> {
     pub fn new(repeated: &'a PrimBitGridConstants<Int>, n: Y, edge: Option<&'a PrimBitGridConstants<Int>>) -> Self {
         debug_assert!(n >= 0);
         debug_assert!(edge.is_none() || repeated.width == edge.unwrap().width);
         let size = Vec2(repeated.width, repeated.height * n + edge.map_or(0, |c| c.height));
+        assert!(0 < size.0);
+        assert!(0 < size.1);
         let num_prim_grids = (n + edge.map_or(0, |_| 1)) as usize;
         let mut prim_grids = Vec::with_capacity(num_prim_grids);
         for _ in 0..n {
@@ -412,103 +477,142 @@ impl<'a, Int: PrimInt, C: CellTrait> BitGrid<'a, Int, C> {
         }
         debug_assert_eq!(num_prim_grids, prim_grids.len());
         let prim_height = repeated.height;
-        let edge_height = edge.map_or(prim_height, |c| c.height);
-        Self { size, prim_grids, prim_height, edge_height }
+        Self { size, prim_grids, prim_height }
     }
-    pub fn with_cache<'b: 'a>(cache: &'b PrimBitGridConstantsCache<Int>, size: Vec2) -> Option<Self> {
-        if size.1 <= cache.prim_max_height {
-            cache.get(size).map(|c| Self::new(c, 1, None))
-        } else {
-            let c1 = cache.get((size.0, cache.prim_max_height).into());
-            if c1.is_none() {
-                return None;
-            }
-            let c2 = cache.get((size.0, size.1 % cache.prim_max_height).into());
-            if c2.is_none() {
-                return None;
-            }
-            Some(Self::new(c1.unwrap(), size.1 / cache.prim_max_height, Some(c2.unwrap())))
-        }
-    }
-    pub fn prim_grid_index_info(&self, y: Y, height: Y) -> (usize, Y, usize, Y) {
+    fn first_prim_grid(&self) -> &PrimBitGrid<'a, Int, C> { self.prim_grids.first().unwrap() }
+    pub fn first_prim_grid_info(&self, y: Y) -> (usize, Y) {
         // Example:
         // 0     1     2     3
         // 0123450123450123450123 (prim_height = 5)
         //          @@@@@@@@@@ (y = 9, height = 10)
-        // => first_i = 1, first_y = 3, last_i = 3, last_height = 1
-        let h = self.prim_height();
-        let (first_i, first_y) = if y >= 0 {
-            ((y / h) as usize, y % h)
+        // => i = 1, y = 3
+        if y >= 0 {
+            ((y / self.prim_height) as usize, y % self.prim_height)
         } else {
             (0, y)
-        };
+        }
+    }
+    pub fn prim_grid_info(&self, y: Y, height: Y) -> (usize, Y, usize, Y) {
+        let (first_i, first_y) = self.first_prim_grid_info(y);
+        // Example:
+        // 0     1     2     3
+        // 0123450123450123450123 (prim_height = 5)
+        //          @@@@@@@@@@ (y = 9, height = 10)
+        // => i = 1, y = 3
         let last_y = first_y + height;
         let (last_i, last_height) = if last_y >= 0 {
-            ((last_y / h) as usize, last_y % h)
+            ((last_y / self.prim_height) as usize, last_y % self.prim_height)
         } else {
             (0, 0)
         };
         (first_i, first_y, last_i, last_height)
     }
-    pub fn put_same_stride_prim<OtherCell: CellTrait>(&mut self, pos: Vec2, other: &PrimBitGrid<Int, OtherCell>) {
-        let (first_i, first_y, last_i, _) = self.prim_grid_index_info(pos.1, other.height());
-        self.prim_grids.get_mut(first_i).unwrap().put_same_stride((pos.0, first_y).into(), other);
-        let mut i = first_i + 1;
-        let mut y = first_y - self.prim_height;
+    fn put_same_stride_prim(&mut self, pos: Vec2, other: &PrimBitGrid<Int, C>) {
+        let (mut i, mut y, last_i, _) = self.prim_grid_info(pos.1, other.height());
         while i <= last_i {
-            self.prim_grids.get_mut(i).unwrap().put_same_stride((pos.0, y).into(), other);
+            self.prim_grids.get_mut(i).unwrap().put_prim_bit_grid((pos.0, y).into(), other);
             i += 1;
             y -= self.prim_height;
         }
     }
-    pub fn can_put_same_stride_prim<OtherCell: CellTrait>(&self, pos: Vec2, other: &PrimBitGrid<Int, OtherCell>) -> bool {
-        // NOTE: outside on lhs := x + other_left_padding < 0
-        // Example:
-        //   |0123456789|
-        // __@@@___ (other_left_padding = 2)
-        // x = -3
-        // -3 + 2 < 0 => -1 < 0
-        if pos.0 + other.left_padding() < 0 {
-            return false;
+    fn can_put_same_stride_prim(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> bool {
+        let (mut i, mut y, last_i, last_height) = self.prim_grid_info(pos.1, other.height());
+        while i <= last_i {
+            let h = if i == last_i { last_height } else { self.prim_height };
+            let mut g = other.clone();
+            // Example:
+            // -------------------> Y
+            // ...|0123456789|... (height = 10)
+            //           __@@@__ (y = 6, height = 7)
+            //               <-> 3 rows should be masked.
+            let masked_height = y + g.height() - h;
+            if masked_height > 0 {
+                g.fill_top(masked_height, C::empty());
+            }
+            // Example:
+            // -------------------> Y
+            // ...|0123456789|... (height = 10)
+            // __@@@__ (y = -3, height = 7)
+            // <-> 3 rows should be masked.
+            let masked_height = -y;
+            if masked_height > 0 {
+                g.fill_bottom(masked_height, C::empty());
+            }
+            if !self.prim_grids.get(i).unwrap().can_put_prim_bit_grid((pos.0, y).into(), &g) {
+                return false;
+            }
+            i += 1;
+            y -= self.prim_height;
         }
-        // NOTE: outside on rhs := x + (other_width - other_right_padding) > width
-        // Example:
-        // |0123456789| (width = 10)
-        // |      __@@@___ (other_width = 8, other_right_padding = 3)
-        //        x = 6
-        // 6 + (8 - 3) > 10 => 11 > 10
-        if pos.0 + (other.width() - other.right_padding()) > self.width() {
-            return false;
-        }
-        if i == 0 && y + other.bottom_padding() < 0 {
-            return false;
-        }
-        if y + (other.height() - other.top_padding()) > self.height() {
-            return false;
-        }
-        if y + other.height() < prim_height {
-            return self.prim;
-        }
-
-        let (first_i, first_y, last_i, last_height) = self.prim_grid_index_info(pos.1);
-
+        true
     }
-    pub fn num_droppable_rows_same_stride_prim(&self, _pos: Vec2, _sub: &PrimBitGrid<Int, C>) -> Y { todo!() }
+    fn num_droppable_rows_same_stride_prim(&self, pos: Vec2, sub: &PrimBitGrid<Int, C>) -> Y {
+        let mut n = 0;
+        while self.can_put_same_stride_prim((pos.0, pos.1 - n).into(), sub) {
+            n += 1;
+        }
+        n
+    }
 }
 
-impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<'a, Int, C> {
+impl<'a, Int: PrimInt, C: CellTrait> BitGridTrait<'a, Int, C> for BasicBitGrid<'a, Int, C> {
+    fn with_store(store: &'a PrimBitGridConstantsStore<Int>, size: Vec2) -> Option<Self> {
+        if size.0 <= 0 || size.1 <= 0 {
+            return None;
+        }
+        if size.1 <= store.prim_max_height {
+            store.get(size).map(|c| Self::new(c, 1, None))
+        } else {
+            let c1 = store.get((size.0, store.prim_max_height).into());
+            if c1.is_none() {
+                return None;
+            }
+            let c2 = store.get((size.0, size.1 % store.prim_max_height).into());
+            if c2.is_none() {
+                return None;
+            }
+            Some(Self::new(c1.unwrap(), size.1 / store.prim_max_height, Some(c2.unwrap())))
+        }
+    }
+    fn put_prim_bit_grid(&mut self, pos: Vec2, other: &PrimBitGrid<Int, C>) {
+        let g = self.first_prim_grid();
+        if g.constants.stride == other.constants.stride {
+            return self.put_same_stride_prim(pos, &other);
+        }
+        // TODO: more optimization
+        self.put(pos, other);
+    }
+    fn can_put_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> bool {
+        let g = self.first_prim_grid();
+        if g.constants.stride == other.constants.stride {
+            return self.can_put_same_stride_prim(pos, &other);
+        }
+        // TODO: more optimization
+        self.can_put(pos, other)
+    }
+    fn num_droppable_rows_of_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> Y {
+        let g = self.first_prim_grid();
+        if g.constants.stride == other.constants.stride {
+            return self.num_droppable_rows_same_stride_prim(pos, &other);
+        }
+        // TODO
+        self.num_droppable_rows(pos, other)
+    }
+}
+
+impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BasicBitGrid<'a, Int, C> {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
     fn cell(&self, pos: Vec2) -> C {
-        let (i, y) = self.prim_grid_index(pos.1);
+        let (i, y) = self.first_prim_grid_info(pos.1);
         self.prim_grids.get(i).unwrap().cell((pos.0, y).into())
     }
     fn set_cell(&mut self, pos: Vec2, cell: C) {
-        let (i, y) = self.prim_grid_index(pos.1);
+        let (i, y) = self.first_prim_grid_info(pos.1);
         self.prim_grids.get_mut(i).unwrap().set_cell((pos.0, y).into(), cell);
     }
     fn fill_row(&mut self, y: Y, cell: C) {
-        let (i, y) = self.prim_grid_index(y);
+        let (i, y) = self.first_prim_grid_info(y);
         self.prim_grids.get_mut(i).unwrap().fill_row(y, cell);
     }
     fn fill_all(&mut self, cell: C) {
@@ -517,11 +621,11 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<'a, Int, C> {
         }
     }
     fn is_row_filled(&self, y: Y) -> bool {
-        let (i, y) = self.prim_grid_index(y);
+        let (i, y) = self.first_prim_grid_info(y);
         self.prim_grids.get(i).unwrap().is_row_filled(y)
     }
     fn is_row_empty(&self, y: Y) -> bool {
-        let (i, y) = self.prim_grid_index(y);
+        let (i, y) = self.first_prim_grid_info(y);
         self.prim_grids.get(i).unwrap().is_row_empty(y)
     }
     fn is_col_filled(&self, x: X) -> bool {
@@ -547,8 +651,8 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<'a, Int, C> {
         if y1 > y2 {
             std::mem::swap(&mut y1, &mut y2);
         }
-        let (i1, y1) = self.prim_grid_index(y1);
-        let (i2, y2) = self.prim_grid_index(y2);
+        let (i1, y1) = self.first_prim_grid_info(y1);
+        let (i2, y2) = self.first_prim_grid_info(y2);
         if i1 == i2 {
             self.prim_grids.get_mut(i1).unwrap().swap_rows(y1, y2);
         } else {
@@ -560,7 +664,7 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<'a, Int, C> {
         }
     }
     fn num_blocks_of_row(&self, y: Y) -> usize {
-        let (i, y) = self.prim_grid_index(y);
+        let (i, y) = self.first_prim_grid_info(y);
         self.prim_grids.get(i).unwrap().num_blocks_of_row(y)
     }
     fn num_blocks(&self) -> usize {
@@ -572,19 +676,19 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BitGrid<'a, Int, C> {
     }
 }
 
-impl<Int: PrimInt, C: CellTrait> fmt::Display for BitGrid<'_, Int, C> {
+impl<'a, Int: PrimInt, C: CellTrait> fmt::Display for BasicBitGrid<'a, Int, C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
 }
 
-impl<Int: PrimInt, C: CellTrait> PartialEq for BitGrid<'_, Int, C> {
+impl<'a, Int: PrimInt, C: CellTrait> PartialEq for BasicBitGrid<'a, Int, C> {
     fn eq(&self, other: &Self) -> bool {
         self.size() == other.size() && self.prim_grids == other.prim_grids
     }
 }
 
-impl<Int: PrimInt, C: CellTrait> Eq for BitGrid<'_, Int, C> {}
+impl<'a, Int: PrimInt, C: CellTrait> Eq for BasicBitGrid<'a, Int, C> {}
 
-impl<Int: PrimInt + Hash, C: CellTrait> Hash for BitGrid<'_, Int, C> {
+impl<'a, Int: PrimInt + Hash, C: CellTrait> Hash for BasicBitGrid<'a, Int, C> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.size().hash(state);
         self.prim_grids.hash(state);
@@ -595,11 +699,12 @@ impl<Int: PrimInt + Hash, C: CellTrait> Hash for BitGrid<'_, Int, C> {
 
 #[cfg(test)]
 mod tests {
+    use once_cell::sync::Lazy;
     use super::*;
     use crate::{Vec2, CellTrait, Grid, TestSuite};
 
-    static CONSTANTS_REGISTRY: Lazy<PrimBitGridConstantsCache<u64>> = Lazy::new(|| {
-        let mut r = PrimBitGridConstantsCache::new(10);
+    static CONSTANTS_REGISTRY: Lazy<PrimBitGridConstantsStore<u64>> = Lazy::new(|| {
+        let mut r = PrimBitGridConstantsStore::new(10);
         r.prepare_for_bit_grid((10, 6).into());
         r
     });
@@ -644,7 +749,7 @@ mod tests {
             0b0001111111_0001111111_0001111111,
             0b0011111111_0011111111_0011111111,
             0b0111111111_0111111111_0111111111,
-        ], c.lhs_cols_masks.as_slice());
+        ], c.left_side_cols_masks.as_slice());
 
         assert_eq!(&[
             0b1000000000_1000000000_1000000000,
@@ -656,7 +761,7 @@ mod tests {
             0b1111111000_1111111000_1111111000,
             0b1111111100_1111111100_1111111100,
             0b1111111110_1111111110_1111111110,
-        ], c.rhs_cols_masks.as_slice());
+        ], c.right_side_cols_masks.as_slice());
 
         assert_eq!(&[
             0b0000000000_0000000000_1111111111,
@@ -699,14 +804,14 @@ mod tests {
             0b0000000011_0000000011,
             0b0000000111_0000000111,
             0b0000001111_0000001111,
-        ], c.lhs_cols_masks.as_slice());
+        ], c.left_side_cols_masks.as_slice());
 
         assert_eq!(&[
             0b0000010000_0000010000,
             0b0000011000_0000011000,
             0b0000011100_0000011100,
             0b0000011110_0000011110,
-        ], c.rhs_cols_masks.as_slice());
+        ], c.right_side_cols_masks.as_slice());
 
         assert_eq!(&[
             0b0000000000_0000011111,
@@ -719,13 +824,13 @@ mod tests {
 
     #[test]
     fn test_prim_bit_grid_basic() {
-        let helper = TestSuite::new(|| BitGrid::<_, BinaryCell>::with_cache(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap());
+        let helper = TestSuite::new(|| BasicBitGrid::<_, BinaryCell>::with_store(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap());
         helper.basic();
     }
 
     #[test]
-    fn test_prim_big_grid_put_fast() {
-        let mut g1 = PrimBitGrid::<_, BinaryCell>::with_cache(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap();
+    fn test_prim_bit_grid_put_same_stride() {
+        let mut g1 = PrimBitGrid::<_, BinaryCell>::with_store(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap();
         let mut g2 = g1.clone();
         g2.set_rows_with_strs((1, 1).into(), &[
             " @@ ",
@@ -733,7 +838,7 @@ mod tests {
             "@@ @",
             " @@ ",
         ]);
-        g1.put_fast((-2, -2).into(), &g2);
+        g1.put_same_stride((-2, -2).into(), &g2);
         assert_eq!(6, g1.num_blocks());
         let mut block_positions: Vec<(i8, i8)> = vec![
             (0, 0), (0, 2), (1, 1), (1, 2), (2, 0), (2, 1),
@@ -741,7 +846,7 @@ mod tests {
         for pos in &block_positions {
             assert!(g1.cell((*pos).into()).is_block());
         }
-        g1.put_fast((6, 2).into(), &g2);
+        g1.put_same_stride((6, 2).into(), &g2);
         assert_eq!(12, g1.num_blocks());
         block_positions.extend([
             (7, 4), (7, 5), (8, 3), (8, 4), (9, 3), (9, 5),
@@ -752,8 +857,8 @@ mod tests {
     }
 
     #[test]
-    fn test_prim_big_grid_can_put_fast() {
-        let mut g1 = PrimBitGrid::<_, BinaryCell>::with_cache(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap();
+    fn test_prim_bit_grid_can_put_same_stride() {
+        let mut g1 = PrimBitGrid::<_, BinaryCell>::with_store(&CONSTANTS_REGISTRY, (10, 6).into()).unwrap();
         let mut g2 = g1.clone();
         g2.set_rows_with_strs((1, 1).into(), &[
             " @@ ",
@@ -761,26 +866,26 @@ mod tests {
             "@@ @",
             " @@ ",
         ]);
-        assert!(g1.can_put_fast((-1, -1).into(), &g2));
-        assert!(!g1.can_put_fast((-2, 0).into(), &g2));
-        assert!(!g1.can_put_fast((0, -2).into(), &g2));
-        g1.put_fast((-1, -1).into(), &g2);
-        assert!(!g1.can_put_fast((-1, -1).into(), &g2));
+        assert!(g1.can_put_same_stride((-1, -1).into(), &g2));
+        assert!(!g1.can_put_same_stride((-2, 0).into(), &g2));
+        assert!(!g1.can_put_same_stride((0, -2).into(), &g2));
+        g1.put_same_stride((-1, -1).into(), &g2);
+        assert!(!g1.can_put_same_stride((-1, -1).into(), &g2));
     }
 
     #[test]
-    fn test_bit_grid_basic() {
+    fn test_basic_bit_grid_basic() {
         let c10x3 = PrimBitGridConstants::<u32>::new(10, Some(3), None);
         let c10x1 = PrimBitGridConstants::<u32>::new(10, Some(1), None);
-        let helper = TestSuite::new(|| BitGrid::<u32>::new(&c10x3, 3, Some(&c10x1)));
+        let helper = TestSuite::new(|| BasicBitGrid::<u32>::new(&c10x3, 3, Some(&c10x1)));
         helper.basic();
     }
 
     #[test]
-    fn test_bit_grid_put_same_stride_prim() {
+    fn test_basic_bit_grid_put_same_stride_prim() {
         let c10x3 = PrimBitGridConstants::<u32>::new(10, Some(3), None);
         let c10x1 = PrimBitGridConstants::<u32>::new(10, Some(1), None);
-        let mut g1 = BitGrid::<u32>::new(&c10x3, 3, Some(&c10x1));
+        let mut g1 = BasicBitGrid::<u32>::new(&c10x3, 3, Some(&c10x1));
         let mut g2 = PrimBitGrid::<u32>::new(&c10x3);
         g2.set_rows_with_strs((1, 1).into(), &["@", "@"]);
         g1.put_same_stride_prim((1, 1).into(), &g2);
@@ -789,15 +894,15 @@ mod tests {
     }
 
     #[test]
-    fn test_bit_grid_constants_cache() {
+    fn test_prim_bit_grid_constants_store() {
         {
-            let mut c = PrimBitGridConstantsCache::<u64>::new(10);
+            let mut c = PrimBitGridConstantsStore::<u64>::new(10);
             c.prepare_for_prim_bit_grid(Vec2(10, 5));
             assert!(c.get(Vec2(10, 4)).is_none());
             assert!(c.get(Vec2(10, 5)).is_some());
         }
         {
-            let mut c = PrimBitGridConstantsCache::<u64>::new(10);
+            let mut c = PrimBitGridConstantsStore::<u64>::new(10);
             c.prepare_for_bit_grid((10, 10).into());
             assert!(c.get(Vec2(10, 4)).is_some());
             assert!(c.get(Vec2(10, 6)).is_some());

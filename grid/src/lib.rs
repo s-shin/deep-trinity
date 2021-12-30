@@ -112,6 +112,30 @@ pub trait Grid<C: CellTrait>: Clone {
             self.fill_row(y, cell);
         }
     }
+    fn fill_top(&mut self, n: Y, cell: C) {
+        if n <= 0 {
+            return;
+        }
+        let h = self.height();
+        if n >= h {
+            self.fill_all(cell);
+        }
+        for y in (h - n)..h {
+            self.fill_row(y, cell);
+        }
+    }
+    fn fill_bottom(&mut self, n: Y, cell: C) {
+        if n <= 0 {
+            return;
+        }
+        let h = self.height();
+        if n >= h {
+            self.fill_all(cell);
+        }
+        for y in 0..n {
+            self.fill_row(y, cell);
+        }
+    }
     /// Example:
     /// ```
     /// use grid::{Grid, CellTrait, BasicGrid, BinaryCell};
@@ -278,14 +302,11 @@ pub trait Grid<C: CellTrait>: Clone {
         !are_cells_disposed
     }
     fn num_droppable_rows<G: Grid<C>>(&self, pos: Vec2, sub: &G) -> Y {
-        if !self.can_put(pos, sub) {
-            return 0;
-        }
-        let mut n: Y = 1;
-        while self.can_put((pos.0 - n as Y, pos.1).into(), sub) {
+        let mut n = 0;
+        while self.can_put((pos.0, pos.1 - n).into(), sub) {
             n += 1;
         }
-        n - 1
+        n
     }
     fn num_blocks_of_row(&self, y: Y) -> usize {
         if self.is_row_empty(y) {

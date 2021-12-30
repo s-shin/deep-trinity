@@ -3,13 +3,14 @@ pub mod helper;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
-use std::fmt::Write;
 use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 use std::ops;
 use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use once_cell::sync::Lazy;
 use grid::{CellTrait, Grid, X, Y, Vec2};
+use grid::bitgrid::BitGridTrait;
 
 //--------------------------------------------------------------------------------------------------
 // Piece, Block and Cell
@@ -133,34 +134,51 @@ impl CellTrait for Cell {
 //--------------------------------------------------------------------------------------------------
 
 type BasicGrid = grid::BasicGrid<Cell>;
-type PrimBitGridConstantsCache = grid::bitgrid::PrimBitGridConstantsCache<u64>;
-type PrimBitGrid<'a> = grid::bitgrid::PrimBitGrid<'a, u64, Cell>;
-type BitGrid<'a> = grid::bitgrid::BitGrid<'a, u64, Cell>;
 
-static DEFAULT_PRIM_GRID_CONSTANTS_CACHE: Lazy<PrimBitGridConstantsCache> = Lazy::new(|| {
-    let mut cache = PrimBitGridConstantsCache::new(DEFAULT_PLAYFIELD_SIZE.0);
-    cache.prepare_for_prim_bit_grid(Vec2(3, 3));
-    cache.prepare_for_prim_bit_grid(Vec2(5, 5));
-    cache.prepare_for_bit_grid(DEFAULT_PLAYFIELD_SIZE);
-    cache
+type BitGridInt = u64;
+type PrimBitGridConstantsStore = grid::bitgrid::PrimBitGridConstantsStore<BitGridInt>;
+type PrimBitGrid<'a> = grid::bitgrid::PrimBitGrid<'a, BitGridInt, Cell>;
+type BasicBitGrid<'a> = grid::bitgrid::BasicBitGrid<'a, BitGridInt, Cell>;
+
+pub static DEFAULT_PRIM_GRID_CONSTANTS_STORE: Lazy<PrimBitGridConstantsStore> = Lazy::new(|| {
+    // Use the width of a playfield as the stride.
+    let mut store = PrimBitGridConstantsStore::new(DEFAULT_PLAYFIELD_SIZE.0);
+    // For I piece.
+    store.prepare_for_prim_bit_grid(Vec2(5, 5));
+    // For other pieces.
+    store.prepare_for_prim_bit_grid(Vec2(3, 3));
+    // For playfield.
+    store.prepare_for_bit_grid(DEFAULT_PLAYFIELD_SIZE);
+    store
 });
 
-#[derive(Clone)]
-pub struct HybridGrid<'a> {
+#[derive(Clone, Debug, Eq)]
+pub struct HybridGrid<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> {
     pub basic_grid: BasicGrid,
-    pub bit_grid: BitGrid<'a>,
+    pub bit_grid: BitGrid,
+    phantom: PhantomData<fn() -> &'a ()>,
 }
 
-impl<'a> HybridGrid<'a> {
-    pub fn new(cache: &'a PrimBitGridConstantsCache, size: Vec2) -> Self {
-        Self {
-            basic_grid: BasicGrid::new(size),
-            bit_grid: BitGrid::with_cache(cache, size).unwrap(),
-        }
+impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> HybridGrid<'a, BitGrid> {
+    pub fn new(basic_grid: BasicGrid, bit_grid: BitGrid) -> Self {
+        Self { basic_grid, bit_grid, phantom: PhantomData }
+    }
+    pub fn with_store(store: &'a PrimBitGridConstantsStore, size: Vec2) -> Option<Self> {
+        BitGrid::with_store(store, size).map(|bit_grid| Self::new(BasicGrid::new(size), bit_grid))
+    }
+    pub fn put_fast<'b>(&mut self, pos: Vec2, other: &HybridGrid<'b, PrimBitGrid<'b>>) {
+        self.basic_grid.put(pos, &other.basic_grid);
+        self.bit_grid.put_prim_bit_grid(pos, &other.bit_grid);
+    }
+    pub fn can_put_fast<'b>(&self, pos: Vec2, other: &HybridGrid<'b, PrimBitGrid<'b>>) -> bool {
+        self.bit_grid.can_put_prim_bit_grid(pos, &other.bit_grid)
+    }
+    pub fn num_droppable_rows_fast<'b>(&self, pos: Vec2, other: &HybridGrid<'b, PrimBitGrid<'b>>) -> Y {
+        self.bit_grid.num_droppable_rows_of_prim_bit_grid(pos, &other.bit_grid)
     }
 }
 
-impl<'a> Grid<Cell> for HybridGrid<'a> {
+impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<'a, BitGrid> {
     fn width(&self) -> X { self.basic_grid.width() }
     fn height(&self) -> X { self.basic_grid.height() }
     fn cell(&self, pos: Vec2) -> Cell { self.basic_grid.cell(pos) }
@@ -176,6 +194,14 @@ impl<'a> Grid<Cell> for HybridGrid<'a> {
         self.basic_grid.fill_all(cell);
         self.bit_grid.fill_all(cell);
     }
+    fn fill_top(&mut self, n: Y, cell: Cell) {
+        self.basic_grid.fill_top(n, cell);
+        self.bit_grid.fill_top(n, cell);
+    }
+    fn fill_bottom(&mut self, n: Y, cell: Cell) {
+        self.basic_grid.fill_bottom(n, cell);
+        self.bit_grid.fill_bottom(n, cell);
+    }
     fn is_row_filled(&self, y: Y) -> bool { self.bit_grid.is_row_filled(y) }
     fn is_row_empty(&self, y: Y) -> bool { self.bit_grid.is_row_empty(y) }
     fn is_col_filled(&self, x: X) -> bool { self.bit_grid.is_col_filled(x) }
@@ -188,15 +214,15 @@ impl<'a> Grid<Cell> for HybridGrid<'a> {
     fn num_blocks(&self) -> usize { self.bit_grid.num_blocks() }
 }
 
-impl<'a> fmt::Display for HybridGrid<'a> {
+impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> fmt::Display for HybridGrid<'a, BitGrid> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
 }
 
-impl<'a> PartialEq for HybridGrid<'a> {
+impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> PartialEq for HybridGrid<'a, BitGrid> {
     fn eq(&self, other: &Self) -> bool { self.basic_grid == other.basic_grid }
 }
 
-impl<'a> Hash for HybridGrid<'a> {
+impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Hash for HybridGrid<'a, BitGrid> {
     fn hash<H: Hasher>(&self, state: &mut H) { self.basic_grid.hash(state); }
 }
 
@@ -545,29 +571,19 @@ fn srs_offset_data_others() -> Vec<Vec<(X, Y)>> {
     ]
 }
 
-pub struct PieceGrids<'a> {
-    pub basic_grid: BasicGrid,
-    pub prim_bit_grid: PrimBitGrid<'a>,
-}
-
-impl<'a> PieceGrids<'a> {
-    pub fn new(basic_grid: BasicGrid, prim_bit_grid: PrimBitGrid<'a>) -> Self {
-        Self { basic_grid, prim_bit_grid }
-    }
-}
-
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PieceSpec<'a> {
     pub piece: Piece,
     /// The index of Vec is orientation.
-    pub grids: Vec<PieceGrids<'a>>,
+    pub grids: Vec<HybridGrid<'a, PrimBitGrid<'a>>>,
     pub initial_placement: Placement,
     /// The index of outer Vec is orientation.
     pub srs_offset_data: Vec<Vec<(X, Y)>>,
 }
 
 impl<'a> PieceSpec<'a> {
-    fn new<'b: 'a>(cache: &'b PrimBitGridConstantsCache, piece: Piece, size: (X, Y), block_pos_list: Vec<(X, Y)>,
-                   initial_pos: (X, Y), srs_offset_data: Vec<Vec<(X, Y)>>) -> Self {
+    fn new(store: &'a PrimBitGridConstantsStore, piece: Piece, size: (X, Y), block_pos_list: Vec<(X, Y)>,
+           initial_pos: (X, Y), srs_offset_data: Vec<Vec<(X, Y)>>) -> Self {
         let piece_cell = Cell::Block(Block::Piece(piece));
         let mut grid = BasicGrid::new(size.into());
         for pos in block_pos_list {
@@ -582,11 +598,11 @@ impl<'a> PieceSpec<'a> {
             grid_deg180,
             grid_deg270,
         ];
-        let mut grids: Vec<PieceGrids> = Vec::with_capacity(basic_grids.len());
+        let mut grids = Vec::with_capacity(basic_grids.len());
         for basic_grid in basic_grids {
-            let mut g = PrimBitGrid::with_cache(cache, size.into()).unwrap();
+            let mut g = PrimBitGrid::with_store(store, size.into()).unwrap();
             g.put((0, 0).into(), &basic_grid);
-            grids.push(PieceGrids::new(basic_grid, g));
+            grids.push(HybridGrid::new(basic_grid, g));
         }
         Self {
             piece,
@@ -597,28 +613,29 @@ impl<'a> PieceSpec<'a> {
     }
 }
 
-struct PieceSpecCollection<'a> {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PieceSpecCollection<'a> {
     specs: Vec<PieceSpec<'a>>,
 }
 
 impl<'a> PieceSpecCollection<'a> {
-    fn new(specs: Vec<PieceSpec<'a>>) -> Self {
+    pub fn new(specs: Vec<PieceSpec<'a>>) -> Self {
         Self { specs }
     }
-    fn get(&self, p: Piece) -> &PieceSpec<'a> {
+    pub fn get(&self, p: Piece) -> &PieceSpec<'a> {
         self.specs.get(p as usize).unwrap()
     }
 }
 
-struct PieceSpecBuilder<'a> {
-    cache: &'a PrimBitGridConstantsCache,
+pub struct PieceSpecBuilder<'a> {
+    store: &'a PrimBitGridConstantsStore,
 }
 
 impl<'a> PieceSpecBuilder<'a> {
-    fn new(cache: &'a PrimBitGridConstantsCache) -> Self {
-        Self { cache }
+    pub fn new(store: &'a PrimBitGridConstantsStore) -> Self {
+        Self { store }
     }
-    fn piece_specs(&self) -> PieceSpecCollection<'a> {
+    pub fn piece_specs(&self) -> PieceSpecCollection<'a> {
         PieceSpecCollection::new(vec![
             self.piece_s(),
             self.piece_z(),
@@ -638,7 +655,7 @@ impl<'a> PieceSpecBuilder<'a> {
     /// ```
     fn piece_s(&self) -> PieceSpec<'a> {
         PieceSpec::new(
-            self.cache,
+            self.store,
             Piece::S,
             (3, 3),
             vec![(0, 1), (1, 1), (1, 2), (2, 2)],
@@ -655,7 +672,7 @@ impl<'a> PieceSpecBuilder<'a> {
     /// ```
     fn piece_z(&self) -> PieceSpec<'a> {
         PieceSpec::new(
-            self.cache,
+            self.store,
             Piece::Z,
             (3, 3),
             vec![(0, 2), (1, 1), (1, 2), (2, 1)],
@@ -672,7 +689,7 @@ impl<'a> PieceSpecBuilder<'a> {
     /// ```
     fn piece_l(&self) -> PieceSpec<'a> {
         PieceSpec::new(
-            self.cache,
+            self.store,
             Piece::L,
             (3, 3),
             vec![(0, 1), (1, 1), (2, 1), (2, 2)],
@@ -689,7 +706,7 @@ impl<'a> PieceSpecBuilder<'a> {
     /// ```
     fn piece_j(&self) -> PieceSpec<'a> {
         PieceSpec::new(
-            self.cache,
+            self.store,
             Piece::J,
             (3, 3),
             vec![(0, 1), (0, 2), (1, 1), (2, 1)],
@@ -708,7 +725,7 @@ impl<'a> PieceSpecBuilder<'a> {
     /// ```
     fn piece_i(&self) -> PieceSpec<'a> {
         PieceSpec::new(
-            self.cache,
+            self.store,
             Piece::I,
             (5, 5),
             vec![(1, 2), (2, 2), (3, 2), (4, 2)],
@@ -725,7 +742,7 @@ impl<'a> PieceSpecBuilder<'a> {
     /// ```
     fn piece_t(&self) -> PieceSpec<'a> {
         PieceSpec::new(
-            self.cache,
+            self.store,
             Piece::T,
             (3, 3),
             vec![(0, 1), (1, 1), (1, 2), (2, 1)],
@@ -742,7 +759,7 @@ impl<'a> PieceSpecBuilder<'a> {
     /// ```
     fn piece_o(&self) -> PieceSpec<'a> {
         PieceSpec::new(
-            self.cache,
+            self.store,
             Piece::O,
             (3, 3),
             vec![(1, 1), (1, 2), (2, 1), (2, 2)],
@@ -752,10 +769,14 @@ impl<'a> PieceSpecBuilder<'a> {
     }
 }
 
-static DEFAULT_PIECE_SPEC_COLLECTION: Lazy<PieceSpecCollection> = Lazy::new(|| {
-    let b = PieceSpecBuilder::new(&DEFAULT_PRIM_GRID_CONSTANTS_CACHE);
+pub static DEFAULT_PIECE_SPEC_COLLECTION: Lazy<PieceSpecCollection> = Lazy::new(|| {
+    let b = PieceSpecBuilder::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE);
     b.piece_specs()
 });
+
+impl Default for &PieceSpecCollection<'_> {
+    fn default() -> Self { &DEFAULT_PIECE_SPEC_COLLECTION }
+}
 
 //---
 
@@ -877,7 +898,7 @@ impl<'a> FallingPiece<'a> {
         fp
     }
     pub fn piece(&self) -> Piece { self.piece_spec.piece }
-    pub fn grid(&self) -> &'a PieceGrids {
+    pub fn grid(&self) -> &'a HybridGrid<PrimBitGrid<'a>> {
         &self.piece_spec.grids[self.placement.orientation.id() as usize]
     }
     pub fn apply_move(&mut self, mv: Move, pf: &Playfield, mode: RotationMode) -> bool {
@@ -938,16 +959,13 @@ impl<'a> FallingPiece<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Playfield<'a> {
-    pub grid: HybridGrid<'a>,
+    pub grid: HybridGrid<'a, BasicBitGrid<'a>>,
     pub visible_height: Y,
 }
 
 impl<'a> Playfield<'a> {
-    pub fn new(cache: &'a PrimBitGridConstantsCache, size: Vec2, visible_height: Y) -> Self {
-        Self {
-            grid: HybridGrid::new(cache, size),
-            visible_height,
-        }
+    pub fn new(store: &'a PrimBitGridConstantsStore, size: Vec2, visible_height: Y) -> Option<Self> {
+        HybridGrid::with_store(store, size).map(|grid| Self { grid, visible_height })
     }
     pub fn width(&self) -> X { self.grid.width() }
     pub fn height(&self) -> X { self.grid.height() }
@@ -964,10 +982,10 @@ impl<'a> Playfield<'a> {
         !ok
     }
     pub fn can_put(&self, fp: &FallingPiece) -> bool {
-        self.grid.bit_grid.can_put_same_stride_prim(fp.placement.pos, &fp.grid().prim_bit_grid)
+        self.grid.bit_grid.can_put_prim_bit_grid(fp.placement.pos, &fp.grid().bit_grid)
     }
     pub fn num_droppable_rows(&self, fp: &FallingPiece) -> Y {
-        self.grid.bit_grid.num_droppable_rows_same_stride_prim(fp.placement.pos, &fp.grid().bit_grid)
+        self.grid.bit_grid.num_droppable_rows_of_prim_bit_grid(fp.placement.pos, &fp.grid().bit_grid)
     }
     pub fn num_shiftable_cols(&self, fp: &FallingPiece, to_right: bool) -> X {
         let p = self.grid.bit_grid.search_last_pos_where_can_put(fp.placement.pos, &fp.grid().bit_grid,
@@ -980,14 +998,14 @@ impl<'a> Playfield<'a> {
         self.grid.bit_grid.can_put(fp.placement.pos + (0, -1).into(), &fp.grid().bit_grid)
     }
     pub fn can_drop_n(&self, fp: &FallingPiece, n: Y) -> bool {
-        n <= self.grid.bit_grid.num_droppable_rows_fast(fp.placement.pos, &fp.grid().bit_grid)
+        n <= self.grid.bit_grid.num_droppable_rows_of_prim_bit_grid(fp.placement.pos, &fp.grid().bit_grid)
     }
     pub fn can_move_horizontally(&self, fp: &FallingPiece, n: X) -> bool {
         let to_right = n > 0;
         let end = if to_right { n } else { -n };
         for dx in 1..=end {
             let x = fp.placement.pos.0 + if to_right { dx } else { -dx };
-            if !self.grid.bit_grid.can_put_fast((x, fp.placement.pos.1).into(), &fp.grid().bit_grid) {
+            if !self.grid.bit_grid.can_put_prim_bit_grid((x, fp.placement.pos.1).into(), &fp.grid().bit_grid) {
                 return false;
             }
         }
@@ -1000,13 +1018,13 @@ impl<'a> Playfield<'a> {
     }
     pub fn check_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Option<Placement> {
         let next_orientation: Orientation = fp.placement.orientation.rotate(if cw { 1 } else { -1 });
-        let spec = PieceSpec::of(fp.piece());
-        let next_grid: &HybridGrid = &spec.grids[next_orientation.id() as usize];
-        let offsets1: &Vec<(X, Y)> = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
-        let offsets2: &Vec<(X, Y)> = &spec.srs_offset_data[next_orientation.id() as usize];
+        let spec = fp.piece_spec;
+        let next_grid = &spec.grids[next_orientation.id() as usize];
+        let offsets1 = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
+        let offsets2 = &spec.srs_offset_data[next_orientation.id() as usize];
         for i in 0..offsets1.len() {
             let p = fp.placement.pos + offsets1[i].into() - offsets2[i].into();
-            if self.grid.bit_grid.can_put_fast(p, &next_grid.bit_grid) {
+            if self.grid.bit_grid.can_put_prim_bit_grid(p, &next_grid.bit_grid) {
                 return Some(Placement::new(next_orientation, p));
             }
         }
@@ -1019,15 +1037,15 @@ impl<'a> Playfield<'a> {
     }
     pub fn check_reverse_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Vec<Placement> {
         let prev_orientation: Orientation = fp.placement.orientation.rotate(if cw { -1 } else { 1 });
-        let spec = PieceSpec::of(fp.piece());
-        let prev_grid: &HybridGrid = &spec.grids[prev_orientation.id() as usize];
-        let offsets1: &Vec<(X, Y)> = &spec.srs_offset_data[prev_orientation.id() as usize];
-        let offsets2: &Vec<(X, Y)> = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
+        let spec = fp.piece_spec;
+        let prev_grid = &spec.grids[prev_orientation.id() as usize];
+        let offsets1 = &spec.srs_offset_data[prev_orientation.id() as usize];
+        let offsets2 = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
         let mut r = Vec::new();
         for i in 0..offsets1.len() {
             let p = fp.placement.pos - offsets1[i].into() + offsets2[i].into();
-            if self.grid.bit_grid.can_put_fast(p, &prev_grid.bit_grid) {
-                let prev_fp = FallingPiece::new(fp.piece(), Placement::new(prev_orientation, p));
+            if self.grid.bit_grid.can_put_prim_bit_grid(p, &prev_grid.bit_grid) {
+                let prev_fp = FallingPiece::new(fp.piece_spec, Placement::new(prev_orientation, p));
                 if let Some(pp) = self.check_rotation_by_srs(&prev_fp, cw) {
                     if pp == fp.placement {
                         r.push(Placement::new(prev_orientation, p));
@@ -1100,7 +1118,7 @@ impl<'a> Playfield<'a> {
     pub fn check_line_clear(&self, fp: &FallingPiece, mode: TSpinJudgementMode) -> LineClear {
         debug_assert!(self.can_lock(fp));
         let mut tmp_grid = self.grid.bit_grid.clone();
-        tmp_grid.put_fast(fp.placement.pos, &fp.grid().bit_grid);
+        tmp_grid.put_prim_bit_grid(fp.placement.pos, &fp.grid().bit_grid);
         LineClear::new(tmp_grid.num_filled_rows() as u8, self.check_tspin(fp, mode))
     }
     pub fn check_lock_out(&self, fp: &FallingPiece) -> Option<LockOutType> {
@@ -1141,11 +1159,11 @@ impl<'a> Playfield<'a> {
             for x in -max_padding..=(self.grid.width() as X - max_padding) {
                 for o in &ORIENTATIONS {
                     let g = sub_bit_grids[o.id() as usize];
-                    let can_put = self.grid.bit_grid.can_put_fast((x, y).into(), g);
+                    let can_put = self.grid.bit_grid.can_put_prim_bit_grid((x, y).into(), g);
                     if !can_put {
                         continue;
                     }
-                    let can_drop = self.grid.bit_grid.can_put_fast((x, y - 1).into(), g);
+                    let can_drop = self.grid.bit_grid.can_put_prim_bit_grid((x, y - 1).into(), g);
                     if can_drop {
                         continue;
                     }
@@ -1162,7 +1180,7 @@ pub const DEFAULT_PLAYFIELD_VISIBLE_HEIGHT: Y = 20;
 
 impl<'a> Default for Playfield<'a> {
     fn default() -> Self {
-        Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_CACHE, DEFAULT_PLAYFIELD_SIZE, DEFAULT_PLAYFIELD_VISIBLE_HEIGHT)
+        Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, DEFAULT_PLAYFIELD_SIZE, DEFAULT_PLAYFIELD_VISIBLE_HEIGHT).unwrap()
     }
 }
 
@@ -1401,14 +1419,16 @@ impl<'a> Default for GameState<'a> {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Game<'a> {
+    pub piece_specs: &'a PieceSpecCollection<'a>,
     pub rules: GameRules,
     pub state: GameState<'a>,
     pub stats: Statistics,
 }
 
 impl<'a> Game<'a> {
-    pub fn new(rules: GameRules, state: GameState<'a>, stats: Statistics) -> Self {
+    pub fn new(piece_specs: &'a PieceSpecCollection<'a>, rules: GameRules, state: GameState<'a>, stats: Statistics) -> Self {
         Self {
+            piece_specs,
             rules,
             state,
             stats,
@@ -1456,7 +1476,7 @@ impl<'a> Game<'a> {
             s.next_pieces.pop().unwrap()
         };
 
-        let fp = FallingPiece::spawn(p, Some(&s.playfield));
+        let fp = FallingPiece::spawn(self.piece_specs.get(p), Some(&s.playfield));
         if !s.playfield.can_put(&fp) {
             s.game_over_reason |= LossConditions::BLOCK_OUT;
         }
@@ -1579,7 +1599,7 @@ impl<'a> Game<'a> {
         if !s.can_hold {
             return Err("already held once");
         }
-        let p = s.falling_piece.as_ref().unwrap().piece;
+        let p = s.falling_piece.as_ref().unwrap().piece_spec.piece;
         s.falling_piece = None;
         let r = self.setup_falling_piece(self.state.hold_piece);
         self.state.hold_piece = Some(p);
@@ -1594,7 +1614,7 @@ impl<'a> Game<'a> {
         }
         let fp = s.falling_piece.as_ref().unwrap();
         let pf = &s.playfield;
-        let conf = move_search::SearchConfiguration::new(pf, fp.piece(), fp.placement, self.rules.rotation_mode);
+        let conf = move_search::SearchConfiguration::new(pf, fp.piece_spec, fp.placement, self.rules.rotation_mode);
         Ok(searcher.search(&conf))
     }
     pub fn get_move_candidates(&self) -> Result<HashSet<MoveTransition>, &'static str> {
@@ -1738,28 +1758,6 @@ mod tests {
     }
 
     #[test]
-    fn test_bit_grid() {
-        let mut grid = BitGrid::new((4, 5).into());
-        assert!(grid.cell((3, 1).into()).is_empty());
-        grid.set_cell((3, 1).into(), Cell::Block(Block::Any));
-        assert!(!grid.cell((3, 1).into()).is_empty());
-        assert_eq!("    \n    \n    \n   @\n    ", format!("{}", grid));
-
-        let mut grid2 = BitGrid::new((3, 2).into());
-        grid2.set_cell((1, 0).into(), Cell::Block(Block::Any));
-        grid2.set_cell((2, 0).into(), Cell::Block(Block::Any));
-        assert!(grid.can_put((1, 0).into(), &grid2));
-        assert!(grid.can_put_fast((1, 0).into(), &grid2));
-        assert!(!grid.can_put((1, 1).into(), &grid2));
-        assert!(!grid.can_put_fast((1, 1).into(), &grid2));
-        assert!(grid.can_put((1, 2).into(), &grid2));
-        assert!(grid.can_put_fast((1, 2).into(), &grid2));
-        grid.put_fast((1, 0).into(), &grid2);
-        assert!(!grid.cell((2, 0).into()).is_empty());
-        assert!(!grid.cell((3, 0).into()).is_empty());
-    }
-
-    #[test]
     fn test_grid_num_covered_empty_cells() {
         let mut grid = BasicGrid::new((10, 10).into());
         grid.set_cell((0, 5).into(), Cell::Block(Block::Any));
@@ -1771,7 +1769,7 @@ mod tests {
     #[test]
     fn test_falling_piece() {
         let pf = Playfield::default();
-        let mut fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        let mut fp = FallingPiece::spawn(Piece::O.default_spec(), Some(&pf));
         assert!(fp.apply_move(Move::Shift(1), &pf, RotationMode::Srs));
         assert!(fp.apply_move(Move::Shift(1), &pf, RotationMode::Srs));
         assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
@@ -1799,24 +1797,24 @@ mod tests {
     fn test_spawn_and_lock_out() {
         let mut pf = Playfield::default();
         pf.append_garbage(&[0].repeat(18));
-        let mut fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        let mut fp = FallingPiece::spawn(Piece::O.default_spec(), Some(&pf));
         assert_eq!(18, fp.placement.pos.1);
         assert!(!pf.can_lock(&fp));
         assert!(fp.apply_move(Move::Drop(1), &pf, RotationMode::Srs));
         assert!(pf.can_lock(&fp));
         assert_eq!(None, pf.check_lock_out(&fp));
         pf.append_garbage(&[0]);
-        let fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        let fp = FallingPiece::spawn(Piece::O.default_spec(), Some(&pf));
         assert_eq!(18, fp.placement.pos.1);
         assert!(pf.can_lock(&fp));
         assert_eq!(Some(LockOutType::PartialLockOut), pf.check_lock_out(&fp));
         pf.append_garbage(&[0]);
-        let fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        let fp = FallingPiece::spawn(Piece::O.default_spec(), Some(&pf));
         assert_eq!(19, fp.placement.pos.1);
         assert!(pf.can_lock(&fp));
         assert_eq!(Some(LockOutType::LockOut), pf.check_lock_out(&fp));
         pf.append_garbage(&[0]);
-        let fp = FallingPiece::spawn(Piece::O, Some(&pf));
+        let fp = FallingPiece::spawn(Piece::O.default_spec(), Some(&pf));
         assert_eq!(19, fp.placement.pos.1);
         assert!(!pf.can_lock(&fp));
     }
@@ -1829,7 +1827,7 @@ mod tests {
             "   @@@@@@@",
             "@ @@@@@@@@",
         ]);
-        let fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_2, (0, 0).into()));
+        let fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(ORIENTATION_2, (0, 0).into()));
         let r_cw = pf.check_reverse_rotation_by_srs(&fp, true);
         assert_eq!(vec![
             Placement::new(ORIENTATION_1, (0, 0).into()),
@@ -1847,7 +1845,7 @@ mod tests {
         pf.set_rows_with_strs((0, 0).into(), &[
             " @@@@@@@@@",
         ]);
-        let mut fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_0, (0, 0).into()));
+        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(ORIENTATION_0, (0, 0).into()));
         assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
         assert_eq!(Placement::new(ORIENTATION_1, (-1, 0).into()), fp.placement);
         let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
@@ -1864,7 +1862,7 @@ mod tests {
             "@@@@@@  @@",
             "@@@@@@@ @@",
         ]);
-        let mut fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_2, (6, 2).into()));
+        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(ORIENTATION_2, (6, 2).into()));
         assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
         assert_eq!(Placement::new(ORIENTATION_3, (6, 0).into()), fp.placement);
         let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
@@ -1881,7 +1879,7 @@ mod tests {
             "@@@@@@@  @",
             "@@@@@@@@ @",
         ]);
-        let mut fp = FallingPiece::new(Piece::T, Placement::new(ORIENTATION_2, (6, 2).into()));
+        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(ORIENTATION_2, (6, 2).into()));
         assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
         assert_eq!(Placement::new(ORIENTATION_3, (7, 0).into()), fp.placement);
         let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
@@ -1897,7 +1895,7 @@ mod tests {
             " @@@@@@@@ ",
             " @@@@@@@@ ",
         ]);
-        let ps = pf.search_lockable_placements(Piece::I);
+        let ps = pf.search_lockable_placements(Piece::I.default_spec());
         assert!(ps.contains(&Placement::new(ORIENTATION_1, (-2, 0).into())));
         assert!(ps.contains(&Placement::new(ORIENTATION_3, (-2, -1).into())));
     }
@@ -1931,7 +1929,7 @@ mod tests {
             "@@ @@@    ",
         ]);
         let fp = game.state.falling_piece.as_ref().unwrap();
-        let lockable = pf.search_lockable_placements(fp.piece());
+        let lockable = pf.search_lockable_placements(fp.piece().default_spec());
 
         let dst = Placement::new(ORIENTATION_3, (1, 0).into());
         assert!(lockable.iter().any(|p| { *p == dst }));
@@ -1983,42 +1981,42 @@ mod tests {
         assert_ok!(game.setup_falling_piece(None));
         // Test simple TSD opener.
         // O
-        assert_eq!(Piece::O, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_eq!(Piece::O, game.state.falling_piece.as_ref().unwrap().piece_spec.piece);
         assert_ok!(game.shift(-1, true));
         assert_ok!(game.firm_drop());
         assert_ok!(game.lock());
         // T
-        assert_eq!(Piece::T, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_eq!(Piece::T, game.state.falling_piece.as_ref().unwrap().piece_spec.piece);
         assert_ok!(game.hold());
         // I
-        assert_eq!(Piece::I, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_eq!(Piece::I, game.state.falling_piece.as_ref().unwrap().piece_spec.piece);
         assert_ok!(game.firm_drop());
         assert_ok!(game.lock());
         // J
-        assert_eq!(Piece::J, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_eq!(Piece::J, game.state.falling_piece.as_ref().unwrap().piece_spec.piece);
         assert_ok!(game.rotate(-1));
         assert_ok!(game.shift(1, true));
         assert_ok!(game.firm_drop());
         assert_ok!(game.lock());
         // L
-        assert_eq!(Piece::L, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_eq!(Piece::L, game.state.falling_piece.as_ref().unwrap().piece_spec.piece);
         assert_ok!(game.rotate(1));
         assert_ok!(game.shift(-1, true));
         assert_ok!(game.firm_drop());
         assert_ok!(game.lock());
         // S
-        assert_eq!(Piece::S, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_eq!(Piece::S, game.state.falling_piece.as_ref().unwrap().piece_spec.piece);
         assert_ok!(game.shift(1, false));
         assert_ok!(game.firm_drop());
         assert_ok!(game.lock());
         // Z
-        assert_eq!(Piece::Z, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_eq!(Piece::Z, game.state.falling_piece.as_ref().unwrap().piece_spec.piece);
         assert_ok!(game.shift(-2, false));
         assert_ok!(game.rotate(1));
         assert_ok!(game.firm_drop());
         assert_ok!(game.lock());
         // O
-        assert_eq!(Piece::O, game.state.falling_piece.as_ref().unwrap().piece);
+        assert_eq!(Piece::O, game.state.falling_piece.as_ref().unwrap().piece_spec.piece);
         assert_ok!(game.hold());
         // T
         assert_ok!(game.shift(1, true));
@@ -2062,9 +2060,9 @@ mod tests {
         let pf = &game.state.playfield;
         let fp = game.state.falling_piece.as_ref().unwrap();
 
-        let placements = game.state.playfield.search_lockable_placements(fp.piece());
+        let placements = game.state.playfield.search_lockable_placements(fp.piece_spec);
         let search_result = move_search::bruteforce::search_moves(
-            &move_search::SearchConfiguration::new(&pf, fp.piece(), fp.placement, game.rules.rotation_mode),
+            &move_search::SearchConfiguration::new(&pf, fp.piece_spec, fp.placement, game.rules.rotation_mode),
             false,
         );
         let dst = placements[0];
