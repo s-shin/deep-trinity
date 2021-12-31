@@ -16,4 +16,4 @@ console_error_panic_hook = { version = "0.1", optional = true }
 core = { path = "../core" }
 grid = { path = "../grid" }
 bot = { path = "../bot" }
-rand = { version = "0.7", features = ["wasm-bindgen"] }
+rand = "0.8"

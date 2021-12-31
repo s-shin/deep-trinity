@@ -1795,6 +1795,13 @@ mod tests {
     }
 
     #[test]
+    fn test_random_piece_generator() {
+        let mut rpg = RandomPieceGenerator::new(rand::thread_rng());
+        let piece_set: std::collections::HashSet<Piece> = rpg.generate().iter().copied().collect::<_>();
+        assert_eq!(NUM_PIECES, piece_set.len());
+    }
+
+    #[test]
     fn test_spawn_and_lock_out() {
         let mut pf = Playfield::default();
         pf.append_garbage(&[0].repeat(18));
