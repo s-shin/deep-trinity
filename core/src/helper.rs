@@ -1,6 +1,85 @@
 use std::collections::HashSet;
-use crate::{MoveTransition, FallingPiece, Playfield, move_search, GameRules, Piece, MovePathItem, Move, MovePath, get_nearest_placement_alias, LineClear, RotationMode, PieceSpec};
+use crate::{MoveTransition, FallingPiece, Playfield, move_search, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, PieceSpec, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0};
 use crate::move_search::{MoveSearcher, SearchConfiguration};
+
+pub fn get_placement_aliases(piece: Piece, placement: &Placement) -> Vec<Placement> {
+    match piece {
+        Piece::O => {
+            match placement.orientation {
+                ORIENTATION_0 => vec![
+                    Placement::new(ORIENTATION_1, placement.pos + (0, 1).into()),
+                    Placement::new(ORIENTATION_2, placement.pos + (1, 1).into()),
+                    Placement::new(ORIENTATION_3, placement.pos + (1, 0).into()),
+                ],
+                ORIENTATION_1 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + (0, -1).into()),
+                    Placement::new(ORIENTATION_2, placement.pos + (1, 0).into()),
+                    Placement::new(ORIENTATION_3, placement.pos + (1, -1).into()),
+                ],
+                ORIENTATION_2 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + (-1, -1).into()),
+                    Placement::new(ORIENTATION_1, placement.pos + (-1, 0).into()),
+                    Placement::new(ORIENTATION_3, placement.pos + (0, -1).into()),
+                ],
+                ORIENTATION_3 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + (-1, 0).into()),
+                    Placement::new(ORIENTATION_1, placement.pos + (-1, 1).into()),
+                    Placement::new(ORIENTATION_2, placement.pos + (0, 1).into()),
+                ],
+                _ => panic!(),
+            }
+        }
+        Piece::I => {
+            match placement.orientation {
+                ORIENTATION_0 => vec![
+                    Placement::new(ORIENTATION_2, placement.pos + (1, 0).into()),
+                ],
+                ORIENTATION_1 => vec![
+                    Placement::new(ORIENTATION_3, placement.pos + (0, -1).into()),
+                ],
+                ORIENTATION_2 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + (-1, 0).into()),
+                ],
+                ORIENTATION_3 => vec![
+                    Placement::new(ORIENTATION_1, placement.pos + (0, 1).into()),
+                ],
+                _ => panic!(),
+            }
+        }
+        Piece::S | Piece::Z => {
+            match placement.orientation {
+                ORIENTATION_0 => vec![
+                    Placement::new(ORIENTATION_2, placement.pos + (0, 1).into()),
+                ],
+                ORIENTATION_1 => vec![
+                    Placement::new(ORIENTATION_3, placement.pos + (1, 0).into()),
+                ],
+                ORIENTATION_2 => vec![
+                    Placement::new(ORIENTATION_0, placement.pos + (0, -1).into()),
+                ],
+                ORIENTATION_3 => vec![
+                    Placement::new(ORIENTATION_1, placement.pos + (-1, 0).into()),
+                ],
+                _ => panic!(),
+            }
+        }
+        _ => vec![],
+    }
+}
+
+pub fn get_nearest_placement_alias(piece: Piece, aliased: &Placement, reference: &Placement,
+                                   factors: Option<(usize, usize, usize)>) -> Placement {
+    let mut candidate = aliased.clone();
+    let mut distance = reference.distance(aliased, factors);
+    for p in &get_placement_aliases(piece, aliased) {
+        let d = reference.distance(p, factors);
+        if d < distance {
+            distance = d;
+            candidate = p.clone();
+        }
+    }
+    candidate
+}
 
 pub fn get_move_candidates(pf: &Playfield, fp: &FallingPiece, rules: &GameRules) -> HashSet<MoveTransition> {
     use move_search::bruteforce::BruteForceMoveSearcher;
