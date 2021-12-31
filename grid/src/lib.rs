@@ -57,10 +57,7 @@ pub trait Grid<C: CellTrait>: Clone {
     fn is_inside(&self, pos: Vec2) -> bool {
         0 <= pos.0 && pos.0 < self.width() && 0 <= pos.1 && pos.1 < self.height()
     }
-    /// If the all non-empty cells in the `sub` grid were put on this grid, `true` is returned.
-    /// TODO: Make no return value.
-    fn put<G: Grid<C>>(&mut self, pos: Vec2, sub: &G) -> bool {
-        let mut dirty = false;
+    fn put<G: Grid<C>>(&mut self, pos: Vec2, sub: &G) {
         for sub_y in 0..sub.height() {
             for sub_x in 0..sub.width() {
                 let sub_pos = (sub_x, sub_y).into();
@@ -70,17 +67,16 @@ pub trait Grid<C: CellTrait>: Clone {
                 }
                 let p = pos + sub_pos;
                 if !self.is_inside(p) {
-                    dirty = true;
+                    // dirty
                     continue;
                 }
                 let cell = self.cell(p);
                 if !cell.is_empty() {
-                    dirty = true;
+                    // dirty
                 }
                 self.set_cell(p, sub_cell);
             }
         }
-        !dirty
     }
     /// If the cells in the sub grid were put outside of this, returns false.
     fn can_put<G: Grid<C>>(&self, pos: Vec2, sub: &G) -> bool {
