@@ -359,7 +359,6 @@ impl MoveTransition {
     }
 }
 
-// TODO: Rename to MoveList
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MovePath {
     pub initial_placement: Placement,
@@ -1707,11 +1706,9 @@ impl<'a> fmt::Display for Game<'a> {
 }
 
 //--------------------------------------------------------------------------------------------------
-// GameReplay
+// MovePlayer
 //--------------------------------------------------------------------------------------------------
 
-// TODO: Rename since "Player" is a confusing word.
-// Also can this be implemented as Iterator?
 #[derive(Clone, Debug)]
 pub struct MovePlayer {
     path: MovePath,
@@ -1980,7 +1977,7 @@ mod tests {
             Piece::O, Piece::T, Piece::I, Piece::J, Piece::L, Piece::S, Piece::Z,
         ];
 
-        let mut game = Game::default();
+        let mut game: Game<'static> = Game::default();
         game.supply_next_pieces(&pieces);
         assert_ok!(game.setup_falling_piece(None));
         // Test simple TSD opener.
