@@ -25,6 +25,7 @@ name = "bot"
 version = "0.1.0"
 dependencies = [
  "core",
+ "grid",
  "rand",
  "tree",
 ]
@@ -210,6 +211,7 @@ name = "ml-core"
 version = "0.1.0"
 dependencies = [
  "core",
+ "grid",
  "rand",
 ]
 
@@ -579,6 +581,7 @@ dependencies = [
  "bot",
  "console_error_panic_hook",
  "core",
+ "grid",
  "rand",
  "wasm-bindgen",
 ]

@@ -2,7 +2,7 @@
 /// https://doi.org/10.1007/978-3-642-40988-2_13
 use crate::{Bot, Action};
 use core::{Game, StatisticsEntryType, LineClear, TSpin};
-use core::grid::Grid;
+use grid::Grid;
 use std::error::Error;
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
@@ -58,12 +58,12 @@ const NUM_ITERATIONS: usize = 50;
 #[derive(Clone, Debug)]
 struct GameData {
     by: Action,
-    game: Rc<Game>,
+    game: Rc<Game<'static>>,
     actions: Vec<Action>,
 }
 
 impl GameData {
-    fn new<R: Rng + ?Sized>(by: Action, game: Game, rng: &mut R) -> Result<Self, Box<dyn Error>> {
+    fn new<R: Rng + ?Sized>(by: Action, game: Game<'static>, rng: &mut R) -> Result<Self, Box<dyn Error>> {
         let actions = if game.state.falling_piece.is_some() {
             let mut actions = game.get_move_candidates()?.iter()
                 .map(|mt| { Action::Move(mt.clone()) })
@@ -238,7 +238,7 @@ fn iterate<R: Rng + ?Sized>(mut node: Rc<RefCell<Node>>, rng: &mut R) -> Result<
 pub struct MctsPuctBot {}
 
 impl Bot for MctsPuctBot {
-    fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
+    fn think(&mut self, game: &Game<'static>) -> Result<Action, Box<dyn Error>> {
         let mut rng = StdRng::seed_from_u64(0);
         let mut game = game.clone();
         game.state.next_pieces.remove_invisible();

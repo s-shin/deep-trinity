@@ -1,6 +1,6 @@
 use super::Bot;
 use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, MoveTransition};
-use core::grid::Grid;
+use grid::Grid;
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -51,13 +51,13 @@ fn eval_placement(p: &Placement) -> f32 {
 struct Node {
     parent: Option<Weak<RefCell<Node>>>,
     children: HashMap<Action, Rc<RefCell<Node>>>,
-    game: Game,
+    game: Game<'static>,
     reward: f32,
     max_future_reward: f32,
 }
 
 impl Node {
-    fn new(game: Game, reward: f32, parent: Option<Weak<RefCell<Node>>>) -> Self {
+    fn new(game: Game<'static>, reward: f32, parent: Option<Weak<RefCell<Node>>>) -> Self {
         Self {
             parent,
             children: HashMap::new(),
@@ -119,7 +119,7 @@ fn expand(rc_node: Rc<RefCell<Node>>, budget: f32) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
-fn simulate(game: &Game, mt: &MoveTransition) -> (Game, f32) {
+fn simulate(game: &Game<'static>, mt: &MoveTransition) -> (Game<'static>, f32) {
     let mut next_game = game.clone();
     let fp = next_game.state.falling_piece.as_mut().unwrap();
     if let Some(hint) = mt.hint {
@@ -143,7 +143,7 @@ fn simulate(game: &Game, mt: &MoveTransition) -> (Game, f32) {
 pub struct SimpleTreeBot {}
 
 impl Bot for SimpleTreeBot {
-    fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
+    fn think(&mut self, game: &Game<'static>) -> Result<Action, Box<dyn Error>> {
         let mut game = game.clone();
         game.state.next_pieces.remove_invisible();
         let node = Rc::new(RefCell::new(Node::new(game, 0.0, None)));

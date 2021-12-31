@@ -6,5 +6,6 @@ edition = "2018"
 
 [dependencies]
 core = { path = "../core" }
+grid = { path = "../grid" }
 tree = { path = "../tree" }
 rand = "0.7"

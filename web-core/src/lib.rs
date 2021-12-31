@@ -7,7 +7,7 @@ extern crate bot;
 use wasm_bindgen::prelude::*;
 use rand::SeedableRng;
 use core::MovePathItem;
-use core::grid::Grid;
+use grid::Grid;
 
 #[wasm_bindgen(js_name = setPanicHook)]
 pub fn set_panic_hook() {
@@ -156,7 +156,7 @@ impl From<core::MoveTransition> for MoveTransition {
 
 #[wasm_bindgen]
 pub struct Game {
-    game: core::Game,
+    game: core::Game<'static>,
 }
 
 #[wasm_bindgen]
@@ -167,10 +167,10 @@ impl Game {
             game: Default::default(),
         }
     }
-    pub fn width(&self) -> core::grid::X { self.game.state.playfield.width() }
-    pub fn height(&self) -> core::grid::Y { self.game.state.playfield.height() }
+    pub fn width(&self) -> grid::X { self.game.state.playfield.width() }
+    pub fn height(&self) -> grid::Y { self.game.state.playfield.height() }
     #[wasm_bindgen(js_name = visibleHeight)]
-    pub fn visible_height(&self) -> core::grid::Y { self.game.state.playfield.visible_height }
+    pub fn visible_height(&self) -> grid::Y { self.game.state.playfield.visible_height }
     #[wasm_bindgen(js_name = getCell)]
     pub fn get_cell(&self, x: i8, y: i8) -> Cell { self.game.state.playfield.grid.cell((x, y).into()).into() }
     #[wasm_bindgen(js_name = getHoldPiece)]
@@ -358,7 +358,7 @@ extern "C" {
 impl MovePlayer {
     pub fn from(game: &Game, mt: &MoveTransition) -> Result<MovePlayer, JsValue> {
         let path = game.game.get_almost_good_move_path(&((*mt).into()))?;
-        log(&format!("{:?}: {:?}", &game.game.state.falling_piece.as_ref().unwrap().piece, path));
+        log(&format!("{:?}: {:?}", &game.game.state.falling_piece.as_ref().unwrap().piece_spec.piece, path));
         Ok(Self {
             move_player: core::MovePlayer::new(path),
         })

@@ -302,6 +302,7 @@ pub trait Grid<C: CellTrait>: Clone {
         !are_cells_disposed
     }
     fn num_droppable_rows<G: Grid<C>>(&self, pos: Vec2, sub: &G) -> Y {
+        // TODO: Incorrect???
         let mut n = 0;
         while self.can_put((pos.0, pos.1 - n).into(), sub) {
             n += 1;
@@ -563,10 +564,17 @@ impl<C: CellTrait, G: Grid<C>, F: Fn() -> G> TestSuite<C, G, F> {
         assert!(g.is_empty());
 
         g.set_cell((1, 1).into(), C::any_block());
+        assert!(!g.is_empty());
         assert!(g.cell((1, 1).into()).is_block());
         assert_eq!(1, g.num_blocks());
         assert!(!g.is_row_empty(1));
         assert!(!g.is_row_filled(1));
+        assert!(!g.is_col_empty(1));
+        assert!(!g.is_col_filled(1));
+        assert_eq!(g.height() - 2, g.top_padding());
+        assert_eq!(1, g.bottom_padding());
+        assert_eq!(1, g.left_padding());
+        assert_eq!(g.width() - 2, g.right_padding());
 
         g.fill_row(4, C::any_block());
         assert_eq!(g.width() as usize + 1, g.num_blocks());

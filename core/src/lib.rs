@@ -34,7 +34,7 @@ pub enum Piece {
 }
 
 impl Piece {
-    fn default_spec(self) -> &'static PieceSpec<'static> {
+    pub fn default_spec(self) -> &'static PieceSpec<'static> {
         &DEFAULT_PIECE_SPEC_COLLECTION.get(self)
     }
 }

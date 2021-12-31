@@ -1,6 +1,6 @@
 use crate::{Bot, Action};
 use core::{Game, FallingPiece, Piece, LineClear};
-use core::grid::Grid;
+use grid::Grid;
 use std::error::Error;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -8,13 +8,13 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 struct NodeData {
     by: Option<Action>,
-    game: Game,
+    game: Game<'static>,
     num_covered_empty_cells: usize,
     stop: bool,
 }
 
 impl NodeData {
-    fn new(by: Option<Action>, game: Game, stop: bool) -> Self {
+    fn new(by: Option<Action>, game: Game<'static>, stop: bool) -> Self {
         let num_covered_empty_cells = game.state.playfield.grid.num_covered_empty_cells();
         Self {
             by,
@@ -40,8 +40,8 @@ fn expand_node(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
     for mt in move_candidates.iter() {
         let mut game = node.borrow().data.game.clone();
         game.stats = Default::default();
-        let piece = game.state.falling_piece.unwrap().piece;
-        game.state.falling_piece = Some(FallingPiece::new_with_last_move_transition(piece, mt));
+        let piece_spec = game.state.falling_piece.unwrap().piece_spec;
+        game.state.falling_piece = Some(FallingPiece::new_with_last_move_transition(piece_spec, mt));
         game.lock()?;
         let data = NodeData::new(Some(Action::Move(*mt)), game, false);
         tree::append_child(node, data);
@@ -177,7 +177,7 @@ fn min_covered_empty_cells<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path
 
 fn hold_i<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     let state = &root.borrow().data.game.state;
-    let piece = state.falling_piece.as_ref().unwrap().piece;
+    let piece = state.falling_piece.as_ref().unwrap().piece_spec.piece;
     if !state.can_hold || piece != Piece::I || matches!(state.hold_piece, Some(Piece::I)) {
         return vec![];
     }
@@ -207,11 +207,11 @@ fn tetris<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tre
 }
 
 struct SuppressLineClear {
-    height: core::grid::Y,
+    height: grid::Y,
 }
 
 impl SuppressLineClear {
-    fn new(height: core::grid::Y) -> Self {
+    fn new(height: grid::Y) -> Self {
         Self { height }
     }
 }
@@ -374,7 +374,7 @@ pub struct TreeBot {
 }
 
 impl Bot for TreeBot {
-    fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
+    fn think(&mut self, game: &Game<'static>) -> Result<Action, Box<dyn Error>> {
         let root = tree::new(NodeData::new(None, game.clone(), false));
         let started_at = std::time::SystemTime::now();
         const NUM_EXPANSIONS: usize = 2;

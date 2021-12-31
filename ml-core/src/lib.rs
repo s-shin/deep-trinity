@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use core::grid::{Grid, CellTrait};
+use grid::{Grid, CellTrait};
 
 #[cfg(feature = "async_session")]
 pub mod async_session;
@@ -69,7 +69,7 @@ pub fn calc_reward(stats: &core::Statistics) -> f32 {
 #[derive(Clone, Debug)]
 pub struct GameSession {
     piece_gen: core::RandomPieceGenerator<StdRng>,
-    game: core::Game,
+    game: core::Game<'static>,
     legal_actions: HashMap<Action, core::MoveTransition>,
     last_reward: f32,
 }
@@ -102,7 +102,7 @@ impl GameSession {
         Ok(())
     }
     fn sync(&mut self) -> Result<(), &'static str> {
-        let piece = self.game.state.falling_piece.as_ref().unwrap().piece;
+        let piece = self.game.state.falling_piece.as_ref().unwrap().piece_spec.piece;
         let mut legal_actions = HashMap::new();
         let candidates = self.game.get_move_candidates()?;
         for mt in candidates.iter() {
@@ -117,8 +117,8 @@ impl GameSession {
             self.last_reward = 0.0;
         } else {
             let mt = self.legal_actions.get(&action).unwrap();
-            let piece = self.game.state.falling_piece.as_ref().unwrap().piece;
-            let fp = core::FallingPiece::new_with_last_move_transition(piece, &mt);
+            let piece_spec = self.game.state.falling_piece.as_ref().unwrap().piece_spec;
+            let fp = core::FallingPiece::new_with_last_move_transition(piece_spec, &mt);
             self.game.state.falling_piece = Some(fp);
             let stats = self.game.stats.clone();
             self.game.lock()?;
@@ -145,9 +145,10 @@ impl GameSession {
         let mut r = Vec::with_capacity(state.playfield.grid.height() as usize + 2);
         // [rows[n], rows[n+1]] * 20
         r.resize(state.playfield.grid.height() as usize / 2, 0 as u32);
-        for (i, row) in state.playfield.grid.bit_grid.rows.iter().enumerate() {
-            r[i / 2] += (*row as u32) << (16 * (i % 2));
-        }
+        todo!();
+        // for (i, row) in state.playfield.grid.bit_grid.rows.iter().enumerate() {
+        //     r[i / 2] += (*row as u32) << (16 * (i % 2));
+        // }
         // [can_hold(2), hold_piece(8), falling_piece(7)]
         r.push(
             if state.can_hold { 1 } else { 0 }
