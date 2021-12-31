@@ -203,6 +203,9 @@ pub trait BitGridTrait<'a, Int: PrimInt, C: CellTrait>: Grid<C> {
     fn num_droppable_rows_of_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> Y {
         self.num_droppable_rows(pos, other)
     }
+    fn reachable_pos_of_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>, direction: Vec2) -> Vec2 {
+        self.search_last_pos_where_can_put(pos, other, direction)
+    }
 }
 
 //---
@@ -324,6 +327,15 @@ impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
             row.unsigned_shr((y - other_y) as u32 * stride)
         };
     }
+    fn reachable_pos_same_stride(&self, mut pos: Vec2, other: &PrimBitGrid<Int, C>, direction: Vec2) -> Vec2 {
+        loop {
+            let p = pos + direction;
+            if !self.can_put_same_stride(p, other) {
+                return pos;
+            }
+            pos = p;
+        }
+    }
 }
 
 impl<'a, Int: PrimInt, C: CellTrait> BitGridTrait<'a, Int, C> for PrimBitGrid<'a, Int, C> {
@@ -350,6 +362,12 @@ impl<'a, Int: PrimInt, C: CellTrait> BitGridTrait<'a, Int, C> for PrimBitGrid<'a
         }
         // TODO
         self.num_droppable_rows(pos, other)
+    }
+    fn reachable_pos_of_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>, direction: Vec2) -> Vec2 {
+        if self.constants.stride == other.constants.stride {
+            return self.reachable_pos_same_stride(pos, other, direction);
+        }
+        self.search_last_pos_where_can_put(pos, other, direction)
     }
 }
 
@@ -567,6 +585,15 @@ impl<'a, Int: PrimInt, C: CellTrait> BasicBitGrid<'a, Int, C> {
         }
         (n - 1).max(0)
     }
+    fn reachable_pos_same_stride(&self, mut pos: Vec2, other: &PrimBitGrid<Int, C>, direction: Vec2) -> Vec2 {
+        loop {
+            let p = pos + direction;
+            if !self.can_put_same_stride_prim(p, other) {
+                return pos;
+            }
+            pos = p;
+        }
+    }
 }
 
 impl<'a, Int: PrimInt, C: CellTrait> BitGridTrait<'a, Int, C> for BasicBitGrid<'a, Int, C> {
@@ -595,22 +622,25 @@ impl<'a, Int: PrimInt, C: CellTrait> BitGridTrait<'a, Int, C> for BasicBitGrid<'
         if g.constants.stride == other.constants.stride {
             return self.put_same_stride_prim(pos, &other);
         }
-        // TODO: more optimization
         self.put(pos, other);
     }
     fn can_put_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> bool {
         if self.first_prim_grid().constants.stride == other.constants.stride {
             return self.can_put_same_stride_prim(pos, &other);
         }
-        // TODO: more optimization
         self.can_put(pos, other)
     }
     fn num_droppable_rows_of_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>) -> Y {
         if self.first_prim_grid().constants.stride == other.constants.stride {
             return self.num_droppable_rows_same_stride_prim(pos, &other);
         }
-        // TODO
         self.num_droppable_rows(pos, other)
+    }
+    fn reachable_pos_of_prim_bit_grid(&self, pos: Vec2, other: &PrimBitGrid<Int, C>, direction: Vec2) -> Vec2 {
+        if self.first_prim_grid().constants.stride == other.constants.stride {
+            return self.reachable_pos_same_stride(pos, other, direction);
+        }
+        self.search_last_pos_where_can_put(pos, other, direction)
     }
 }
 
@@ -643,25 +673,14 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BasicBitGrid<'a, Int, C> {
         self.prim_grids.get(i).unwrap().is_row_empty(y)
     }
     fn is_col_filled(&self, x: X) -> bool {
-        for g in self.prim_grids.iter() {
-            if !g.is_col_filled(x) {
-                return false;
-            }
-        }
-        true
+        self.prim_grids.iter().find(|g| !g.is_col_filled(x)).is_none()
     }
     fn is_col_empty(&self, x: X) -> bool {
-        for g in self.prim_grids.iter() {
-            if !g.is_col_empty(x) {
-                return false;
-            }
-        }
-        true
+        self.prim_grids.iter().find(|g| !g.is_col_empty(x)).is_none()
     }
-    // TODO
-    // fn is_empty(&self) -> bool {
-    //
-    // }
+    fn is_empty(&self) -> bool {
+        self.prim_grids.iter().find(|g| !g.is_empty()).is_none()
+    }
     fn swap_rows(&mut self, mut y1: Y, mut y2: Y) {
         if y1 == y2 {
             return;
@@ -686,11 +705,7 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BasicBitGrid<'a, Int, C> {
         self.prim_grids.get(i).unwrap().num_blocks_of_row(y)
     }
     fn num_blocks(&self) -> usize {
-        let mut n = 0;
-        for g in self.prim_grids.iter() {
-            n += g.num_blocks();
-        }
-        n
+        self.prim_grids.iter().fold(0, |n, g| n + g.num_blocks())
     }
 }
 

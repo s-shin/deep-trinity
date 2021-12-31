@@ -176,6 +176,9 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> HybridGrid<'a, BitGrid> {
     pub fn num_droppable_rows_fast<'b>(&self, pos: Vec2, other: &HybridGrid<'b, PrimBitGrid<'b>>) -> Y {
         self.bit_grid.num_droppable_rows_of_prim_bit_grid(pos, &other.bit_grid)
     }
+    pub fn reachable_pos_fast<'b>(&self, pos: Vec2, other: &HybridGrid<'b, PrimBitGrid<'b>>, direction: Vec2) -> Vec2 {
+        self.bit_grid.reachable_pos_of_prim_bit_grid(pos, &other.bit_grid, direction)
+    }
 }
 
 impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<'a, BitGrid> {
@@ -186,6 +189,7 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<
         self.basic_grid.set_cell(pos, cell);
         self.bit_grid.set_cell(pos, cell);
     }
+    fn is_empty(&self) -> bool { self.bit_grid.is_empty() }
     fn fill_row(&mut self, y: Y, cell: Cell) {
         self.basic_grid.fill_row(y, cell);
         self.bit_grid.fill_row(y, cell);
@@ -982,30 +986,30 @@ impl<'a> Playfield<'a> {
         !ok
     }
     pub fn can_put(&self, fp: &FallingPiece) -> bool {
-        self.grid.bit_grid.can_put_prim_bit_grid(fp.placement.pos, &fp.grid().bit_grid)
+        self.grid.can_put_fast(fp.placement.pos, fp.grid())
     }
     pub fn num_droppable_rows(&self, fp: &FallingPiece) -> Y {
-        self.grid.bit_grid.num_droppable_rows_of_prim_bit_grid(fp.placement.pos, &fp.grid().bit_grid)
+        self.grid.num_droppable_rows_fast(fp.placement.pos, fp.grid())
     }
     pub fn num_shiftable_cols(&self, fp: &FallingPiece, to_right: bool) -> X {
-        let p = self.grid.bit_grid.search_last_pos_where_can_put(fp.placement.pos, &fp.grid().bit_grid,
-                                                                 if to_right { (1, 0) } else { (-1, 0) }.into());
+        let p = self.grid.reachable_pos_fast(fp.placement.pos, fp.grid(),
+                                             if to_right { (1, 0) } else { (-1, 0) }.into());
         let r = if to_right { p.0 - fp.placement.pos.0 } else { fp.placement.pos.0 - p.0 };
         debug_assert!(r >= 0);
         r as X
     }
     pub fn can_drop(&self, fp: &FallingPiece) -> bool {
-        self.grid.bit_grid.can_put(fp.placement.pos + (0, -1).into(), &fp.grid().bit_grid)
+        self.grid.can_put_fast(fp.placement.pos + (0, -1).into(), fp.grid())
     }
     pub fn can_drop_n(&self, fp: &FallingPiece, n: Y) -> bool {
-        n <= self.grid.bit_grid.num_droppable_rows_of_prim_bit_grid(fp.placement.pos, &fp.grid().bit_grid)
+        n <= self.grid.num_droppable_rows_fast(fp.placement.pos, fp.grid())
     }
     pub fn can_move_horizontally(&self, fp: &FallingPiece, n: X) -> bool {
         let to_right = n > 0;
         let end = if to_right { n } else { -n };
         for dx in 1..=end {
             let x = fp.placement.pos.0 + if to_right { dx } else { -dx };
-            if !self.grid.bit_grid.can_put_prim_bit_grid((x, fp.placement.pos.1).into(), &fp.grid().bit_grid) {
+            if !self.grid.can_put_fast((x, fp.placement.pos.1).into(), fp.grid()) {
                 return false;
             }
         }
@@ -1024,7 +1028,7 @@ impl<'a> Playfield<'a> {
         let offsets2 = &spec.srs_offset_data[next_orientation.id() as usize];
         for i in 0..offsets1.len() {
             let p = fp.placement.pos + offsets1[i].into() - offsets2[i].into();
-            if self.grid.bit_grid.can_put_prim_bit_grid(p, &next_grid.bit_grid) {
+            if self.grid.can_put_fast(p, next_grid) {
                 return Some(Placement::new(next_orientation, p));
             }
         }
@@ -1044,7 +1048,7 @@ impl<'a> Playfield<'a> {
         let mut r = Vec::new();
         for i in 0..offsets1.len() {
             let p = fp.placement.pos - offsets1[i].into() + offsets2[i].into();
-            if self.grid.bit_grid.can_put_prim_bit_grid(p, &prev_grid.bit_grid) {
+            if self.grid.can_put_fast(p, prev_grid) {
                 let prev_fp = FallingPiece::new(fp.piece_spec, Placement::new(prev_orientation, p));
                 if let Some(pp) = self.check_rotation_by_srs(&prev_fp, cw) {
                     if pp == fp.placement {
@@ -1148,22 +1152,22 @@ impl<'a> Playfield<'a> {
             _ => 1,
         };
         let yend = (self.grid.height() - self.grid.top_padding()) as Y;
-        let sub_bit_grids = [
-            &spec.grids[ORIENTATION_0.id() as usize].bit_grid,
-            &spec.grids[ORIENTATION_1.id() as usize].bit_grid,
-            &spec.grids[ORIENTATION_2.id() as usize].bit_grid,
-            &spec.grids[ORIENTATION_3.id() as usize].bit_grid,
+        let piece_grids = [
+            &spec.grids[ORIENTATION_0.id() as usize],
+            &spec.grids[ORIENTATION_1.id() as usize],
+            &spec.grids[ORIENTATION_2.id() as usize],
+            &spec.grids[ORIENTATION_3.id() as usize],
         ];
         let mut r: Vec<Placement> = Vec::new();
         for y in -max_padding..=yend {
             for x in -max_padding..=(self.grid.width() as X - max_padding) {
                 for o in &ORIENTATIONS {
-                    let g = sub_bit_grids[o.id() as usize];
-                    let can_put = self.grid.bit_grid.can_put_prim_bit_grid((x, y).into(), g);
+                    let g = piece_grids[o.id() as usize];
+                    let can_put = self.grid.can_put_fast((x, y).into(), g);
                     if !can_put {
                         continue;
                     }
-                    let can_drop = self.grid.bit_grid.can_put_prim_bit_grid((x, y - 1).into(), g);
+                    let can_drop = self.grid.can_put_fast((x, y - 1).into(), g);
                     if can_drop {
                         continue;
                     }
