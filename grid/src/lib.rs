@@ -165,14 +165,13 @@ pub trait Grid<C: CellTrait>: Clone {
             }
         }
     }
-    fn search_last_pos_where_can_put<G: Grid<C>>(&self, pos: Vec2, sub: &G, direction: Vec2) -> Vec2 {
-        let mut p = pos;
+    fn reachable_pos<G: Grid<C>>(&self, mut pos: Vec2, sub: &G, direction: Vec2) -> Vec2 {
         loop {
-            let pp = p + direction;
-            if !self.can_put(pp, sub) {
-                return p;
+            let p = pos + direction;
+            if !self.can_put(p, sub) {
+                return pos;
             }
-            p = pp;
+            pos = p;
         }
     }
     fn is_row_filled(&self, y: Y) -> bool {
@@ -286,8 +285,7 @@ pub trait Grid<C: CellTrait>: Clone {
         n
     }
     /// `false` will be returned if any non-empty cells are disposed.
-    /// TODO: rename to insert_rows
-    fn insert_rows_of_cell(&mut self, y: Y, cell: C, n: Y) -> bool {
+    fn insert_rows(&mut self, y: Y, cell: C, n: Y) -> bool {
         debug_assert!(self.height() >= y + n);
         let mut are_cells_disposed = false;
         for y in (self.height() - n)..self.height() {
@@ -302,12 +300,11 @@ pub trait Grid<C: CellTrait>: Clone {
         !are_cells_disposed
     }
     fn num_droppable_rows<G: Grid<C>>(&self, pos: Vec2, sub: &G) -> Y {
-        // TODO: Incorrect???
         let mut n = 0;
         while self.can_put((pos.0, pos.1 - n).into(), sub) {
             n += 1;
         }
-        n
+        (n - 1).max(0)
     }
     fn num_blocks_of_row(&self, y: Y) -> usize {
         if self.is_row_empty(y) {

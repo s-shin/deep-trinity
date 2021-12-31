@@ -979,7 +979,7 @@ impl<'a> Playfield<'a> {
     }
     // If garbage out, `true` will be returned.
     pub fn append_garbage(&mut self, gap_x_list: &[X]) -> bool {
-        let ok = self.grid.insert_rows_of_cell(0, Cell::Block(Block::Garbage), gap_x_list.len() as Y);
+        let ok = self.grid.insert_rows(0, Cell::Block(Block::Garbage), gap_x_list.len() as Y);
         for (y, x) in gap_x_list.iter().enumerate() {
             self.grid.set_cell((*x, y as Y).into(), Cell::Empty);
         }
