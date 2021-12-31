@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use core::Grid;
+use grid::{Grid, CellTrait};
 
 #[cfg(feature = "async_session")]
 pub mod async_session;
@@ -69,7 +69,7 @@ pub fn calc_reward(stats: &core::Statistics) -> f32 {
 #[derive(Clone, Debug)]
 pub struct GameSession {
     piece_gen: core::RandomPieceGenerator<StdRng>,
-    game: core::Game,
+    game: core::Game<'static>,
     legal_actions: HashMap<Action, core::MoveTransition>,
     last_reward: f32,
 }
@@ -102,7 +102,7 @@ impl GameSession {
         Ok(())
     }
     fn sync(&mut self) -> Result<(), &'static str> {
-        let piece = self.game.state.falling_piece.as_ref().unwrap().piece;
+        let piece = self.game.state.falling_piece.as_ref().unwrap().piece_spec.piece;
         let mut legal_actions = HashMap::new();
         let candidates = self.game.get_move_candidates()?;
         for mt in candidates.iter() {
@@ -117,8 +117,8 @@ impl GameSession {
             self.last_reward = 0.0;
         } else {
             let mt = self.legal_actions.get(&action).unwrap();
-            let piece = self.game.state.falling_piece.as_ref().unwrap().piece;
-            let fp = core::FallingPiece::new_with_last_move_transition(piece, &mt);
+            let piece_spec = self.game.state.falling_piece.as_ref().unwrap().piece_spec;
+            let fp = core::FallingPiece::new_with_last_move_transition(piece_spec, &mt);
             self.game.state.falling_piece = Some(fp);
             let stats = self.game.stats.clone();
             self.game.lock()?;
@@ -145,14 +145,15 @@ impl GameSession {
         let mut r = Vec::with_capacity(state.playfield.grid.height() as usize + 2);
         // [rows[n], rows[n+1]] * 20
         r.resize(state.playfield.grid.height() as usize / 2, 0 as u32);
-        for (i, row) in state.playfield.grid.bit_grid.rows.iter().enumerate() {
-            r[i / 2] += (*row as u32) << (16 * (i % 2));
-        }
+        todo!();
+        // for (i, row) in state.playfield.grid.bit_grid.rows.iter().enumerate() {
+        //     r[i / 2] += (*row as u32) << (16 * (i % 2));
+        // }
         // [can_hold(2), hold_piece(8), falling_piece(7)]
         r.push(
             if state.can_hold { 1 } else { 0 }
                 + if let Some(p) = state.hold_piece { p as u32 + 1 } else { 0 } * 2
-                + fp.piece as u32 * 2 * 8
+                + fp.piece() as u32 * 2 * 8
         );
         // [next]
         r.push(
@@ -173,10 +174,10 @@ impl GameSession {
             state.playfield.grid.width() as usize * state.playfield.grid.height() as usize * (4 + state.next_pieces.visible_num));
         for y in 0..state.playfield.grid.height() {
             for x in 0..state.playfield.grid.width() {
-                r.push(if state.playfield.grid.has_cell(core::upos!(x, y)) { 1.0 } else { 0.0 });
+                r.push(if state.playfield.grid.cell((x, y).into()).is_empty() { 0.0 } else { 1.0 });
                 r.push(if state.can_hold { 1.0 } else { 0.0 });
                 r.push(if let Some(p) = state.hold_piece { (p as i32 as f32 + 1.0) / 8.0 } else { 0.0 });
-                r.push((fp.piece as i32 as f32) / 7.0);
+                r.push((fp.piece() as i32 as f32) / 7.0);
                 for p in state.next_pieces.pieces.iter().take(state.next_pieces.visible_num) {
                     r.push((*p as i32 as f32) / 7.0);
                 }

@@ -79,7 +79,7 @@ pub fn search_moves(conf: &SearchConfiguration, dst: Placement, debug: bool) -> 
         debug_println!("target: placement: {:?}, f: {:?}, g: {}", target_placement, target_f, target_g);
 
         for mv in &MOVES {
-            let mut fp = FallingPiece::new(conf.piece, target_placement);
+            let mut fp = FallingPiece::new(conf.piece_spec, target_placement);
             if fp.apply_move(*mv, conf.pf, conf.mode) {
                 let f = target_g + cost_func(&conf.src, &target_placement, *mv) + heuristic_func(&fp.placement, &dst);
                 if !open_list.contains_key(&f) {
@@ -126,21 +126,21 @@ impl MoveSearcher for AStarMoveSearcher {
 
 #[cfg(test)]
 mod test {
-    use crate::{Game, Piece, MovePlayer, upos, pos, ORIENTATION_3, ORIENTATION_1};
+    use crate::{Game, Piece, MovePlayer, ORIENTATION_3, ORIENTATION_1};
     use super::*;
 
     #[test]
     fn test1() {
         let mut game: Game = Default::default();
         let pf = &mut game.state.playfield;
-        pf.set_str_rows(upos!(0, 0), &[
+        pf.set_rows_with_strs((0, 0).into(), &[
             "   @@@@   ",
             "@@@@@@    ",
             "@@@@@@@ @@",
         ]);
         game.supply_next_pieces(&[Piece::T]);
         game.setup_falling_piece(None).unwrap();
-        let dst = Placement::new(ORIENTATION_3, pos!(6, 0));
+        let dst = Placement::new(ORIENTATION_3, (6, 0).into());
         let r = game.search_moves(&mut AStarMoveSearcher::new(dst, false));
         assert!(r.is_ok());
         let r = r.unwrap();
@@ -157,10 +157,10 @@ mod test {
     fn test2() {
         let mut game: Game = Default::default();
         let pf = &mut game.state.playfield;
-        pf.set_str_rows(upos!(0, 0), &["@@@@@@@@@@"].repeat(20));
+        pf.set_rows_with_strs((0, 0).into(), &["@@@@@@@@@@"].repeat(20));
         game.supply_next_pieces(&[Piece::T]);
         game.setup_falling_piece(None).unwrap();
-        let dst = Placement::new(ORIENTATION_1, pos!(3, 20));
+        let dst = Placement::new(ORIENTATION_1, (3, 20).into());
         let r = game.search_moves(&mut AStarMoveSearcher::new(dst, false));
         assert!(r.is_ok());
         let r = r.unwrap();

@@ -13,7 +13,7 @@ pub enum Action {
 }
 
 pub trait Bot {
-    fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>>;
+    fn think(&mut self, game: &Game<'static>) -> Result<Action, Box<dyn Error>>;
 }
 
 pub fn test_bot<B: Bot>(bot: &mut B, random_seed: u64, max_iterations: usize, debug_print: bool) -> Result<Game, Box<dyn Error>> {
