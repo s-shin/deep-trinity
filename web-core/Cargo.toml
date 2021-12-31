@@ -17,3 +17,4 @@ core = { path = "../core" }
 grid = { path = "../grid" }
 bot = { path = "../bot" }
 rand = "0.8"
+getrandom = { version = "0.2", features = ["js"] }
