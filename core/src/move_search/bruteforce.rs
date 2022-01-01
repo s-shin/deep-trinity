@@ -39,7 +39,7 @@ pub fn search_moves(conf: &SearchConfiguration, debug: bool) -> SearchResult {
             debug_assert!(v.is_none());
         }
 
-        let mut fp = FallingPiece::new(fp.piece, fp.placement);
+        let mut fp = FallingPiece::new(fp.piece_spec, fp.placement);
         for mv in &MOVES {
             debug_println!("├ {:?}", mv);
             if fp.apply_move(*mv, conf.pf, conf.mode) {
@@ -49,9 +49,8 @@ pub fn search_moves(conf: &SearchConfiguration, debug: bool) -> SearchResult {
         }
         debug_println!("=> checked.");
     }
-    ;
 
-    search(conf, &FallingPiece::new(conf.piece, conf.src), 0, &mut found, debug);
+    search(conf, &FallingPiece::new(conf.piece_spec, conf.src), 0, &mut found, debug);
 
     SearchResult { src: conf.src, found }
 }
@@ -73,7 +72,7 @@ impl MoveSearcher for BruteForceMoveSearcher {
 
 #[cfg(test)]
 mod test {
-    use crate::{Game, Piece, Placement, RotationMode, MovePlayer, upos, pos, ORIENTATION_1};
+    use crate::{Game, Piece, Placement, RotationMode, MovePlayer, ORIENTATION_1};
     use super::*;
 
     #[test]
@@ -82,7 +81,7 @@ mod test {
         game.supply_next_pieces(&[Piece::I]);
         game.setup_falling_piece(None).unwrap();
         let pf = &mut game.state.playfield;
-        pf.set_str_rows(upos!(0, 0), &[
+        pf.set_rows_with_strs((0, 0).into(), &[
             " @@@@@@@@@",
             " @@@@@@@@@",
             " @@@@@@@@@",
@@ -92,8 +91,8 @@ mod test {
             " @@@@@@@@@",
         ]);
         let fp = game.state.falling_piece.as_ref().unwrap();
-        let conf = SearchConfiguration::new(&pf, fp.piece, fp.placement, RotationMode::Srs);
-        let dst = Placement::new(ORIENTATION_1, pos!(-2, 0));
+        let conf = SearchConfiguration::new(&pf, fp.piece_spec, fp.placement, RotationMode::Srs);
+        let dst = Placement::new(ORIENTATION_1, (-2, 0).into());
         let r = search_moves(&conf, false);
         let path = r.get(&dst);
         assert!(path.is_some());

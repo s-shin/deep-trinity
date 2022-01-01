@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 core = { path = "../core" }
 ml-core = { path = "../ml-core" }
 pyo3 = "0.11"
-rand = "0.7"
+rand = "0.8"
 
 [features]
 # https://github.com/PyO3/pyo3/blob/v0.9.1/guide/src/advanced.md#testing

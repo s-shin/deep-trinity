@@ -1,5 +1,6 @@
 use crate::{Bot, Action};
-use core::{Game, FallingPiece, Grid, Piece, LineClear};
+use core::{Game, FallingPiece, Piece, LineClear};
+use grid::Grid;
 use std::error::Error;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -7,13 +8,13 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 struct NodeData {
     by: Option<Action>,
-    game: Game,
+    game: Game<'static>,
     num_covered_empty_cells: usize,
     stop: bool,
 }
 
 impl NodeData {
-    fn new(by: Option<Action>, game: Game, stop: bool) -> Self {
+    fn new(by: Option<Action>, game: Game<'static>, stop: bool) -> Self {
         let num_covered_empty_cells = game.state.playfield.grid.num_covered_empty_cells();
         Self {
             by,
@@ -39,8 +40,8 @@ fn expand_node(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
     for mt in move_candidates.iter() {
         let mut game = node.borrow().data.game.clone();
         game.stats = Default::default();
-        let piece = game.state.falling_piece.unwrap().piece;
-        game.state.falling_piece = Some(FallingPiece::new_with_last_move_transition(piece, mt));
+        let piece_spec = game.state.falling_piece.unwrap().piece_spec;
+        game.state.falling_piece = Some(FallingPiece::new_with_last_move_transition(piece_spec, mt));
         game.lock()?;
         let data = NodeData::new(Some(Action::Move(*mt)), game, false);
         tree::append_child(node, data);
@@ -49,7 +50,7 @@ fn expand_node(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
 }
 
 fn expand_leaves(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
-    tree::visit(node, &mut (), |node, _, _| {
+    tree::visit(node, |node, _| {
         if !node.borrow().is_leaf() {
             return tree::VisitPlan::Children;
         }
@@ -62,6 +63,12 @@ fn expand_leaves(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
 }
 
 // fn expand_leaves_mt(node: &Rc<RefCell<Node>>, n) -> Result<(), Box<dyn Error>> {
+// }
+
+//---
+
+// fn evaluate_flatness(game: &Game) {
+//     //
 // }
 
 //---
@@ -170,7 +177,7 @@ fn min_covered_empty_cells<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path
 
 fn hold_i<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     let state = &root.borrow().data.game.state;
-    let piece = state.falling_piece.as_ref().unwrap().piece;
+    let piece = state.falling_piece.as_ref().unwrap().piece_spec.piece;
     if !state.can_hold || piece != Piece::I || matches!(state.hold_piece, Some(Piece::I)) {
         return vec![];
     }
@@ -200,11 +207,11 @@ fn tetris<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tre
 }
 
 struct SuppressLineClear {
-    height: core::SizeY,
+    height: grid::Y,
 }
 
 impl SuppressLineClear {
-    fn new(height: core::SizeY) -> Self {
+    fn new(height: grid::Y) -> Self {
         Self { height }
     }
 }
@@ -297,7 +304,7 @@ fn min_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&
 }
 
 fn filter_by_contour<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
-    fn calc_stddev(values: &[u8]) -> f32 {
+    fn calc_stddev(values: &[i8]) -> f32 {
         let mean = values.iter().fold(0, |memo, v| memo + v) as f32 / values.len() as f32;
         let mut sum = 0.0;
         for v in values {
@@ -367,7 +374,7 @@ pub struct TreeBot {
 }
 
 impl Bot for TreeBot {
-    fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
+    fn think(&mut self, game: &Game<'static>) -> Result<Action, Box<dyn Error>> {
         let root = tree::new(NodeData::new(None, game.clone(), false));
         let started_at = std::time::SystemTime::now();
         const NUM_EXPANSIONS: usize = 2;
@@ -375,23 +382,30 @@ impl Bot for TreeBot {
             expand_leaves(&root)?;
 
             let mut initial_num = root.borrow().data.num_covered_empty_cells as i32;
-            tree::visit(&root, &mut initial_num, |node, ctx, _| {
+            tree::visit(&root, |node, _| {
                 if !node.borrow().is_leaf() {
                     return tree::VisitPlan::Children;
                 }
-                let initial_num = *ctx;
                 if node.borrow().data.num_covered_empty_cells as i32 - initial_num >= 3 {
                     node.borrow_mut().data.stop = true;
                 }
                 tree::VisitPlan::Sibling
             });
         }
+        // tree::visit(&root, |node, _| {
+        //     if !node.borrow().is_leaf() {
+        //         return tree::VisitPlan::Children;
+        //     }
+        //     println!("{}", node.borrow().data.game);
+        //     tree::VisitPlan::Sibling
+        // });
+        // assert!(false);
 
         // stats
         self.expansion_duration = std::time::SystemTime::now().duration_since(started_at)?;
         self.num_expanded = 0;
-        tree::visit(&root, &mut self.num_expanded, |_, ctx, _| {
-            *ctx += 1;
+        tree::visit(&root, |_, _| {
+            self.num_expanded += 1;
             tree::VisitPlan::Children
         });
         if self.num_expanded > 0 {
@@ -408,7 +422,7 @@ impl Bot for TreeBot {
             to_box_filter(SuppressLineClear::new(10)),
             // to_box_filter(FunctionFilter(filter_by_contour)),
             // to_box_filter(FunctionFilter(min_trenches)),
-            to_box_filter(FunctionFilter(exclude_trenches)),
+            // to_box_filter(FunctionFilter(exclude_trenches)),
             to_box_filter(FunctionFilter(min_covered_empty_cells)),
             // to_box_filter(FunctionFilter(min_height)),
             to_box_filter(FunctionFilter(max_density)),
@@ -428,10 +442,10 @@ mod tests {
     use crate::test_bot;
 
     #[test]
-    fn test_simple_bot() {
+    fn test_tree_bot() {
         let mut bot = TreeBot::default();
         let seed = 0;
-        let _game = test_bot(&mut bot, seed, 40, true).unwrap();
+        let _game = test_bot(&mut bot, seed, 5, false).unwrap();
         // assert!(game.stats.lock > 40);
     }
 }

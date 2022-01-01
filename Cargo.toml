@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "grid",
   "core",
   "bot",
   "web-core",

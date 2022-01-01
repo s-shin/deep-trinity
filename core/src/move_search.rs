@@ -1,20 +1,20 @@
 use std::collections::HashMap;
-use crate::{Playfield, Piece, Placement, RotationMode, MovePathItem, MovePath};
+use crate::{Playfield, Placement, RotationMode, MovePathItem, MovePath, PieceSpec};
 
 pub mod astar;
 pub mod bruteforce;
 pub mod humanly_optimized;
 
 pub struct SearchConfiguration<'a> {
-    pf: &'a Playfield,
-    piece: Piece,
+    pf: &'a Playfield<'a>,
+    piece_spec: &'a PieceSpec<'a>,
     src: Placement,
     mode: RotationMode,
 }
 
 impl<'a> SearchConfiguration<'a> {
-    pub fn new(pf: &'a Playfield, piece: Piece, src: Placement, mode: RotationMode) -> Self {
-        Self { pf, piece, src, mode }
+    pub fn new(pf: &'a Playfield<'a>, piece_spec: &'a PieceSpec<'a>, src: Placement, mode: RotationMode) -> Self {
+        Self { pf, piece_spec, src, mode }
     }
 }
 
