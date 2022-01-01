@@ -31,7 +31,7 @@
     }
   },
   "dependencies": {
-    "@deep-trinity/web-core": "^0.1.0",
-    "@deep-trinity/model": "^0.1.0"
+    "@deep-trinity/model": "^0.1.0",
+    "@deep-trinity/web-core": "^0.1.0"
   }
 }
