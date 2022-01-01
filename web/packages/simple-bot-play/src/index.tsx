@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom";
-import { ThemeProvider } from "emotion-theming";
+import { ThemeProvider } from '@emotion/react';
 import { useForm } from "react-hook-form";
 import * as core from "@deep-trinity/web-core";
 import * as coreHelper from "@deep-trinity/web-core-helper";
@@ -112,7 +112,7 @@ const botRunner = new BotRunner();
 
 //---
 
-const randInt = (min: number, max: number) => min + Math.floor(Math.random() * max);
+const randInt = (min: number, max: number): number => min + Math.floor(Math.random() * max);
 
 const ControlPanelRoot = styled.div``;
 
@@ -140,7 +140,7 @@ const ControlPanel: React.FC<ControlPanelProps> = props => {
         <form onSubmit={runTriggerForm.handleSubmit(props.onToggleRun)}>
           <p>
             <label htmlFor="sleep_ms">Sleep: </label>
-            <input id="sleep_ms" name="sleep_ms" type="number" defaultValue={100} ref={runTriggerForm.register}/> ms
+            <input {...runTriggerForm.register("sleep_ms", { value: 100 })}/> ms
           </p>
           <p>
             <button>{props.isRunning ? "Stop" : "Start"}</button>
@@ -153,7 +153,7 @@ const ControlPanel: React.FC<ControlPanelProps> = props => {
         <form onSubmit={setupForm.handleSubmit(props.onSetup)}>
           <p>
             <label htmlFor="bot">Bot: </label>
-            <select id="bot" name="bot" defaultValue="2" ref={setupForm.register}>
+            <select {...setupForm.register("bot", { value: 2 })}>
               <option value="1">Simple</option>
               <option value="2">Simple Tree</option>
               <option value="3">MCTS (PUCT)</option>
@@ -161,7 +161,7 @@ const ControlPanel: React.FC<ControlPanelProps> = props => {
           </p>
           <p>
             <label htmlFor="seed">Seed: </label>
-            <input id="seed" name="seed" type="number" defaultValue={0} ref={setupForm.register}/>
+            <input {...setupForm.register("seed", { value: 0 })}/>
             <button type="button" onClick={() => setupForm.setValue("seed", randInt(0, 1000000000))}>Generate</button>
           </p>
           <p>

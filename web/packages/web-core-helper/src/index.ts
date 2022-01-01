@@ -8,7 +8,7 @@ export const getGameModel = (game: core.Game, onlyVisibleNext: boolean): model.G
       cells[model.getIndex(game.width(), x, y)] = game.getCell(x, y);
     }
   }
-  let g: model.Game = {
+  const g: model.Game = {
     width: game.width(),
     height: game.height(),
     visibleHeight: game.visibleHeight(),

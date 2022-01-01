@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Game = void 0;
 const react_1 = __importDefault(require("react"));
 const styled_1 = __importDefault(require("@emotion/styled"));
 const NextPieces_1 = __importDefault(require("./NextPieces"));
@@ -18,12 +19,13 @@ const GameRootInner = styled_1.default.div `
   display: grid;
   grid-template-columns: min-content min-content min-content;
 `;
-exports.Game = props => {
+const Game = props => {
     return (react_1.default.createElement(GameRoot, null,
         react_1.default.createElement(GameRootInner, null,
             react_1.default.createElement(PieceContainer_1.default, { piece: props.game.holdPiece }),
             react_1.default.createElement(Playfield_1.default, { game: props.game }),
             react_1.default.createElement(NextPieces_1.default, { pieces: props.game.nextPieces }))));
 };
+exports.Game = Game;
 exports.default = exports.Game;
 //# sourceMappingURL=Game.js.map

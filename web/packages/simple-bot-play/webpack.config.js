@@ -1,7 +1,11 @@
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const path = require('path');
+const CopyWebpackPlugin = require("copy-webpack-plugin");
+const path = require("path");
 
 module.exports = {
+  experiments: {
+    // https://github.com/rustwasm/wasm-pack/issues/835
+    syncWebAssembly: true,
+  },
   mode: "development",
   devtool: "inline-source-map",
   entry: "./bootstrap.js",
@@ -14,10 +18,13 @@ module.exports = {
   },
   module: {
     rules: [
-      {test: /\.tsx?$/, loader: "ts-loader"},
-    ]
+      { test: /\.tsx?$/, loader: "ts-loader" },
+      { test: /\.wasm$/, type: "webassembly/sync" },
+    ],
   },
   plugins: [
-    new CopyWebpackPlugin(["index.html"]),
+    new CopyWebpackPlugin({
+      patterns: ["index.html"],
+    }),
   ],
 };
