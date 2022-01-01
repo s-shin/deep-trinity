@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
-import { ThemeProvider } from "emotion-theming";
+import { ThemeProvider } from '@emotion/react';
 import * as core from "@deep-trinity/web-core";
 import * as coreHelper from "@deep-trinity/web-core-helper";
 import * as view from "@deep-trinity/view";

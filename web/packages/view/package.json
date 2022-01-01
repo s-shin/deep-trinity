@@ -34,18 +34,16 @@
     "@deep-trinity/model": "^0.1.0"
   },
   "peerDependencies": {
-    "@emotion/core": "^10.0.28",
-    "@emotion/styled": "^10.0.27",
-    "emotion-theming": "^10.0.27",
-    "react": "^16.13.0",
-    "react-dom": "^16.13.0"
+    "@emotion/react": "^11.7.1",
+    "@emotion/styled": "^11.6.0",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
   },
   "devDependencies": {
-    "@emotion/core": "^10.0.28",
-    "@emotion/styled": "^10.0.27",
+    "@emotion/react": "^11.7.1",
+    "@emotion/styled": "^11.6.0",
     "@types/react": "^17.0.38",
     "@types/react-dom": "^17.0.11",
-    "emotion-theming": "^10.0.27",
     "react": "^17.0.2",
     "react-dom": "^17.0.2"
   }

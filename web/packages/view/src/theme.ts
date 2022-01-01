@@ -1,5 +1,5 @@
 import * as model from "@deep-trinity/model";
-import * as theming from "emotion-theming";
+import * as theming from '@emotion/react';
 
 export type Theme = {
   gridGap: string,
@@ -38,4 +38,4 @@ export type StyledProps = {
   theme: Theme,
 };
 
-export const useTheme: () => Theme = () => theming.useTheme<Theme>();
+export const useTheme = (): Theme => theming.useTheme() as Theme;

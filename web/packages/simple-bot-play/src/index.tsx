@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom";
-import { ThemeProvider } from "emotion-theming";
+import { ThemeProvider } from '@emotion/react';
 import { useForm } from "react-hook-form";
 import * as core from "@deep-trinity/web-core";
 import * as coreHelper from "@deep-trinity/web-core-helper";

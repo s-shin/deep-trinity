@@ -8,7 +8,7 @@ module.exports = {
     tsconfigRootDir: __dirname,
     project: ["./tsconfig.json", "./packages/*/tsconfig.json"],
   },
-  plugins: ["@typescript-eslint"],
+  plugins: ["@typescript-eslint", "@emotion"],
   settings: {
     react: {
       version: "detect",
@@ -23,5 +23,6 @@ module.exports = {
   rules: {
     "react/prop-types": "off",
     "@typescript-eslint/explicit-function-return-type": ["error", { allowExpressions: true, allowTypedFunctionExpressions: true, allowHigherOrderFunctions: true }],
+    "@emotion/pkg-renaming": "error",
   },
 };
