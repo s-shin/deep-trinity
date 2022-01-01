@@ -1,6 +1,9 @@
 import * as core from "@deep-trinity/web-core";
 
-const elApp = document.querySelector("main")!;
+const elApp = document.querySelector("main");
+if (!elApp) {
+  throw new Error("<main> not found.");
+}
 
 const elPre = document.createElement("pre");
 elApp.appendChild(elPre);

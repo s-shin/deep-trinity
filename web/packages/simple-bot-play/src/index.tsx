@@ -112,7 +112,7 @@ const botRunner = new BotRunner();
 
 //---
 
-const randInt = (min: number, max: number) => min + Math.floor(Math.random() * max);
+const randInt = (min: number, max: number): number => min + Math.floor(Math.random() * max);
 
 const ControlPanelRoot = styled.div``;
 
