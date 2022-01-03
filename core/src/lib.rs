@@ -285,6 +285,17 @@ impl Placement {
             + (dp.1.abs() as usize) * fy
             + ((self.orientation.id() as i8 - other.orientation.id() as i8).abs() as usize) * fr
     }
+    pub fn normalize(&self, piece: Piece) -> Placement {
+        let aliases = helper::get_placement_aliases(piece, self);
+        match aliases.iter().min_by(|p1, p2| p1.orientation.id().cmp(&p2.orientation.id())) {
+            Some(p) => if self.orientation.id() < p.orientation.id() {
+                self.clone()
+            } else {
+                *p
+            }
+            None => self.clone(),
+        }
+    }
 }
 
 //--------------------------------------------------------------------------------------------------

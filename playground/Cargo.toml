@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 core = { path = "../core" }
+grid = { path = "../grid" }
 bot = { path = "../bot" }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
