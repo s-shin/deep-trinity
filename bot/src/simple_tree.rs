@@ -49,7 +49,7 @@ fn eval_placement(p: &Placement) -> f32 {
 
 #[derive(Debug)]
 struct Node {
-    parent: Option<Weak<RefCell<Node>>>,
+    _parent: Option<Weak<RefCell<Node>>>,
     children: HashMap<Action, Rc<RefCell<Node>>>,
     game: Game<'static>,
     reward: f32,
@@ -59,7 +59,7 @@ struct Node {
 impl Node {
     fn new(game: Game<'static>, reward: f32, parent: Option<Weak<RefCell<Node>>>) -> Self {
         Self {
-            parent,
+            _parent: parent,
             children: HashMap::new(),
             game,
             reward,

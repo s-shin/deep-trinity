@@ -300,6 +300,7 @@ dependencies = [
  "anyhow",
  "bot",
  "core",
+ "grid",
  "rand",
  "serde",
  "serde_yaml",

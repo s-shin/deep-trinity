@@ -243,7 +243,7 @@ impl Filter for SuppressLineClear {
     }
 }
 
-fn exclude_holds<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
+fn _exclude_holds<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     paths.iter()
         .filter(|path| {
             path.child_node_iter(root)
@@ -254,7 +254,7 @@ fn exclude_holds<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<
         .collect()
 }
 
-fn exclude_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
+fn _exclude_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     const TRENCH_HEIGHT: i8 = 3;
     const MAX_TRENCHES: i8 = 2;
     paths.iter()
@@ -278,7 +278,7 @@ fn exclude_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> V
         .collect()
 }
 
-fn min_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
+fn _min_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     const TRENCH_HEIGHT: i8 = 3;
     paths.iter()
         .fold((-1, vec![]), |(min, mut paths), &path| {
@@ -303,7 +303,7 @@ fn min_trenches<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&
         }).1
 }
 
-fn filter_by_contour<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
+fn _filter_by_contour<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     fn calc_stddev(values: &[i8]) -> f32 {
         let mean = values.iter().fold(0, |memo, v| memo + v) as f32 / values.len() as f32;
         let mut sum = 0.0;
@@ -353,7 +353,7 @@ fn max_density<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'
     vec![path]
 }
 
-fn min_height<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
+fn _min_height<'a>(root: &Rc<RefCell<Node>>, paths: &[&'a tree::Path]) -> Vec<&'a tree::Path> {
     let path = paths.iter()
         .map(|&path| {
             let node = tree::get(root, path.iter()).unwrap();
@@ -381,7 +381,7 @@ impl Bot for TreeBot {
         for _ in 0..NUM_EXPANSIONS {
             expand_leaves(&root)?;
 
-            let mut initial_num = root.borrow().data.num_covered_empty_cells as i32;
+            let initial_num = root.borrow().data.num_covered_empty_cells as i32;
             tree::visit(&root, |node, _| {
                 if !node.borrow().is_leaf() {
                     return tree::VisitPlan::Children;
