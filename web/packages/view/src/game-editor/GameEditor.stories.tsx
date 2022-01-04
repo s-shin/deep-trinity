@@ -1,7 +1,7 @@
 import React from "react";
 import { ThemeProvider } from "@emotion/react";
 import * as model from "@deep-trinity/model";
-import { DEFAULT_THEME } from "./theme";
+import { DEFAULT_THEME } from "../theme";
 import { GameEditor } from "./GameEditor";
 
 export default {
