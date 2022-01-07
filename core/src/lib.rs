@@ -278,16 +278,21 @@ impl Placement {
     pub fn new(orientation: Orientation, pos: Vec2) -> Self {
         Self { orientation, pos }
     }
+    /// Manhattan distance.
+    /// ```txt
+    /// factors = (fo, fx, fy) (default: (1, 1, 1))
+    /// distance = do * fo + dx * fx + dy * fy
+    /// ```
     pub fn distance(&self, other: &Placement, factors: Option<(usize, usize, usize)>) -> usize {
         let dp = self.pos - other.pos;
-        let (fx, fy, fr) = factors.unwrap_or((1, 1, 2));
+        let (fo, fx, fy) = factors.unwrap_or((1, 1, 1));
         (dp.0.abs() as usize) * fx
             + (dp.1.abs() as usize) * fy
-            + ((self.orientation.id() as i8 - other.orientation.id() as i8).abs() as usize) * fr
+            + ((self.orientation.id() as i8 - other.orientation.id() as i8).abs() as usize) * fo
     }
     pub fn normalize(&self, piece: Piece) -> Placement {
-        let aliases = helper::get_placement_aliases(piece, self);
-        match aliases.iter().min_by(|p1, p2| p1.orientation.id().cmp(&p2.orientation.id())) {
+        let alts = helper::get_alternative_placements(piece, self);
+        match alts.iter().min_by(|p1, p2| p1.orientation.id().cmp(&p2.orientation.id())) {
             Some(p) => if self.orientation.id() < p.orientation.id() {
                 self.clone()
             } else {
@@ -1074,7 +1079,8 @@ impl<'a> Playfield<'a> {
         let num_cleared_line = self.grid.drop_filled_rows();
         Some(LineClear::new(num_cleared_line as u8, tspin))
     }
-    // The return placements can include unreachable placements.
+    /// The return placements can include unreachable placements.
+    /// These also includes all alternative placements.
     pub fn search_lockable_placements(&self, spec: &PieceSpec) -> Vec<Placement> {
         let max_padding = match spec.piece {
             Piece::I => 2,

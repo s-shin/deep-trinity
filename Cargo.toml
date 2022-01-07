@@ -8,4 +8,5 @@ members = [
   "py-core",
   "playground",
   "tree",
+  "move-finder"
 ]

@@ -321,53 +321,57 @@ pub trait Grid<C: CellTrait>: Clone {
         }
         n
     }
-    fn detect_space(&self, pos: Vec2) -> HashSet<Vec2> {
-        let mut space = HashSet::new();
-        let mut checked = HashSet::new();
-        let mut unchecked = HashSet::new();
-        unchecked.insert(pos);
-        loop {
-            let p = match unchecked.iter().next().copied() {
-                Some(p) => p,
-                None => break,
-            };
-            let ok = unchecked.remove(&p);
-            debug_assert!(ok);
-            checked.insert(p);
-            if self.cell(p).is_empty() {
-                space.insert(p);
-            } else {
+    fn traverse(&self, start_pos: Vec2, mut cb: impl FnMut(Vec2, C) -> bool) {
+        let mut open = HashSet::new();
+        let mut closed = HashSet::new();
+        open.insert(start_pos);
+        while let Some(p) = open.iter().next().copied() {
+            let is_removed = open.remove(&p);
+            debug_assert!(is_removed);
+            closed.insert(p);
+            let cell = self.cell(p);
+            if !cb(p, cell) {
                 continue;
             }
             if p.0 > 0 {
                 let mut pp = p.clone();
                 pp.0 -= 1;
-                if !checked.contains(&pp) {
-                    unchecked.insert(pp);
+                if !closed.contains(&pp) {
+                    open.insert(pp);
                 }
             }
             if p.1 > 0 {
                 let mut pp = p.clone();
                 pp.1 -= 1;
-                if !checked.contains(&pp) {
-                    unchecked.insert(pp);
+                if !closed.contains(&pp) {
+                    open.insert(pp);
                 }
             }
             if p.0 < self.width() - 1 {
                 let mut pp = p.clone();
                 pp.0 += 1;
-                if !checked.contains(&pp) {
-                    unchecked.insert(pp);
+                if !closed.contains(&pp) {
+                    open.insert(pp);
                 }
             }
             if p.1 < self.height() - 1 {
                 let mut pp = p.clone();
                 pp.1 += 1;
-                if !checked.contains(&pp) {
-                    unchecked.insert(pp);
+                if !closed.contains(&pp) {
+                    open.insert(pp);
                 }
             }
         }
+    }
+    fn detect_space(&self, pos: Vec2) -> HashSet<Vec2> {
+        let mut space = HashSet::new();
+        self.traverse(pos, |p, c| {
+            if c.is_empty() {
+                space.insert(p);
+                return true;
+            }
+            false
+        });
         space
     }
     /// Example:
@@ -588,6 +592,27 @@ impl<C: CellTrait, G: Grid<C>, F: Fn() -> G> TestSuite<C, G, F> {
         g.fill_all(C::empty());
         assert!(g.is_empty());
     }
+    pub fn detect_space(&self) {
+        let mut g = self.new_empty_grid();
+        g.set_rows_with_strs((0, 0).into(), &[
+            "@@@@ ",
+            "   @ ",
+            " @  @",
+            "  @ @",
+            " @  @",
+        ]);
+        let spaces = g.detect_space((0, 0).into());
+        let expected = [
+            (0, 0), (2, 0), (3, 0),
+            (0, 1), (1, 1), (3, 1),
+            (0, 2), (2, 2), (3, 2),
+            (0, 3), (1, 3), (2, 3),
+        ].map(|(x, y)| Vec2(x, y));
+        assert_eq!(expected.len(), spaces.len());
+        for pos in expected.iter() {
+            assert!(spaces.contains(pos));
+        }
+    }
 }
 
 //---
@@ -597,8 +622,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn basic() {
+    fn suite() {
         let suite = TestSuite::new(|| BasicGrid::<BinaryCell>::new((5, 5).into()));
         suite.basic();
+        suite.detect_space();
     }
 }
