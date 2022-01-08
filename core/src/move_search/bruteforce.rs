@@ -100,8 +100,8 @@ mod test {
         assert!(r.get(&dst2).is_some());
         let mut mp = MovePlayer::new(path.unwrap());
         while mp.step(&mut game).unwrap() {
-            println!("{}", game);
+            // println!("{}", game);
         }
-        println!("{}", game);
+        // println!("{}", game);
     }
 }

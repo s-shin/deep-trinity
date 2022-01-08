@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use crate::{MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, PieceSpec, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0};
+use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, PieceSpec, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0};
 use crate::move_search::{MoveSearcher, SearchConfiguration, SearchResult};
 use crate::move_search::bruteforce::BruteForceMoveSearcher;
 use crate::move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
@@ -113,6 +113,12 @@ impl<'a> MoveDecisionHelper<'a> {
             brute_force_search_result: search_result,
         }
     }
+    pub fn with_game(game: &'a Game<'a>) -> Result<Self, &'static str> {
+        if matches!(game.state.falling_piece, None) {
+            return Err("The falling_piece should not be None.");
+        }
+        Ok(Self::new(&game.state.playfield, game.state.falling_piece.as_ref().unwrap(), &game.rules))
+    }
     pub fn tspin_moves(&self) -> Result<Vec<(MoveTransition, LineClear)>, &'static str> {
         if self.piece_spec.piece != Piece::T {
             return Err("This helper is not for T piece.");
@@ -202,6 +208,10 @@ pub fn get_move_candidates(pf: &Playfield, fp: &FallingPiece, rules: &GameRules)
     r
 }
 
+/// TODO: Optimize more like the following:
+/// 1. Get paths by A* search.
+/// 2. Search the last placement lifted up over the spawned position.
+/// 3. If exists, get the path by humanly optimized move search.
 pub fn get_almost_good_move_path(pf: &Playfield, fp: &FallingPiece, last_transition: &MoveTransition, rotation_mode: RotationMode) -> Option<MovePath> {
     enum Searcher {
         HumanOptimized,
@@ -216,8 +226,8 @@ pub fn get_almost_good_move_path(pf: &Playfield, fp: &FallingPiece, last_transit
         patterns.push((alt, Searcher::HumanOptimized));
         patterns.push((alt, Searcher::AStar));
         if dst != alt {
-            // Since, in case of moves with special rotations, a piece cannot always be moved to an alternative placement,
-            // the original destination is also checked.
+            // In a move with special rotations, a piece cannot always be reached to an alternative placement,
+            // so also check the original destination.
             patterns.push((dst, Searcher::AStar));
         }
     }
@@ -249,7 +259,6 @@ pub fn get_almost_good_move_path(pf: &Playfield, fp: &FallingPiece, last_transit
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Game;
 
     #[test]
     fn test_move_decision_helper() {
@@ -268,7 +277,7 @@ mod tests {
             let fp = FallingPiece::spawn(Piece::T.default_spec(), Some(&pf));
             let h = MoveDecisionHelper::new(&pf, &fp, &rules);
             let moves = h.tspin_moves().unwrap();
-            assert_eq!(3, moves.len());
+            assert_eq!(10, moves.len());
         }
         {
             let fp = FallingPiece::spawn(Piece::I.default_spec(), Some(&pf));

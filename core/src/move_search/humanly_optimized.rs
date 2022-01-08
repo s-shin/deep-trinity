@@ -25,30 +25,33 @@ pub fn normal_plan(conf: &SearchConfiguration) -> Vec<Vec<Move>> {
     let fp = FallingPiece::new(conf.piece_spec, conf.src);
     let num_r = pf.num_shiftable_cols(&fp, true) as i8;
     let num_l = pf.num_shiftable_cols(&fp, false) as i8;
-    let mut first_mvs = Vec::new();
+    // Move::Shift(0) is checked in edge_plan.
+    let mut first_moves = Vec::with_capacity((num_r + num_l) as usize);
     for x in 1..=num_r {
-        first_mvs.push(Move::Shift(x))
+        first_moves.push(Move::Shift(x))
     }
     for x in 1..=num_l {
-        first_mvs.push(Move::Shift(-x));
+        first_moves.push(Move::Shift(-x));
     }
     vec![
-        first_mvs,
+        first_moves,
         vec![Move::Rotate(0), Move::Rotate(1), Move::Rotate(-1)],
         vec![Move::Drop(END)],
     ]
 }
 
-fn enumerate_index_patterns(patterns: &[usize], a: Vec<usize>, out: &mut Vec<Vec<usize>>) {
-    if a.len() >= patterns.len() {
-        out.push(a);
-        return;
+fn get_all_index_patterns<T>(vs: &[Vec<T>]) -> Vec<Vec<usize>> {
+    if vs.is_empty() {
+        return Vec::new();
     }
-    for i in 0..patterns[a.len()] {
-        let mut a = a.clone();
-        a.push(i);
-        enumerate_index_patterns(patterns, a, out);
+    let lens = vs.iter().map(|v| v.len()).collect::<Vec<_>>();
+    let num_patterns = lens.iter().copied().reduce(|accum, len| accum * len).unwrap();
+    let mut patterns = Vec::with_capacity(num_patterns);
+    for n in 0..num_patterns {
+        let indices = lens.iter().copied().map(|len| n % len).collect::<Vec<_>>();
+        patterns.push(indices);
     }
+    patterns
 }
 
 fn search_moves(conf: &SearchConfiguration, plan: &[Vec<Move>]) -> SearchResult {
@@ -56,14 +59,9 @@ fn search_moves(conf: &SearchConfiguration, plan: &[Vec<Move>]) -> SearchResult 
     let pf = &conf.pf;
     let fp = FallingPiece::new(conf.piece_spec, conf.src);
 
-    let mut idx_patterns = Vec::new();
-    enumerate_index_patterns(
-        &plan.iter().map(|v| { v.len() }).collect::<Vec<usize>>(),
-        vec![],
-        &mut idx_patterns,
-    );
+    let index_patterns = get_all_index_patterns(plan);
 
-    for indices in &idx_patterns {
+    for indices in &index_patterns {
         let mut fp = fp.clone();
         for (i, j) in indices.iter().enumerate() {
             let mut mv = plan[i][*j];
@@ -137,6 +135,23 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_get_all_index_patterns() {
+        let index_patterns = get_all_index_patterns(&[
+            vec![1, 2, 3],
+            vec![4, 5],
+            vec![6],
+        ]);
+        assert_eq!(vec![
+            vec![0, 0, 0],
+            vec![1, 1, 0],
+            vec![2, 0, 0],
+            vec![0, 1, 0],
+            vec![1, 0, 0],
+            vec![2, 1, 0],
+        ], index_patterns);
+    }
+
+    #[test]
     fn test_das_optim_plan() {
         let plan = das_optim_plan();
         let pf = Playfield::default();
@@ -147,7 +162,7 @@ mod test {
             // println!("{:?}", p);
             let mut g = Game::default();
             g.state.playfield.grid.put(p.pos, FallingPiece::new(fp.piece_spec, *p).grid());
-            println!("{}", g);
+            // println!("{}", g);
         }
     }
 }
