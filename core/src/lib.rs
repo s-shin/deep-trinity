@@ -936,7 +936,18 @@ impl<'a> Playfield<'a> {
         self.grid.can_put_fast(fp.placement.pos + (0, -1).into(), fp.grid())
     }
     pub fn can_drop_n(&self, fp: &FallingPiece, n: Y) -> bool {
+        assert!(n > 0);
         n <= self.grid.num_droppable_rows_fast(fp.placement.pos, fp.grid())
+    }
+    pub fn can_raise_n(&self, fp: &FallingPiece, n: Y) -> bool {
+        assert!(n > 0);
+        for i in 0..n {
+            let y = fp.placement.pos.1 + i + 1;
+            if !self.grid.can_put_fast((fp.placement.pos.0, y).into(), fp.grid()) {
+                return false;
+            }
+        }
+        true
     }
     pub fn can_move_horizontally(&self, fp: &FallingPiece, n: X) -> bool {
         let to_right = n > 0;
@@ -1570,8 +1581,11 @@ impl<'a> Game<'a> {
         } else {
             return Err("no falling piece");
         };
-
-        if let Some(path) = helper::get_almost_good_move_path(&self.state.playfield, fp, last_transition, self.rules.rotation_mode) {
+        let dst = if let Some(hint) = last_transition.hint { hint.placement.clone() } else { last_transition.placement.clone() };
+        if let Some(mut path) = helper::get_almost_good_move_path(self.rules.rotation_mode, &self.state.playfield, fp, &dst) {
+            if let Some(hint) = last_transition.hint {
+                path.merge_or_push(hint);
+            }
             Ok(path)
         } else {
             Err("move path not found")

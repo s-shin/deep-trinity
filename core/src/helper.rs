@@ -208,11 +208,49 @@ pub fn get_move_candidates(pf: &Playfield, fp: &FallingPiece, rules: &GameRules)
     r
 }
 
-/// TODO: Optimize more like the following:
-/// 1. Get paths by A* search.
-/// 2. Search the last placement lifted up over the spawned position.
-/// 3. If exists, get the path by humanly optimized move search.
-pub fn get_almost_good_move_path(pf: &Playfield, fp: &FallingPiece, last_transition: &MoveTransition, rotation_mode: RotationMode) -> Option<MovePath> {
+pub fn get_almost_good_move_path(rotation_mode: RotationMode, pf: &Playfield, fp: &FallingPiece, dst: &Placement) -> Option<MovePath> {
+    let search_conf = SearchConfiguration::new(pf, fp.piece_spec, fp.placement, rotation_mode);
+
+    // Since HumanlyOptimizedMoveSearcher is better performance than other searchers,
+    // search moves by it first.
+    let r = HumanlyOptimizedMoveSearcher::new(*dst, true).search(&search_conf);
+    if let Some(path) = r.get(dst) {
+        return Some(path);
+    }
+
+    // Search moves by A* searcher.
+    let r = AStarMoveSearcher::new(*dst, false).search(&search_conf);
+    let mut path_by_aster = if let Some(path) = r.get(dst) {
+        path
+    } else {
+        // Must be found if reachable placement given.
+        return None;
+    };
+
+    // Detect the last position where can be reached by only drop moves from around the spawned position.
+    if let Some((i, item)) = path_by_aster.items.iter().enumerate().rev().find(|(_, item)| {
+        let n = fp.piece_spec.initial_placement.pos.1 - item.placement.pos.1;
+        if n < 0 {
+            return false;
+        }
+        pf.can_raise_n(fp, n)
+    }) {
+        let r = HumanlyOptimizedMoveSearcher::new(item.placement.clone(), true).search(&search_conf);
+        if let Some(mut path) = r.get(&item.placement) {
+            if i <= path_by_aster.len() - 2 {
+                for j in (i + 1)..path_by_aster.len() {
+                    path.merge_or_push(path_by_aster.items[j]);
+                }
+            }
+            return Some(path);
+        }
+    }
+
+    Some(path_by_aster)
+}
+
+#[deprecated]
+pub fn get_almost_good_move_path_old(pf: &Playfield, fp: &FallingPiece, last_transition: &MoveTransition, rotation_mode: RotationMode) -> Option<MovePath> {
     enum Searcher {
         HumanOptimized,
         AStar,
@@ -285,5 +323,31 @@ mod tests {
             let dsts = h.tetris_destinations().unwrap();
             assert_eq!(2, dsts.len());
         }
+    }
+
+    #[test]
+    fn test_get_almost_good_move_path() {
+        let mut pf: Playfield<'static> = Default::default();
+        pf.set_rows_with_strs((0, 0).into(), &[
+            "@@  @     ",
+            "@   @     ",
+            "@ @@@     ",
+            "@  @@     ",
+            "@   @     ",
+            "@@ @@@    ",
+        ]);
+        let fp = FallingPiece::spawn(Piece::T.default_spec(), Some(&pf));
+        let dst = Placement::new(ORIENTATION_2, (1, 0).into());
+        let path = get_almost_good_move_path(RotationMode::Srs, &pf, &fp, &dst).unwrap();
+        // for i in 0..path.len() {
+        //     println!("{:?}", path.items[i]);
+        // }
+        // MovePathItem { by: Shift(-1), placement: Placement { orientation: Orientation(0), pos: Vec2(2, 18) } }
+        // MovePathItem { by: Rotate(-1), placement: Placement { orientation: Orientation(3), pos: Vec2(2, 18) } }
+        // MovePathItem { by: Drop(14), placement: Placement { orientation: Orientation(3), pos: Vec2(2, 4) } }
+        // MovePathItem { by: Rotate(1), placement: Placement { orientation: Orientation(0), pos: Vec2(1, 3) } }
+        // MovePathItem { by: Rotate(1), placement: Placement { orientation: Orientation(1), pos: Vec2(0, 1) } }
+        // MovePathItem { by: Rotate(1), placement: Placement { orientation: Orientation(2), pos: Vec2(1, 0) } }
+        assert_eq!(6, path.len());
     }
 }
