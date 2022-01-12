@@ -6,11 +6,13 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops;
+use std::rc::Rc;
 use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use once_cell::sync::Lazy;
 use grid::{CellTrait, Grid, X, Y, Vec2};
 use grid::bitgrid::BitGridTrait;
+use crate::helper::{MoveDecisionHelper, MoveDecisionStuff};
 
 //--------------------------------------------------------------------------------------------------
 // Piece, Block and Cell
@@ -1567,6 +1569,7 @@ impl<'a> Game<'a> {
         let conf = move_search::SearchConfiguration::new(pf, fp.piece_spec, fp.placement, self.rules.rotation_mode);
         Ok(searcher.search(&conf))
     }
+    #[deprecated(note = "Use helper::MoveDecisionHelper.")]
     pub fn get_move_candidates(&self) -> Result<HashSet<MoveTransition>, &'static str> {
         let s = &self.state;
         if s.falling_piece.is_none() {
@@ -1575,14 +1578,17 @@ impl<'a> Game<'a> {
         let r = helper::get_move_candidates(&s.playfield, s.falling_piece.as_ref().unwrap(), &self.rules);
         Ok(r)
     }
+    pub fn get_move_decision_helper(&self, stuff: Option<Rc<MoveDecisionStuff>>) -> Result<MoveDecisionHelper, &'static str> {
+        MoveDecisionHelper::with_game(self, stuff)
+    }
     pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MovePath, &'static str> {
         let fp = if let Some(fp) = self.state.falling_piece.as_ref() {
             fp
         } else {
             return Err("no falling piece");
         };
-        let dst = if let Some(hint) = last_transition.hint { hint.placement.clone() } else { last_transition.placement.clone() };
-        if let Some(mut path) = helper::get_almost_good_move_path(self.rules.rotation_mode, &self.state.playfield, fp, &dst) {
+        let dst = if let Some(hint) = last_transition.hint.as_ref() { &hint.placement } else { &last_transition.placement };
+        if let Some(mut path) = helper::get_almost_good_move_path(self.rules.rotation_mode, &self.state.playfield, fp, dst) {
             if let Some(hint) = last_transition.hint {
                 path.merge_or_push(hint);
             }

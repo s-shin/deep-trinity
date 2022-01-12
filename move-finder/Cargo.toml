@@ -8,4 +8,6 @@ edition = "2021"
 [dependencies]
 core = { path = "../core" }
 grid = { path = "../grid" }
+bot = { path = "../bot" }
+tree = { path = "../tree" }
 rand = "0.8"
