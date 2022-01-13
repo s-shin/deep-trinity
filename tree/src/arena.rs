@@ -1,39 +1,67 @@
-use std::error::Error;
-use std::fmt::Display;
+pub type NodeHandle = usize;
 
-pub struct Node<NodeHandle, Data> {
-    pub parent: Option<NodeHandle>,
-    pub children: Vec<NodeHandle>,
+pub struct Node<Data> {
     pub data: Data,
+    parent: Option<NodeHandle>,
+    children: Vec<NodeHandle>,
 }
 
-impl<NodeHandle, Data> Node<NodeHandle, Data> {
-    pub fn new(parent: Option<NodeHandle>, data: Data) -> Self {
+impl<Data> Node<Data> {
+    pub fn new(data: Data) -> Self {
         Self {
-            parent,
-            children: Vec::new(),
             data,
+            parent: None,
+            children: Vec::new(),
         }
     }
+    pub fn parent(&self) -> &Option<NodeHandle> { &self.parent }
+    pub fn children(&self) -> &Vec<NodeHandle> { &self.children }
+    pub fn has_parent(&self) -> bool { self.parent.is_some() }
+    pub fn has_children(&self) -> bool { !self.children.is_empty() }
     pub fn is_root(&self) -> bool { self.parent.is_none() }
     pub fn is_leaf(&self) -> bool { self.children.is_empty() }
     pub fn is_internal(&self) -> bool { !(self.is_root() || self.is_leaf()) }
 }
 
-pub trait NodeArena<Data> {
-    type NodeHandle: Sized + Copy + Eq + Display;
-    fn get(&self, handle: Self::NodeHandle) -> Option<&Node<Self::NodeHandle, Data>>;
-    fn get_mut(&mut self, handle: Self::NodeHandle) -> Option<&mut Node<Self::NodeHandle, Data>>;
-    fn contains(&self, handle: Self::NodeHandle) -> bool { self.get(handle).is_some() }
-    fn append(&mut self, parent: Option<Self::NodeHandle>, data: Data) -> Result<Self::NodeHandle, Box<dyn Error>>;
-    fn visit_depth_first(&self, start: Self::NodeHandle, mut visitor: impl FnMut(&Self, Self::NodeHandle, usize) -> bool) -> Result<(), Box<dyn Error>> {
+pub trait NodeArena<Data>: std::ops::Index<NodeHandle> + std::ops::IndexMut<NodeHandle> {
+    fn get(&self, handle: NodeHandle) -> Option<&Node<Data>>;
+    fn get_mut(&mut self, handle: NodeHandle) -> Option<&mut Node<Data>>;
+    fn contains(&self, handle: NodeHandle) -> bool { self.get(handle).is_some() }
+    fn create(&mut self, data: Data) -> NodeHandle;
+    /// Destroys the node and its children.
+    fn destroy(&mut self, handle: NodeHandle);
+    /// ## Panics
+    /// Panics if the `parent` node doesn't exist.
+    fn append_child(&mut self, parent: NodeHandle, data: Data) -> NodeHandle {
+        debug_assert!(self.contains(parent));
+        let child = self.create(data);
+        self.get_mut(parent).unwrap().children.push(child);
+        self.get_mut(child).unwrap().parent = Some(parent);
+        child
+    }
+    /// Detaches the node from its parent.
+    /// ## Panics
+    /// Panics if the specified node doesn't exist.
+    fn detach(&mut self, handle: NodeHandle) -> bool {
+        if let Some(parent) = self.get(handle).unwrap().parent {
+            self.get_mut(handle).unwrap().parent = None;
+            let children = &mut self.get_mut(parent).unwrap().children;
+            let i = children.iter().position(|h| h.eq(&handle));
+            debug_assert!(i.is_some());
+            children.remove(i.unwrap());
+            true
+        } else {
+            false
+        }
+    }
+    /// ## Panics
+    /// Panics if the visited nodes do not exist.
+    fn visit_depth_first(&self, start: NodeHandle, mut visitor: impl FnMut(&Self, NodeHandle, usize) -> bool) {
         let mut current = start;
         let mut depth = 0;
         let mut indices = Vec::new();
         loop {
-            if !self.contains(current) {
-                return Err(format!("The node ({}) to be visited not found.", current).into());
-            }
+            debug_assert!(self.contains(current));
             if !visitor(self, current, depth) {
                 break;
             }
@@ -45,7 +73,7 @@ pub trait NodeArena<Data> {
             }
             loop {
                 if current == start {
-                    return Ok(());
+                    return;
                 }
                 let c = self.get(current).unwrap();
                 let p = self.get(c.parent.unwrap()).unwrap();
@@ -59,20 +87,19 @@ pub trait NodeArena<Data> {
                 indices.pop();
             }
         }
-        Ok(())
     }
 }
 
 macro_rules! impl_arena_index_ops {
-    ($handle_type:ty, $arena_type:ident) => {
-        impl<Data> std::ops::Index<$handle_type> for $arena_type<Data> {
-            type Output = Node<$handle_type, Data>;
-            fn index(&self, index: $handle_type) -> &Self::Output {
+    ($arena_type:ident) => {
+        impl<Data> std::ops::Index<NodeHandle> for $arena_type<Data> {
+            type Output = Node<Data>;
+            fn index(&self, index: NodeHandle) -> &Self::Output {
                 self.get(index).unwrap()
             }
         }
-        impl<Data> std::ops::IndexMut<$handle_type> for $arena_type<Data> {
-            fn index_mut(&mut self, index: $handle_type) -> &mut Self::Output {
+        impl<Data> std::ops::IndexMut<NodeHandle> for $arena_type<Data> {
+            fn index_mut(&mut self, index: NodeHandle) -> &mut Self::Output {
                 self.get_mut(index).unwrap()
             }
         }
@@ -81,31 +108,63 @@ macro_rules! impl_arena_index_ops {
 
 #[derive(Default)]
 pub struct VecNodeArena<Data> {
-    nodes: Vec<Node<usize, Data>>,
+    handle_indices: Vec<Option<NodeHandle>>,
+    recycled_indices: Vec<usize>,
+    nodes: Vec<Node<Data>>,
+}
+
+impl<Data> VecNodeArena<Data> {
+    pub fn len(&self) -> usize { self.nodes.len() }
+    pub fn used_len(&self) -> usize { self.nodes.len() - self.recycled_indices.len() }
+    pub fn recycled_len(&self) -> usize { self.recycled_indices.len() }
+    pub fn shrink(&mut self) { todo!() }
 }
 
 impl<Data> NodeArena<Data> for VecNodeArena<Data> {
-    type NodeHandle = usize;
-    fn get(&self, handle: Self::NodeHandle) -> Option<&Node<Self::NodeHandle, Data>> { self.nodes.get(handle) }
-    fn get_mut(&mut self, handle: Self::NodeHandle) -> Option<&mut Node<Self::NodeHandle, Data>> { self.nodes.get_mut(handle) }
-    fn contains(&self, handle: Self::NodeHandle) -> bool { handle < self.nodes.len() }
-    fn append(&mut self, parent: Option<Self::NodeHandle>, data: Data) -> Result<Self::NodeHandle, Box<dyn Error>> {
-        if let Some(ph) = parent {
-            if matches!(self.get(ph), None) {
-                return Err("parent not found".into());
-            }
+    fn get(&self, handle: NodeHandle) -> Option<&Node<Data>> {
+        if let Some(Some(i)) = self.handle_indices.get(handle) {
+            Some(&self.nodes[*i])
+        } else {
+            None
         }
-        self.nodes.push(Node::new(parent, data));
+    }
+    fn get_mut(&mut self, handle: NodeHandle) -> Option<&mut Node<Data>> {
+        if let Some(Some(i)) = self.handle_indices.get(handle) {
+            Some(&mut self.nodes[*i])
+        } else {
+            None
+        }
+    }
+    fn contains(&self, handle: NodeHandle) -> bool {
+        matches!(self.handle_indices.get(handle), Some(Some(_)))
+    }
+    fn create(&mut self, data: Data) -> NodeHandle {
+        if let Some(i) = self.recycled_indices.pop() {
+            debug_assert!(self.handle_indices[i].is_none());
+            self.nodes[i] = Node::new(data);
+            self.handle_indices[i] = Some(i);
+            return i;
+        }
+        debug_assert_eq!(self.nodes.len(), self.handle_indices.len());
+        self.nodes.push(Node::new(data));
         let handle = self.nodes.len() - 1;
-        if let Some(ph) = parent {
-            let pn = self.get_mut(ph).unwrap();
-            pn.children.push(handle);
+        self.handle_indices.push(Some(handle));
+        handle
+    }
+    fn destroy(&mut self, handle: NodeHandle) {
+        let mut handles = Vec::new();
+        self.visit_depth_first(handle, |_, h, _| {
+            handles.push(h);
+            true
+        });
+        for h in handles.iter() {
+            self.handle_indices[*h] = None;
+            self.recycled_indices.push(*h);
         }
-        Ok(handle)
     }
 }
 
-impl_arena_index_ops!(usize, VecNodeArena);
+impl_arena_index_ops!(VecNodeArena);
 
 #[cfg(test)]
 mod tests {
@@ -115,13 +174,13 @@ mod tests {
     fn test_basic() {
         let mut arena: VecNodeArena<u8> = Default::default();
 
-        let root = arena.append(None, 1).unwrap();
+        let root = arena.create(1);
         assert_eq!(1, arena[root].data);
         assert!(arena[root].is_root());
         assert!(arena[root].is_leaf());
         assert!(!arena[root].is_internal());
 
-        let n1 = arena.append(Some(root), 10).unwrap();
+        let n1 = arena.append_child(root, 10);
         assert_eq!(1, arena[root].children.len());
         assert_eq!(&[n1], arena[root].children.as_slice());
         assert!(arena[root].is_root());
@@ -133,23 +192,39 @@ mod tests {
         assert!(arena[n1].is_leaf());
         assert!(!arena[n1].is_internal());
 
-        arena.append(Some(n1), 100).unwrap();
+        let _n1_1 = arena.append_child(n1, 100);
         assert!(arena[n1].is_internal());
+
+        let n2 = arena.append_child(root, 20);
+
+        assert!(arena.detach(n1));
+        assert!(arena[root].is_root());
+        assert!(arena[n1].is_root());
+
+        assert_eq!(0, arena.recycled_len());
+        arena.destroy(root);
+        assert_eq!(2, arena.recycled_len());
+        assert!(!arena.contains(root));
+        assert!(!arena.contains(n2));
+        assert!(arena.contains(n1));
+
+        let _n1_2 = arena.append_child(n1, 200);
+        assert_eq!(1, arena.recycled_len());
     }
 
     #[test]
     fn test_visit() {
         let mut arena: VecNodeArena<u8> = Default::default();
-        let root = arena.append(None, 1).unwrap();
-        let c1 = arena.append(Some(root), 10).unwrap();
-        let c2 = arena.append(Some(root), 20).unwrap();
-        let c1_1 = arena.append(Some(c1), 10).unwrap();
-        let c1_2 = arena.append(Some(c1), 10).unwrap();
+        let root = arena.create(1);
+        let n1 = arena.append_child(root, 10);
+        let n2 = arena.append_child(root, 20);
+        let n1_1 = arena.append_child(n1, 10);
+        let n1_2 = arena.append_child(n1, 10);
         let mut handles = Vec::new();
         arena.visit_depth_first(root, |_, handle, _| {
             handles.push(handle);
             true
-        }).unwrap();
-        assert_eq!(&[root, c1, c1_1, c1_2, c2], handles.as_slice());
+        });
+        assert_eq!(&[root, n1, n1_1, n1_2, n2], handles.as_slice());
     }
 }
