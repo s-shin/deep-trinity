@@ -1,10 +1,8 @@
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
 use std::rc::Rc;
 use core::{Piece, Placement, MoveTransition, FallingPiece};
-use core::helper::{MoveDecisionHelper, MoveDecisionStuff};
+use core::helper::MoveDecisionStuff;
 use bot::Action;
-use tree::VisitPlan;
+use tree::arena::{NodeArena, NodeHandle};
 
 type Game = core::Game<'static>;
 
@@ -22,111 +20,44 @@ impl NodeData {
     }
 }
 
-fn expand_node(node: &mut Rc<RefCell<tree::Node<NodeData>>>) -> Result<bool, &'static str> {
-    let fp = node.borrow().data.game.state.falling_piece.clone();
-    if let Some(fp) = fp {
-        let pps_len = node.borrow().data.pps.len();
+type VecNodeArena = tree::arena::VecNodeArena<NodeData>;
+
+fn expand_node(arena: &mut VecNodeArena, node: NodeHandle) {
+    if let Some(fp) = arena[node].data.game.state.falling_piece.clone() {
+        let pps_len = arena[node].data.pps.len();
         for i in 0..pps_len {
-            let pp = node.borrow().data.pps.get(i).cloned().unwrap();
+            let pp = arena[node].data.pps.get(i).cloned().unwrap();
             let (game, pps) = {
-                let data = &node.borrow().data;
+                let data = &arena[node].data;
                 if pp.piece != fp.piece() || !data.stuff.dst_candidates.contains(&pp.placement) {
                     continue;
                 }
                 let mut game = data.game.clone();
                 game.state.falling_piece = Some(FallingPiece::new(fp.piece().default_spec(), pp.placement));
-                game.lock()?;
+                game.lock().unwrap();
                 let mut pps = data.pps.clone();
                 pps.remove(i);
                 (game, pps)
             };
-            tree::append_child(&node, NodeData::new(
-                Some(Action::Move(MoveTransition::new(pp.placement.clone(), None))),
-                game,
-                pps,
-            )?);
+            if game.state.falling_piece.is_some() {
+                arena.append_child(node, NodeData::new(
+                    Some(Action::Move(MoveTransition::new(pp.placement.clone(), None))),
+                    game,
+                    pps,
+                ).unwrap());
+            }
         }
     }
-
-    let no_children = node.borrow().children.is_empty();
-    if no_children {
-        let can_hold = node.borrow().data.game.state.can_hold;
-        if can_hold {
-            let mut game = node.borrow().data.game.clone();
-            game.hold()?;
-            let pps = node.borrow().data.pps.clone();
-            let child_data = NodeData::new(Some(Action::Hold), game, pps)?;
-            tree::append_child(&node, child_data);
-            return Ok(true);
+    if arena[node].data.game.state.can_hold {
+        let mut game = arena[node].data.game.clone();
+        game.hold().unwrap();
+        if game.state.falling_piece.is_some() {
+            let pps = arena[node].data.pps.clone();
+            let child_data = NodeData::new(Some(Action::Hold), game, pps).unwrap();
+            arena.append_child(node, child_data);
         }
-        return Ok(false);
-    }
-
-    Ok(true)
-}
-
-struct DecisionTree {
-    root: Rc<RefCell<tree::Node<NodeData>>>,
-}
-
-impl DecisionTree {
-    fn new(game: Game, pps: Vec<Rc<PiecePlacement>>) -> Result<Self, &'static str> {
-        let root = tree::new(NodeData::new(None, game, pps)?);
-        Ok(Self { root })
     }
 }
-
-// Vec<Vec<Action>>
-// state managed with tree
-// fn check(mut game: Game, pps: Vec<PiecePlacement>) -> Vec<Action> {
-//     let mut r = Vec::new();
-//     let mut remains = pps;
-//     while !remains.is_empty() {
-//         if game.state.falling_piece.is_none() {
-//             if game.state.can_hold {
-//                 r.push(Action::Hold);
-//                 game.hold().unwrap();
-//                 continue;
-//             }
-//             break;
-//         }
-//         let h = game.get_move_decision_helper().unwrap();
-//         println!("=====================================");
-//         println!("{}", game);
-//         for pp in remains.iter() {
-//             println!("{:?}", pp);
-//         }
-//         println!("---");
-//         println!("{:?}", h.falling_piece.piece);
-//         for dst in h.dst_candidates.iter() {
-//             println!("{:?}", dst);
-//         }
-//         if let Some((i, p)) = remains.iter().enumerate()
-//             .filter(|(_, pp)| pp.piece == h.falling_piece.piece && h.dst_candidates.contains(&pp.placement))
-//             .map(|(i, pp)| (i, pp.placement.clone()))
-//             .next() {
-//             println!("---");
-//             println!("=> {:?}", p);
-//             r.push(Action::Move(MoveTransition::new(p.clone(), None)));
-//             remains.remove(i);
-//             game.state.falling_piece = Some(FallingPiece::new(h.falling_piece.piece.default_spec(), p));
-//             game.lock().unwrap();
-//         } else {
-//             println!("---");
-//             println!("=> not found");
-//             if game.state.can_hold {
-//                 r.push(Action::Hold);
-//                 game.hold().unwrap();
-//                 continue;
-//             }
-//             break;
-//         }
-//     }
-//     if matches!(r.last(), Some(Action::Hold)) {
-//         r.pop();
-//     }
-//     r
-// }
 
 macro_rules! pp {
     ($piece_name:ident, $orientation:literal, $x:literal, $y:literal) => {
@@ -153,6 +84,8 @@ impl PiecePlacement {
 }
 
 fn main() {
+    let debug_trace = false;
+
     let tsd_opener_l_base = [
         pp!(I, 0, 2, -2),
         pp!(O, 0, 7, -1),
@@ -165,20 +98,57 @@ fn main() {
         pp!(T, 2, 1, 0),
     ].iter().copied()).collect::<Vec<_>>();
 
+    let pps = tsd_opener_l_01.iter().copied().map(|pp| Rc::new(pp)).collect::<Vec<_>>();
+    let pps_len = pps.len();
+    println!("## Positions");
+    for ps in pps.iter() {
+        println!("{} {} {}", ps.piece.char(), ps.placement.orientation.id(), ps.placement.pos);
+    }
+
     let mut game: Game = Default::default();
     game.supply_next_pieces(&[
         Piece::I, Piece::S, Piece::Z, Piece::T, Piece::O, Piece::J, Piece::L,
         Piece::I, Piece::S, Piece::Z, Piece::T, Piece::O, Piece::J, Piece::L,
     ]);
     game.setup_falling_piece(None);
-    let pps = tsd_opener_l_01.iter().copied().map(|pp| Rc::new(pp)).collect::<Vec<_>>();
-    let mut t = DecisionTree::new(game, pps).unwrap();
-    expand_node(&mut t.root).unwrap();
+    println!("## Game\n{}", game);
 
-    tree::visit(&t.root, |node, state| {
-        VisitPlan::Children
+    let mut arena = VecNodeArena::default();
+    let root = arena.create(NodeData::new(None, game, pps).unwrap());
+
+    let mut open = vec![root];
+    while !open.is_empty() {
+        let target = open.pop().unwrap();
+        expand_node(&mut arena, target);
+        open.extend(arena[target].children());
+    }
+    if debug_trace {
+        arena.visit_depth_first(root, |arena, node, ctx| {
+            let indent = "  ".repeat(ctx.depth);
+            let n = &arena[node];
+            println!("{}- by_action: {:?}", indent, n.data.by_action);
+            println!("{}  game: |-\n{}", indent, n.data.game.to_string().split("\n")
+                .map(|line| format!("{}    {}", indent, line)).collect::<Vec<_>>().join("\n"));
+            println!("{}  children: {}", indent, if n.is_leaf() { "[]" } else { "" });
+        });
+    }
+
+    println!("## Result");
+
+    let mut found = Vec::new();
+    arena.visit_depth_first(root, |arena, node, ctx| {
+        if arena[node].data.game.stats.lock == pps_len as u32 {
+            found.push(arena.route(node));
+            ctx.skip();
+        }
     });
 
-    // let r = check(game, tsd_opener_l_01.to_vec());
-    // println!("{:?}", r);
+    for (i, route) in found.iter().enumerate() {
+        println!("--- {} ---", i);
+        for n in route.iter() {
+            if let Some(action) = arena[*n].data.by_action {
+                println!("{:?}", action);
+            }
+        }
+    }
 }

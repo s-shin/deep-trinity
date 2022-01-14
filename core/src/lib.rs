@@ -39,6 +39,9 @@ impl Piece {
     pub fn default_spec(self) -> &'static PieceSpec<'static> {
         &DEFAULT_PIECE_SPEC_COLLECTION.get(self)
     }
+    pub fn char(self) -> char {
+        Cell::Block(Block::Piece(self)).char()
+    }
 }
 
 pub const NUM_PIECES: usize = 7;

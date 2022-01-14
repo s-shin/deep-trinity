@@ -23,6 +23,25 @@ impl<Data> Node<Data> {
     pub fn is_internal(&self) -> bool { !(self.is_root() || self.is_leaf()) }
 }
 
+enum VisitPlan {
+    Next,
+    Skip,
+    Finish,
+}
+
+pub struct VisitContext {
+    pub depth: usize,
+    next_plan: VisitPlan,
+}
+
+impl VisitContext {
+    fn new(depth: usize) -> Self {
+        Self { depth, next_plan: VisitPlan::Next }
+    }
+    pub fn skip(&mut self) { self.next_plan = VisitPlan::Skip }
+    pub fn finish(&mut self) { self.next_plan = VisitPlan::Finish }
+}
+
 pub trait NodeArena<Data>: std::ops::Index<NodeHandle> + std::ops::IndexMut<NodeHandle> {
     fn get(&self, handle: NodeHandle) -> Option<&Node<Data>>;
     fn get_mut(&mut self, handle: NodeHandle) -> Option<&mut Node<Data>>;
@@ -56,20 +75,25 @@ pub trait NodeArena<Data>: std::ops::Index<NodeHandle> + std::ops::IndexMut<Node
     }
     /// ## Panics
     /// Panics if the visited nodes do not exist.
-    fn visit_depth_first(&self, start: NodeHandle, mut visitor: impl FnMut(&Self, NodeHandle, usize) -> bool) {
+    fn visit_depth_first(&self, start: NodeHandle, mut visitor: impl FnMut(&Self, NodeHandle, &mut VisitContext)) {
         let mut current = start;
         let mut depth = 0;
         let mut indices = Vec::new();
         loop {
             debug_assert!(self.contains(current));
-            if !visitor(self, current, depth) {
-                break;
-            }
-            if let Some(next) = self.get(current).unwrap().children.get(0) {
-                current = *next;
-                depth += 1;
-                indices.push(0);
-                continue;
+            let mut ctx = VisitContext::new(depth);
+            visitor(self, current, &mut ctx);
+            match ctx.next_plan {
+                VisitPlan::Next => {
+                    if let Some(next) = self.get(current).unwrap().children.get(0) {
+                        current = *next;
+                        depth += 1;
+                        indices.push(0);
+                        continue;
+                    }
+                }
+                VisitPlan::Skip => {}
+                VisitPlan::Finish => return,
             }
             loop {
                 if current == start {
@@ -87,6 +111,20 @@ pub trait NodeArena<Data>: std::ops::Index<NodeHandle> + std::ops::IndexMut<Node
                 indices.pop();
             }
         }
+    }
+    fn route(&self, node: NodeHandle) -> Vec<NodeHandle> {
+        let mut r = Vec::new();
+        let mut c = node;
+        loop {
+            r.push(c);
+            if let Some(p) = self.get(c).unwrap().parent {
+                c = p;
+            } else {
+                break;
+            }
+        }
+        r.reverse();
+        r
     }
 }
 
@@ -106,11 +144,20 @@ macro_rules! impl_arena_index_ops {
     }
 }
 
-#[derive(Default)]
 pub struct VecNodeArena<Data> {
     handle_indices: Vec<Option<NodeHandle>>,
     recycled_indices: Vec<usize>,
     nodes: Vec<Node<Data>>,
+}
+
+impl<Data> Default for VecNodeArena<Data> {
+    fn default() -> Self {
+        Self {
+            handle_indices: Vec::new(),
+            recycled_indices: Vec::new(),
+            nodes: Vec::new(),
+        }
+    }
 }
 
 impl<Data> VecNodeArena<Data> {
@@ -155,7 +202,6 @@ impl<Data> NodeArena<Data> for VecNodeArena<Data> {
         let mut handles = Vec::new();
         self.visit_depth_first(handle, |_, h, _| {
             handles.push(h);
-            true
         });
         for h in handles.iter() {
             self.handle_indices[*h] = None;
@@ -223,7 +269,6 @@ mod tests {
         let mut handles = Vec::new();
         arena.visit_depth_first(root, |_, handle, _| {
             handles.push(handle);
-            true
         });
         assert_eq!(&[root, n1, n1_1, n1_2, n2], handles.as_slice());
     }
