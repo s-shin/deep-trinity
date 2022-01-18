@@ -42,6 +42,12 @@ impl Piece {
     pub fn char(self) -> char {
         Cell::Block(Block::Piece(self)).char()
     }
+    pub fn from_char(c: char) -> Result<Self, &'static str> {
+        match Cell::from(c) {
+            Cell::Block(Block::Piece(p)) => Ok(p),
+            _ => Err("not piece char"),
+        }
+    }
 }
 
 pub const NUM_PIECES: usize = 7;

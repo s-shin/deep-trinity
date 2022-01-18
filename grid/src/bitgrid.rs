@@ -339,7 +339,7 @@ impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
             pos = p;
         }
     }
-    fn space_mask(&self, pos: Vec2) -> Int {
+    fn _space_mask(&self, pos: Vec2) -> Int {
         let mut mask = Int::zero();
         self.traverse(pos, |p, c| {
             if c.is_empty() {

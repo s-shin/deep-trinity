@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::rc::Rc;
-use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, PieceSpec, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0};
+use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0};
 use crate::move_search::{MoveSearcher, SearchConfiguration, SearchResult};
 use crate::move_search::bruteforce::BruteForceMoveSearcher;
 use crate::move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
@@ -233,7 +233,7 @@ pub fn get_almost_good_move_path(rotation_mode: RotationMode, pf: &Playfield, fp
 
     // Search moves by A* searcher.
     let r = AStarMoveSearcher::new(*dst, false).search(&search_conf);
-    let mut path_by_aster = if let Some(path) = r.get(dst) {
+    let path_by_aster = if let Some(path) = r.get(dst) {
         path
     } else {
         // Must be found if reachable placement given.

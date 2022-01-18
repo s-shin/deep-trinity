@@ -1,5 +1,9 @@
+use std::ops::Deref;
 use std::rc::Rc;
-use core::{Piece, Placement, MoveTransition, FallingPiece};
+use std::str::FromStr;
+use clap::Parser;
+use rand::prelude::*;
+use core::{Piece, Orientation, Placement, MoveTransition, FallingPiece, RandomPieceGenerator};
 use core::helper::MoveDecisionStuff;
 use bot::Action;
 use tree::arena::{NodeArena, NodeHandle};
@@ -59,17 +63,17 @@ fn expand_node(arena: &mut VecNodeArena, node: NodeHandle) {
     }
 }
 
-macro_rules! pp {
-    ($piece_name:ident, $orientation:literal, $x:literal, $y:literal) => {
-        PiecePlacement::new(
-            core::Piece::$piece_name,
-            Placement::new(
-                core::ORIENTATIONS[$orientation],
-                grid::Vec2($x, $y),
-            ),
-        )
-    }
-}
+// macro_rules! pp {
+//     ($piece_name:ident, $orientation:literal, $x:literal, $y:literal) => {
+//         PiecePlacement::new(
+//             core::Piece::$piece_name,
+//             Placement::new(
+//                 core::ORIENTATIONS[$orientation],
+//                 grid::Vec2($x, $y),
+//             ),
+//         )
+//     }
+// }
 
 #[derive(Copy, Clone, Debug)]
 struct PiecePlacement {
@@ -83,22 +87,78 @@ impl PiecePlacement {
     }
 }
 
+impl FromStr for PiecePlacement {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(",");
+        let err_msg = "Invalid format.";
+        let mut part0 = parts.next().ok_or::<Self::Err>(err_msg.into())?.chars();
+        let part1 = parts.next().ok_or::<Self::Err>(err_msg.into())?;
+        let part2 = parts.next().ok_or::<Self::Err>(err_msg.into())?;
+
+        let piece = if let Some(c) = part0.next() {
+            if let Ok(p) = Piece::from_char(c) {
+                p
+            } else {
+                return Err(format!("'{}' is not piece character.", c).into());
+            }
+        } else {
+            return Err("A piece character is required..".into());
+        };
+        let orientation = if let Some(c) = part0.next() {
+            if let Ok(n) = u8::from_str(c.to_string().as_str()) {
+                Orientation::new(n)
+            } else {
+                return Err(format!("'{}' is invalid orientation value.", c).into());
+            }
+        } else {
+            return Err("An orientation value is required..".into());
+        };
+
+        let x = i8::from_str(part1).map_err(|_| Self::Err::from("Invalid x value."))?;
+        let y = i8::from_str(part2).map_err(|_| Self::Err::from("invalid y value."))?;
+
+        Ok(Self::new(piece, Placement::new(orientation, (x, y).into())))
+    }
+}
+
+#[derive(Debug)]
+struct PieceList(Vec<Piece>);
+
+impl FromStr for PieceList {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut r = Vec::with_capacity(s.len());
+        for c in s.chars() {
+            r.push(Piece::from_char(c)?);
+        }
+        Ok(PieceList(r))
+    }
+}
+
+impl Deref for PieceList {
+    type Target = Vec<Piece>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[clap(short = 's', long, default_value = "0")]
+    random_seed: u64,
+    #[clap(short, long, default_value = "")]
+    pieces: PieceList,
+    #[clap(long)]
+    debug: bool,
+    positions: Vec<PiecePlacement>,
+}
+
 fn main() {
-    let debug_trace = false;
+    let args: Args = Args::parse();
+    let debug_trace = args.debug;
 
-    let tsd_opener_l_base = [
-        pp!(I, 0, 2, -2),
-        pp!(O, 0, 7, -1),
-        pp!(L, 1, -1, 0),
-    ];
-    let tsd_opener_l_01 = tsd_opener_l_base.iter().copied().chain([
-        pp!(S, 1, 5, 0),
-        pp!(Z, 0, 3, 0),
-        pp!(J, 2, 3, 2),
-        pp!(T, 2, 1, 0),
-    ].iter().copied()).collect::<Vec<_>>();
-
-    let pps = tsd_opener_l_01.iter().copied().map(|pp| Rc::new(pp)).collect::<Vec<_>>();
+    let pps = args.positions.iter().map(|&pp| Rc::new(pp)).collect::<Vec<_>>();
     let pps_len = pps.len();
     println!("## Positions");
     for ps in pps.iter() {
@@ -106,11 +166,19 @@ fn main() {
     }
 
     let mut game: Game = Default::default();
-    game.supply_next_pieces(&[
-        Piece::I, Piece::S, Piece::Z, Piece::T, Piece::O, Piece::J, Piece::L,
-        Piece::I, Piece::S, Piece::Z, Piece::T, Piece::O, Piece::J, Piece::L,
-    ]);
-    game.setup_falling_piece(None);
+    game.supply_next_pieces(args.pieces.as_slice());
+    {
+        let mut n = args.pieces.len();
+        if n < pps_len {
+            let mut rpg = RandomPieceGenerator::new(StdRng::seed_from_u64(args.random_seed));
+            while n < pps_len {
+                let pieces = rpg.generate();
+                game.supply_next_pieces(&pieces);
+                n += pieces.len();
+            }
+        }
+    }
+    game.setup_falling_piece(None).unwrap();
     println!("## Game\n{}", game);
 
     let mut arena = VecNodeArena::default();
@@ -150,5 +218,17 @@ fn main() {
                 println!("{:?}", action);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_cmd::Command;
+
+    #[test]
+    fn basic() {
+        let mut cmd = Command::cargo_bin("move-finder").unwrap();
+        let assert = cmd.args("-p ISZTOJLISZTOJL I0,2,-2 O0,7,-1 L1,-1,0 S1,5,0 Z0,3,0 J2,3,2 T2,1,0".split(" ").collect::<Vec<_>>()).assert();
+        assert.code(0);
     }
 }
