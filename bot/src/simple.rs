@@ -21,13 +21,15 @@ impl Bot for SimpleBot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_bot;
+    use crate::BotRunner;
 
     #[test]
     fn test_simple_bot() {
-        let mut bot = SimpleBot::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 100, false).unwrap();
+        let runner = BotRunner::new(100, true, Some(seed), false);
+        let mut bot = SimpleBot::default();
+        let game = runner.run_with_no_hooks(&mut bot).unwrap();
+        // let game = test_bot(&mut bot, seed, 100, false).unwrap();
         assert!(game.stats.lock > 40);
     }
 }

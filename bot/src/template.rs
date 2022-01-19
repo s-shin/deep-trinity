@@ -165,16 +165,16 @@ impl Bot for TemplateBot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BotRunner, BotRunnerHook};
+    use crate::{BotRunner, BotRunnerHooks};
     use core::{Cell, Block};
 
     #[test]
     fn test_template_bot() {
-        struct Hook {
+        struct Hooks {
             next_pieces: Vec<Piece>,
         }
 
-        impl BotRunnerHook for Hook {
+        impl BotRunnerHooks for Hooks {
             fn on_start(&mut self, game: &mut Game) -> Result<(), Box<dyn Error>> {
                 game.supply_next_pieces(&self.next_pieces);
                 game.setup_falling_piece(None)?;
@@ -219,11 +219,11 @@ mod tests {
             Params::new(tsd_opener_r_02(), "IJOLZST", false),
         ] {
             let runner = BotRunner::new(100, true, None, params.debug_print);
-            let mut hook = Hook {
+            let mut hooks = Hooks {
                 next_pieces: params.next_pieces.clone(),
             };
             let mut bot = TemplateBot::new(params.tmpl.clone());
-            runner.run(&mut bot, Some(&mut hook)).unwrap();
+            runner.run(&mut bot, &mut hooks).unwrap();
         }
     }
 }

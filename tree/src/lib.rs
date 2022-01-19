@@ -2,6 +2,8 @@ use std::rc::{Rc, Weak};
 use std::cell::{RefCell};
 use std::cmp::Ordering;
 
+pub mod arena;
+
 pub struct Node<Data> {
     pub parent: Option<Weak<RefCell<Node<Data>>>>,
     pub children: Vec<Rc<RefCell<Node<Data>>>>,

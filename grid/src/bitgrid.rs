@@ -220,7 +220,10 @@ pub struct PrimBitGrid<'a, Int: PrimInt, C: CellTrait = BinaryCell> {
 
 impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
     pub fn new(constants: &'a PrimBitGridConstants<Int>) -> Self {
-        Self { constants, cells: Int::zero(), phantom: PhantomData }
+        Self::with_cells(constants, Int::zero())
+    }
+    pub fn with_cells(constants: &'a PrimBitGridConstants<Int>, cells: Int) -> Self {
+        Self { constants, cells, phantom: PhantomData }
     }
     pub fn constants(&self) -> &'a PrimBitGridConstants<Int> { self.constants }
     fn bit_index(&self, pos: Vec2) -> i32 { self.constants.stride as i32 * pos.1 as i32 + pos.0 as i32 }
@@ -335,6 +338,17 @@ impl<'a, Int: PrimInt, C: CellTrait> PrimBitGrid<'a, Int, C> {
             }
             pos = p;
         }
+    }
+    fn _space_mask(&self, pos: Vec2) -> Int {
+        let mut mask = Int::zero();
+        self.traverse(pos, |p, c| {
+            if c.is_empty() {
+                mask = mask | self.cell_mask(p);
+                return true;
+            }
+            false
+        });
+        mask
     }
 }
 

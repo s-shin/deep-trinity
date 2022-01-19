@@ -1,16 +1,64 @@
 pub mod move_search;
 pub mod helper;
+pub mod prelude;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops;
+use std::rc::Rc;
 use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use once_cell::sync::Lazy;
 use grid::{CellTrait, Grid, X, Y, Vec2};
 use grid::bitgrid::BitGridTrait;
+use crate::helper::{MoveDecisionHelper, MoveDecisionStuff};
+
+//--------------------------------------------------------------------------------------------------
+// Global Configurations
+//--------------------------------------------------------------------------------------------------
+
+#[derive(Copy, Clone, Debug)]
+pub struct GlobalDefaults {
+    playfield_size: Vec2,
+    playfield_visible_height: Y,
+    num_visible_next_pieces: usize,
+}
+
+impl GlobalDefaults {
+    pub fn new(playfield_size: Vec2, playfield_visible_height: Y, num_visible_next_pieces: usize) -> Self {
+        Self { playfield_size, playfield_visible_height, num_visible_next_pieces }
+    }
+}
+
+impl Default for GlobalDefaults {
+    fn default() -> Self {
+        Self::new((10, 40).into(), 20, 5)
+    }
+}
+
+mod global_defaults_internal {
+    use once_cell::sync::OnceCell;
+    use super::GlobalDefaults;
+
+    static GLOBAL_DEFAULTS: OnceCell<GlobalDefaults> = OnceCell::new();
+
+    pub fn init_global_defaults(v: GlobalDefaults) -> Result<(), &'static str> {
+        GLOBAL_DEFAULTS.set(v).map_err(|_| "Already initialized.")
+    }
+
+    pub fn global_defaults() -> &'static GlobalDefaults {
+        if let Some(c) = GLOBAL_DEFAULTS.get() {
+            return c;
+        }
+        GLOBAL_DEFAULTS.set(Default::default()).ok();
+        GLOBAL_DEFAULTS.get().unwrap()
+    }
+}
+
+pub use global_defaults_internal::init_global_defaults;
+use global_defaults_internal::global_defaults;
 
 //--------------------------------------------------------------------------------------------------
 // Piece, Block and Cell
@@ -36,6 +84,15 @@ pub enum Piece {
 impl Piece {
     pub fn default_spec(self) -> &'static PieceSpec<'static> {
         &DEFAULT_PIECE_SPEC_COLLECTION.get(self)
+    }
+    pub fn char(self) -> char {
+        Cell::Block(Block::Piece(self)).char()
+    }
+    pub fn from_char(c: char) -> Result<Self, &'static str> {
+        match Cell::from(c) {
+            Cell::Block(Block::Piece(p)) => Ok(p),
+            _ => Err("not piece char"),
+        }
     }
 }
 
@@ -141,14 +198,15 @@ type PrimBitGrid<'a> = grid::bitgrid::PrimBitGrid<'a, BitGridInt, Cell>;
 type BasicBitGrid<'a> = grid::bitgrid::BasicBitGrid<'a, BitGridInt, Cell>;
 
 pub static DEFAULT_PRIM_GRID_CONSTANTS_STORE: Lazy<PrimBitGridConstantsStore> = Lazy::new(|| {
+    let def = global_defaults();
     // Use the width of a playfield as the stride.
-    let mut store = PrimBitGridConstantsStore::new(DEFAULT_PLAYFIELD_SIZE.0);
+    let mut store = PrimBitGridConstantsStore::new(def.playfield_size.0);
     // For I piece.
     store.prepare_for_prim_bit_grid(Vec2(5, 5));
     // For other pieces.
     store.prepare_for_prim_bit_grid(Vec2(3, 3));
     // For playfield.
-    store.prepare_for_bit_grid(DEFAULT_PLAYFIELD_SIZE);
+    store.prepare_for_bit_grid(def.playfield_size);
     store
 });
 
@@ -278,16 +336,21 @@ impl Placement {
     pub fn new(orientation: Orientation, pos: Vec2) -> Self {
         Self { orientation, pos }
     }
+    /// Manhattan distance.
+    /// ```txt
+    /// factors = (fo, fx, fy) (default: (1, 1, 1))
+    /// distance = do * fo + dx * fx + dy * fy
+    /// ```
     pub fn distance(&self, other: &Placement, factors: Option<(usize, usize, usize)>) -> usize {
         let dp = self.pos - other.pos;
-        let (fx, fy, fr) = factors.unwrap_or((1, 1, 2));
+        let (fo, fx, fy) = factors.unwrap_or((1, 1, 1));
         (dp.0.abs() as usize) * fx
             + (dp.1.abs() as usize) * fy
-            + ((self.orientation.id() as i8 - other.orientation.id() as i8).abs() as usize) * fr
+            + ((self.orientation.id() as i8 - other.orientation.id() as i8).abs() as usize) * fo
     }
     pub fn normalize(&self, piece: Piece) -> Placement {
-        let aliases = helper::get_placement_aliases(piece, self);
-        match aliases.iter().min_by(|p1, p2| p1.orientation.id().cmp(&p2.orientation.id())) {
+        let alts = helper::get_alternative_placements(piece, self);
+        match alts.iter().min_by(|p1, p2| p1.orientation.id().cmp(&p2.orientation.id())) {
             Some(p) => if self.orientation.id() < p.orientation.id() {
                 self.clone()
             } else {
@@ -641,7 +704,7 @@ impl<'a> PieceSpecCollection<'a> {
     }
 }
 
-pub struct PieceSpecBuilder<'a> {
+struct PieceSpecBuilder<'a> {
     store: &'a PrimBitGridConstantsStore,
 }
 
@@ -788,7 +851,7 @@ pub static DEFAULT_PIECE_SPEC_COLLECTION: Lazy<PieceSpecCollection> = Lazy::new(
     b.piece_specs()
 });
 
-impl Default for &PieceSpecCollection<'_> {
+impl Default for &PieceSpecCollection<'static> {
     fn default() -> Self { &DEFAULT_PIECE_SPEC_COLLECTION }
 }
 
@@ -931,7 +994,18 @@ impl<'a> Playfield<'a> {
         self.grid.can_put_fast(fp.placement.pos + (0, -1).into(), fp.grid())
     }
     pub fn can_drop_n(&self, fp: &FallingPiece, n: Y) -> bool {
+        assert!(n > 0);
         n <= self.grid.num_droppable_rows_fast(fp.placement.pos, fp.grid())
+    }
+    pub fn can_raise_n(&self, fp: &FallingPiece, n: Y) -> bool {
+        assert!(n > 0);
+        for i in 0..n {
+            let y = fp.placement.pos.1 + i + 1;
+            if !self.grid.can_put_fast((fp.placement.pos.0, y).into(), fp.grid()) {
+                return false;
+            }
+        }
+        true
     }
     pub fn can_move_horizontally(&self, fp: &FallingPiece, n: X) -> bool {
         let to_right = n > 0;
@@ -1074,7 +1148,8 @@ impl<'a> Playfield<'a> {
         let num_cleared_line = self.grid.drop_filled_rows();
         Some(LineClear::new(num_cleared_line as u8, tspin))
     }
-    // The return placements can include unreachable placements.
+    /// The return placements can include unreachable placements.
+    /// These also includes all alternative placements.
     pub fn search_lockable_placements(&self, spec: &PieceSpec) -> Vec<Placement> {
         let max_padding = match spec.piece {
             Piece::I => 2,
@@ -1108,20 +1183,16 @@ impl<'a> Playfield<'a> {
     }
 }
 
-pub const DEFAULT_PLAYFIELD_SIZE: Vec2 = Vec2(10, 40);
-pub const DEFAULT_PLAYFIELD_VISIBLE_HEIGHT: Y = 20;
-
-impl<'a> Default for Playfield<'a> {
+impl Default for Playfield<'static> {
     fn default() -> Self {
-        Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, DEFAULT_PLAYFIELD_SIZE, DEFAULT_PLAYFIELD_VISIBLE_HEIGHT).unwrap()
+        let def = global_defaults();
+        Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, def.playfield_size, def.playfield_visible_height).unwrap()
     }
 }
 
 //--------------------------------------------------------------------------------------------------
 // NextPieces
 //--------------------------------------------------------------------------------------------------
-
-pub const DEFAULT_NUM_VISIBLE_NEXT_PIECES: usize = 5;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NextPieces {
@@ -1143,7 +1214,7 @@ impl NextPieces {
 }
 
 impl Default for NextPieces {
-    fn default() -> Self { Self::new(DEFAULT_NUM_VISIBLE_NEXT_PIECES) }
+    fn default() -> Self { Self::new(global_defaults().num_visible_next_pieces) }
 }
 
 impl fmt::Display for NextPieces {
@@ -1331,11 +1402,11 @@ impl<'a> GameState<'a> {
     pub fn is_game_over(&self) -> bool { !self.game_over_reason.is_empty() }
 }
 
-impl<'a> Default for GameState<'a> {
+impl Default for GameState<'static> {
     fn default() -> Self {
         Self {
-            playfield: Playfield::<'a>::default(),
-            next_pieces: NextPieces::default(),
+            playfield: Default::default(),
+            next_pieces: Default::default(),
             falling_piece: None,
             hold_piece: None,
             can_hold: true,
@@ -1550,6 +1621,7 @@ impl<'a> Game<'a> {
         let conf = move_search::SearchConfiguration::new(pf, fp.piece_spec, fp.placement, self.rules.rotation_mode);
         Ok(searcher.search(&conf))
     }
+    #[deprecated(note = "Use helper::MoveDecisionHelper.")]
     pub fn get_move_candidates(&self) -> Result<HashSet<MoveTransition>, &'static str> {
         let s = &self.state;
         if s.falling_piece.is_none() {
@@ -1558,14 +1630,20 @@ impl<'a> Game<'a> {
         let r = helper::get_move_candidates(&s.playfield, s.falling_piece.as_ref().unwrap(), &self.rules);
         Ok(r)
     }
+    pub fn get_move_decision_helper(&self, stuff: Option<Rc<MoveDecisionStuff>>) -> Result<MoveDecisionHelper, &'static str> {
+        MoveDecisionHelper::with_game(self, stuff)
+    }
     pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MovePath, &'static str> {
         let fp = if let Some(fp) = self.state.falling_piece.as_ref() {
             fp
         } else {
             return Err("no falling piece");
         };
-
-        if let Some(path) = helper::get_almost_good_move_path(&self.state.playfield, fp, last_transition, self.rules.rotation_mode) {
+        let dst = if let Some(hint) = last_transition.hint.as_ref() { &hint.placement } else { &last_transition.placement };
+        if let Some(mut path) = helper::get_almost_good_move_path(self.rules.rotation_mode, &self.state.playfield, fp, dst) {
+            if let Some(hint) = last_transition.hint {
+                path.merge_or_push(hint);
+            }
             Ok(path)
         } else {
             Err("move path not found")
