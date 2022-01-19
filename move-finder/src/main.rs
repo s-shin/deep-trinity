@@ -3,12 +3,10 @@ use std::rc::Rc;
 use std::str::FromStr;
 use clap::Parser;
 use rand::prelude::*;
-use core::{Piece, Orientation, Placement, MoveTransition, FallingPiece, RandomPieceGenerator};
+use core::prelude::*;
 use core::helper::MoveDecisionStuff;
 use bot::Action;
 use tree::arena::{NodeArena, NodeHandle};
-
-type Game = core::Game<'static>;
 
 struct NodeData {
     by_action: Option<Action>,

@@ -1,5 +1,6 @@
 pub mod move_search;
 pub mod helper;
+pub mod prelude;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
@@ -13,6 +14,51 @@ use once_cell::sync::Lazy;
 use grid::{CellTrait, Grid, X, Y, Vec2};
 use grid::bitgrid::BitGridTrait;
 use crate::helper::{MoveDecisionHelper, MoveDecisionStuff};
+
+//--------------------------------------------------------------------------------------------------
+// Global Configurations
+//--------------------------------------------------------------------------------------------------
+
+#[derive(Copy, Clone, Debug)]
+pub struct GlobalDefaults {
+    playfield_size: Vec2,
+    playfield_visible_height: Y,
+    num_visible_next_pieces: usize,
+}
+
+impl GlobalDefaults {
+    pub fn new(playfield_size: Vec2, playfield_visible_height: Y, num_visible_next_pieces: usize) -> Self {
+        Self { playfield_size, playfield_visible_height, num_visible_next_pieces }
+    }
+}
+
+impl Default for GlobalDefaults {
+    fn default() -> Self {
+        Self::new((10, 40).into(), 20, 5)
+    }
+}
+
+mod global_defaults_internal {
+    use once_cell::sync::OnceCell;
+    use super::GlobalDefaults;
+
+    static GLOBAL_DEFAULTS: OnceCell<GlobalDefaults> = OnceCell::new();
+
+    pub fn init_global_defaults(v: GlobalDefaults) -> Result<(), &'static str> {
+        GLOBAL_DEFAULTS.set(v).map_err(|_| "Already initialized.")
+    }
+
+    pub fn global_defaults() -> &'static GlobalDefaults {
+        if let Some(c) = GLOBAL_DEFAULTS.get() {
+            return c;
+        }
+        GLOBAL_DEFAULTS.set(Default::default()).ok();
+        GLOBAL_DEFAULTS.get().unwrap()
+    }
+}
+
+pub use global_defaults_internal::init_global_defaults;
+use global_defaults_internal::global_defaults;
 
 //--------------------------------------------------------------------------------------------------
 // Piece, Block and Cell
@@ -152,14 +198,15 @@ type PrimBitGrid<'a> = grid::bitgrid::PrimBitGrid<'a, BitGridInt, Cell>;
 type BasicBitGrid<'a> = grid::bitgrid::BasicBitGrid<'a, BitGridInt, Cell>;
 
 pub static DEFAULT_PRIM_GRID_CONSTANTS_STORE: Lazy<PrimBitGridConstantsStore> = Lazy::new(|| {
+    let def = global_defaults();
     // Use the width of a playfield as the stride.
-    let mut store = PrimBitGridConstantsStore::new(DEFAULT_PLAYFIELD_SIZE.0);
+    let mut store = PrimBitGridConstantsStore::new(def.playfield_size.0);
     // For I piece.
     store.prepare_for_prim_bit_grid(Vec2(5, 5));
     // For other pieces.
     store.prepare_for_prim_bit_grid(Vec2(3, 3));
     // For playfield.
-    store.prepare_for_bit_grid(DEFAULT_PLAYFIELD_SIZE);
+    store.prepare_for_bit_grid(def.playfield_size);
     store
 });
 
@@ -657,7 +704,7 @@ impl<'a> PieceSpecCollection<'a> {
     }
 }
 
-pub struct PieceSpecBuilder<'a> {
+struct PieceSpecBuilder<'a> {
     store: &'a PrimBitGridConstantsStore,
 }
 
@@ -804,7 +851,7 @@ pub static DEFAULT_PIECE_SPEC_COLLECTION: Lazy<PieceSpecCollection> = Lazy::new(
     b.piece_specs()
 });
 
-impl Default for &PieceSpecCollection<'_> {
+impl Default for &PieceSpecCollection<'static> {
     fn default() -> Self { &DEFAULT_PIECE_SPEC_COLLECTION }
 }
 
@@ -1136,20 +1183,16 @@ impl<'a> Playfield<'a> {
     }
 }
 
-pub const DEFAULT_PLAYFIELD_SIZE: Vec2 = Vec2(10, 40);
-pub const DEFAULT_PLAYFIELD_VISIBLE_HEIGHT: Y = 20;
-
-impl<'a> Default for Playfield<'a> {
+impl Default for Playfield<'static> {
     fn default() -> Self {
-        Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, DEFAULT_PLAYFIELD_SIZE, DEFAULT_PLAYFIELD_VISIBLE_HEIGHT).unwrap()
+        let def = global_defaults();
+        Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, def.playfield_size, def.playfield_visible_height).unwrap()
     }
 }
 
 //--------------------------------------------------------------------------------------------------
 // NextPieces
 //--------------------------------------------------------------------------------------------------
-
-pub const DEFAULT_NUM_VISIBLE_NEXT_PIECES: usize = 5;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NextPieces {
@@ -1171,7 +1214,7 @@ impl NextPieces {
 }
 
 impl Default for NextPieces {
-    fn default() -> Self { Self::new(DEFAULT_NUM_VISIBLE_NEXT_PIECES) }
+    fn default() -> Self { Self::new(global_defaults().num_visible_next_pieces) }
 }
 
 impl fmt::Display for NextPieces {
@@ -1359,11 +1402,11 @@ impl<'a> GameState<'a> {
     pub fn is_game_over(&self) -> bool { !self.game_over_reason.is_empty() }
 }
 
-impl<'a> Default for GameState<'a> {
+impl Default for GameState<'static> {
     fn default() -> Self {
         Self {
-            playfield: Playfield::<'a>::default(),
-            next_pieces: NextPieces::default(),
+            playfield: Default::default(),
+            next_pieces: Default::default(),
             falling_piece: None,
             hold_piece: None,
             can_hold: true,
