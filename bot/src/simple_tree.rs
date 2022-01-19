@@ -163,14 +163,15 @@ impl Bot for SimpleTreeBot {
 #[cfg(test)]
 mod tests {
     use super::SimpleTreeBot;
-    use crate::test_bot;
+    use crate::BotRunner;
 
     #[test]
     #[ignore]
     fn test_simple_bot2() {
-        let mut bot = SimpleTreeBot::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 10, true).unwrap();
+        let runner = BotRunner::new(10, true, Some(seed), false);
+        let mut bot = SimpleTreeBot::default();
+        let game = runner.run_with_no_hook(&mut bot).unwrap();
         assert!(game.stats.lock > 5);
     }
 }

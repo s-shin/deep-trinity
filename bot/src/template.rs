@@ -223,7 +223,7 @@ mod tests {
                 next_pieces: params.next_pieces.clone(),
             };
             let mut bot = TemplateBot::new(params.tmpl.clone());
-            runner.run(&mut bot, Some(&mut hook)).unwrap();
+            runner.run(&mut bot, &mut hook).unwrap();
         }
     }
 }

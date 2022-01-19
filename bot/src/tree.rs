@@ -439,13 +439,14 @@ impl Bot for TreeBot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_bot;
+    use crate::BotRunner;
 
     #[test]
     fn test_tree_bot() {
-        let mut bot = TreeBot::default();
         let seed = 0;
-        let _game = test_bot(&mut bot, seed, 5, false).unwrap();
+        let runner = BotRunner::new(5, true, Some(seed), false);
+        let mut bot = TreeBot::default();
+        let _game = runner.run_with_no_hook(&mut bot).unwrap();
         // assert!(game.stats.lock > 40);
     }
 }

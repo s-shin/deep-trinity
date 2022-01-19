@@ -264,13 +264,14 @@ impl Bot for MctsPuctBot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_bot;
+    use crate::BotRunner;
 
     #[test]
     fn test_simple_bot2() {
-        let mut bot = MctsPuctBot::default();
         let seed = 0;
-        let game = test_bot(&mut bot, seed, 3, false).unwrap();
+        let runner = BotRunner::new(3, true, Some(seed), false);
+        let mut bot = MctsPuctBot::default();
+        let game = runner.run_with_no_hook(&mut bot).unwrap();
         assert!(game.stats.lock > 1);
     }
 }
