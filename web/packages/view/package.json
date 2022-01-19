@@ -14,7 +14,9 @@
     "watch": "tsc -w",
     "lint": "eslint --ext .ts,.tsx,.js,.jsx src",
     "fmt": "prettier --write src/*",
-    "test": "jest"
+    "test": "jest",
+    "storybook": "start-storybook -p 6006",
+    "build-storybook": "build-storybook"
   },
   "jest": {
     "moduleFileExtensions": [
@@ -31,7 +33,9 @@
     }
   },
   "dependencies": {
-    "@deep-trinity/model": "^0.1.0"
+    "@deep-trinity/model": "^0.1.0",
+    "@mui/icons-material": "^5.2.5",
+    "@mui/material": "^5.2.7"
   },
   "peerDependencies": {
     "@emotion/react": "^11.7.1",
@@ -40,10 +44,18 @@
     "react-dom": "^17.0.2"
   },
   "devDependencies": {
+    "@babel/core": "^7.16.7",
     "@emotion/react": "^11.7.1",
     "@emotion/styled": "^11.6.0",
+    "@mdx-js/react": "^1.6.22",
+    "@storybook/addon-actions": "^6.4.9",
+    "@storybook/addon-docs": "^6.4.9",
+    "@storybook/addon-essentials": "^6.4.9",
+    "@storybook/addon-links": "^6.4.9",
+    "@storybook/react": "^6.4.9",
     "@types/react": "^17.0.38",
     "@types/react-dom": "^17.0.11",
+    "babel-loader": "^8.2.3",
     "react": "^17.0.2",
     "react-dom": "^17.0.2"
   }

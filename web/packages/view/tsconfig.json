@@ -4,9 +4,12 @@
     "outDir": "lib"
   },
   "include": [
-    "src/**/*"
+    "src/**/*.ts",
+    "src/**/*.tsx"
   ],
   "exclude": [
-    "src/**/*.test.*"
+    "src/**/*.test.*",
+    "src/**/*.stories.*",
+    "src/stories/**/*"
   ]
 }
