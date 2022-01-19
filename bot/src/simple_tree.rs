@@ -171,7 +171,7 @@ mod tests {
         let seed = 0;
         let runner = BotRunner::new(10, true, Some(seed), false);
         let mut bot = SimpleTreeBot::default();
-        let game = runner.run_with_no_hook(&mut bot).unwrap();
+        let game = runner.run_with_no_hooks(&mut bot).unwrap();
         assert!(game.stats.lock > 5);
     }
 }

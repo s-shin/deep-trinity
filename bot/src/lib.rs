@@ -23,7 +23,7 @@ pub trait Bot {
 
 //---
 
-pub trait BotRunnerHook {
+pub trait BotRunnerHooks {
     fn on_start(&mut self, _game: &mut Game) -> Result<(), Box<dyn Error>> { Ok(()) }
     fn on_iter(&mut self, _game: &mut Game) -> Result<bool, Box<dyn Error>> { Ok(true) }
     fn on_action(&mut self, _game: &Game, _action: &Action) -> Result<(), Box<dyn Error>> { Ok(()) }
@@ -31,9 +31,9 @@ pub trait BotRunnerHook {
     fn on_end(&mut self, _game: &mut Game) -> Result<(), Box<dyn Error>> { Ok(()) }
 }
 
-pub struct DummyBotRunnerHook;
+pub struct DummyBotRunnerHooks;
 
-impl BotRunnerHook for DummyBotRunnerHook {}
+impl BotRunnerHooks for DummyBotRunnerHooks {}
 
 pub struct BotRunner {
     max_iterations: usize,
@@ -46,11 +46,11 @@ impl BotRunner {
     pub fn new(max_iterations: usize, quick_action: bool, random_seed: Option<u64>, debug_print: bool) -> Self {
         Self { max_iterations, quick_action, random_seed, debug_print }
     }
-    pub fn run_with_no_hook(&self, bot: &mut impl Bot) -> Result<Game, Box<dyn Error>> {
-        let mut dummy = DummyBotRunnerHook;
+    pub fn run_with_no_hooks(&self, bot: &mut impl Bot) -> Result<Game, Box<dyn Error>> {
+        let mut dummy = DummyBotRunnerHooks;
         self.run(bot, &mut dummy)
     }
-    pub fn run(&self, bot: &mut impl Bot, mut hook: &mut impl BotRunnerHook) -> Result<Game, Box<dyn Error>> {
+    pub fn run(&self, bot: &mut impl Bot, mut hook: &mut impl BotRunnerHooks) -> Result<Game, Box<dyn Error>> {
         let mut game: Game = Default::default();
 
         let mut rpg = self.random_seed.map(|seed| RandomPieceGenerator::new(StdRng::seed_from_u64(seed)));

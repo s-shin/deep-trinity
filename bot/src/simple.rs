@@ -28,7 +28,7 @@ mod tests {
         let seed = 0;
         let runner = BotRunner::new(100, true, Some(seed), false);
         let mut bot = SimpleBot::default();
-        let game = runner.run_with_no_hook(&mut bot).unwrap();
+        let game = runner.run_with_no_hooks(&mut bot).unwrap();
         // let game = test_bot(&mut bot, seed, 100, false).unwrap();
         assert!(game.stats.lock > 40);
     }
