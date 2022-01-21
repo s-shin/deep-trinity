@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::process::exit;
 use std::rc::Rc;
 use std::str::FromStr;
 use clap::Parser;
@@ -154,6 +155,11 @@ struct Args {
 
 fn main() {
     let args: Args = Args::parse();
+    if args.positions.is_empty() {
+        println!("ERROR: At least one position is required.");
+        exit(1);
+    }
+
     let debug_trace = args.debug;
 
     let pps = args.positions.iter().map(|&pp| Rc::new(pp)).collect::<Vec<_>>();
@@ -164,6 +170,7 @@ fn main() {
     }
 
     let mut game: Game = Default::default();
+    game.state.playfield.grid.disable_basic_grid();
     game.supply_next_pieces(args.pieces.as_slice());
     {
         let mut n = args.pieces.len();

@@ -212,20 +212,34 @@ pub static DEFAULT_PRIM_GRID_CONSTANTS_STORE: Lazy<PrimBitGridConstantsStore> = 
 
 #[derive(Clone, Debug, Eq)]
 pub struct HybridGrid<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> {
-    pub basic_grid: BasicGrid,
+    /// The field of BasicGrid is optional.
+    /// If enabled, the piece types of each cell on the playfield are managed.
+    /// By disabling this, we will get better performance and smaller memory usage.
+    pub basic_grid: Option<BasicGrid>,
     pub bit_grid: BitGrid,
     phantom: PhantomData<fn() -> &'a ()>,
 }
 
 impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> HybridGrid<'a, BitGrid> {
-    pub fn new(basic_grid: BasicGrid, bit_grid: BitGrid) -> Self {
+    pub fn new(basic_grid: Option<BasicGrid>, bit_grid: BitGrid) -> Self {
         Self { basic_grid, bit_grid, phantom: PhantomData }
     }
-    pub fn with_store(store: &'a PrimBitGridConstantsStore, size: Vec2) -> Option<Self> {
-        BitGrid::with_store(store, size).map(|bit_grid| Self::new(BasicGrid::new(size), bit_grid))
+    pub fn with_store(store: &'a PrimBitGridConstantsStore, size: Vec2, with_basic_grid: bool) -> Option<Self> {
+        BitGrid::with_store(store, size).map(|bit_grid| {
+            Self::new(if with_basic_grid { Some(BasicGrid::new(size)) } else { None }, bit_grid)
+        })
+    }
+    pub fn disable_basic_grid(&mut self) {
+        self.basic_grid = None;
     }
     pub fn put_fast<'b>(&mut self, pos: Vec2, other: &HybridGrid<'b, PrimBitGrid<'b>>) {
-        self.basic_grid.put(pos, &other.basic_grid);
+        if let Some(grid) = self.basic_grid.as_mut() {
+            if let Some(other_grid) = other.basic_grid.as_ref() {
+                grid.put(pos, other_grid);
+            } else {
+                grid.put(pos, &other.bit_grid);
+            }
+        }
         self.bit_grid.put_prim_bit_grid(pos, &other.bit_grid);
     }
     pub fn can_put_fast<'b>(&self, pos: Vec2, other: &HybridGrid<'b, PrimBitGrid<'b>>) -> bool {
@@ -240,28 +254,34 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> HybridGrid<'a, BitGrid> {
 }
 
 impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<'a, BitGrid> {
-    fn width(&self) -> X { self.basic_grid.width() }
-    fn height(&self) -> X { self.basic_grid.height() }
-    fn cell(&self, pos: Vec2) -> Cell { self.basic_grid.cell(pos) }
+    fn width(&self) -> X { self.bit_grid.width() }
+    fn height(&self) -> X { self.bit_grid.height() }
+    fn cell(&self, pos: Vec2) -> Cell {
+        if let Some(g) = self.basic_grid.as_ref() {
+            g.cell(pos)
+        } else {
+            self.bit_grid.cell(pos)
+        }
+    }
     fn set_cell(&mut self, pos: Vec2, cell: Cell) {
-        self.basic_grid.set_cell(pos, cell);
+        self.basic_grid.as_mut().map(|g| g.set_cell(pos, cell));
         self.bit_grid.set_cell(pos, cell);
     }
     fn is_empty(&self) -> bool { self.bit_grid.is_empty() }
     fn fill_row(&mut self, y: Y, cell: Cell) {
-        self.basic_grid.fill_row(y, cell);
+        self.basic_grid.as_mut().map(|g| g.fill_row(y, cell));
         self.bit_grid.fill_row(y, cell);
     }
     fn fill_all(&mut self, cell: Cell) {
-        self.basic_grid.fill_all(cell);
+        self.basic_grid.as_mut().map(|g| g.fill_all(cell));
         self.bit_grid.fill_all(cell);
     }
     fn fill_top(&mut self, n: Y, cell: Cell) {
-        self.basic_grid.fill_top(n, cell);
+        self.basic_grid.as_mut().map(|g| g.fill_top(n, cell));
         self.bit_grid.fill_top(n, cell);
     }
     fn fill_bottom(&mut self, n: Y, cell: Cell) {
-        self.basic_grid.fill_bottom(n, cell);
+        self.basic_grid.as_mut().map(|g| g.fill_bottom(n, cell));
         self.bit_grid.fill_bottom(n, cell);
     }
     fn is_row_filled(&self, y: Y) -> bool { self.bit_grid.is_row_filled(y) }
@@ -269,7 +289,7 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<
     fn is_col_filled(&self, x: X) -> bool { self.bit_grid.is_col_filled(x) }
     fn is_col_empty(&self, x: X) -> bool { self.bit_grid.is_col_empty(x) }
     fn swap_rows(&mut self, y1: Y, y2: Y) {
-        self.basic_grid.swap_rows(y1, y2);
+        self.basic_grid.as_mut().map(|g| g.swap_rows(y1, y2));
         self.bit_grid.swap_rows(y1, y2);
     }
     fn num_blocks_of_row(&self, y: Y) -> usize { self.bit_grid.num_blocks_of_row(y) }
@@ -679,7 +699,7 @@ impl<'a> PieceSpec<'a> {
         for basic_grid in basic_grids {
             let mut g = PrimBitGrid::with_store(store, size.into()).unwrap();
             g.put((0, 0).into(), &basic_grid);
-            grids.push(HybridGrid::new(basic_grid, g));
+            grids.push(HybridGrid::new(Some(basic_grid), g));
         }
         Self {
             piece,
@@ -960,8 +980,8 @@ pub struct Playfield<'a> {
 }
 
 impl<'a> Playfield<'a> {
-    pub fn new(store: &'a PrimBitGridConstantsStore, size: Vec2, visible_height: Y) -> Option<Self> {
-        HybridGrid::with_store(store, size).map(|grid| Self { grid, visible_height })
+    pub fn new(store: &'a PrimBitGridConstantsStore, size: Vec2, with_basic_grid: bool, visible_height: Y) -> Option<Self> {
+        HybridGrid::with_store(store, size, with_basic_grid).map(|grid| Self { grid, visible_height })
     }
     pub fn width(&self) -> X { self.grid.width() }
     pub fn height(&self) -> X { self.grid.height() }
@@ -1186,7 +1206,7 @@ impl<'a> Playfield<'a> {
 impl Default for Playfield<'static> {
     fn default() -> Self {
         let def = global_defaults();
-        Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, def.playfield_size, def.playfield_visible_height).unwrap()
+        Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, def.playfield_size, true, def.playfield_visible_height).unwrap()
     }
 }
 
