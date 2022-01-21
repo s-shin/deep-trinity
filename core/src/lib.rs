@@ -256,7 +256,13 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> HybridGrid<'a, BitGrid> {
 impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<'a, BitGrid> {
     fn width(&self) -> X { self.bit_grid.width() }
     fn height(&self) -> X { self.bit_grid.height() }
-    fn cell(&self, pos: Vec2) -> Cell { self.bit_grid.cell(pos) }
+    fn cell(&self, pos: Vec2) -> Cell {
+        if let Some(g) = self.basic_grid.as_ref() {
+            g.cell(pos)
+        } else {
+            self.bit_grid.cell(pos)
+        }
+    }
     fn set_cell(&mut self, pos: Vec2, cell: Cell) {
         self.basic_grid.as_mut().map(|g| g.set_cell(pos, cell));
         self.bit_grid.set_cell(pos, cell);
