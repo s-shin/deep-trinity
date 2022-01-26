@@ -1,6 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
-use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0};
+use std::thread::current;
+use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0, NUM_PIECES};
 use crate::move_search::{MoveSearcher, SearchConfiguration, SearchResult};
 use crate::move_search::bruteforce::BruteForceMoveSearcher;
 use crate::move_search::humanly_optimized::HumanlyOptimizedMoveSearcher;
@@ -307,6 +308,140 @@ pub fn get_almost_good_move_path_old(pf: &Playfield, fp: &FallingPiece, last_tra
     path
 }
 
+//---
+
+// const FACTORIALS: [u64; 8] = [1, 1, 2, 6, 24, 120, 720, 5040];
+
+/// ```txt
+///            ┌ current_idx = 2
+/// pieces = SZLJITOSZLJITO
+///            └───┘
+///            num_visible_pieces = 5
+/// ```
+pub struct NextPiecePredictor {
+    pieces: VecDeque<Piece>,
+    current_idx: usize,
+    num_visible_pieces: usize,
+}
+
+impl NextPiecePredictor {
+    pub fn new(num_visible_pieces: usize) -> Self {
+        Self {
+            pieces: VecDeque::new(),
+            current_idx: 0,
+            num_visible_pieces,
+        }
+    }
+    pub fn append(&mut self, pieces: &[Piece]) {
+        self.pieces.extend(pieces.iter());
+    }
+    pub fn predict(&self, piece: Piece, offset: usize, span: usize) -> f32 {
+        debug_assert!(self.current_idx < NUM_PIECES);
+
+        if span == 0 {
+            return 0f32;
+        }
+
+        let target_idx = self.current_idx + offset;
+        let end_idx = target_idx + span;
+        if (NUM_PIECES - target_idx % NUM_PIECES) % NUM_PIECES + NUM_PIECES <= span {
+            return 1f32;
+        }
+        debug_assert!(0 < span && span < NUM_PIECES * 2);
+
+        let invisible_idx = (self.current_idx + self.num_visible_pieces).min(self.pieces.len());
+
+        let is_target_span_in_one_bag = (target_idx % NUM_PIECES) + span <= NUM_PIECES;
+        if is_target_span_in_one_bag {
+            let target_bag_idx = (target_idx / NUM_PIECES) * NUM_PIECES;
+            // LJSZITO
+            // └─┘ previous target span
+            for i in target_bag_idx..target_idx {
+                if i < invisible_idx {
+                    if self.pieces[i] == piece {
+                        return 0f32;
+                    }
+                } else {
+                    return span as f32 / (NUM_PIECES - (i - target_bag_idx)) as f32;
+                }
+            }
+            // LJSZITO
+            //    └─┘ target span
+            for i in target_idx..end_idx {
+                if i < invisible_idx {
+                    if self.pieces[i] == piece {
+                        return 1f32;
+                    }
+                } else {
+                    return (end_idx - i) as f32 / (NUM_PIECES - (i - target_bag_idx)) as f32;
+                }
+            }
+            return 0f32;
+        }
+
+        let first_bag_idx = (target_idx / NUM_PIECES) * NUM_PIECES;
+        let second_bag_idx = first_bag_idx + NUM_PIECES;
+        let mut prob = 0f32;
+        let mut is_first_prob_resolved = false;
+        for i in first_bag_idx..target_idx {
+            if i < invisible_idx {
+                if self.pieces[i] == piece {
+                    break;
+                }
+            } else {
+                prob = span as f32 / (NUM_PIECES - (i - first_bag_idx)) as f32;
+                is_first_prob_resolved = true;
+            }
+        }
+        if !is_first_prob_resolved {
+            for i in target_idx..second_bag_idx {
+                if i < invisible_idx {
+                    if self.pieces[i] == piece {
+                        return 1f32;
+                    }
+                } else {
+                    prob = (i - target_idx) as f32 / (NUM_PIECES - (i - first_bag_idx)) as f32;
+                    is_first_prob_resolved = true;
+                }
+            }
+        }
+        debug_assert!(is_first_prob_resolved);
+        for i in second_bag_idx..end_idx {
+            if i < invisible_idx {
+                if self.pieces[i] == piece {
+                    return 1f32;
+                }
+            } else {
+                prob += (end_idx - i) as f32 / (NUM_PIECES - (i - second_bag_idx)) as f32;
+            }
+        }
+        prob
+    }
+    pub fn num_comsumable(&self) -> usize { self.pieces.len() - self.current_idx }
+    pub fn consume(&mut self, limit: usize) -> usize {
+        if self.pieces.is_empty() {
+            self.current_idx = 0;
+            return 0;
+        }
+        let prev = self.current_idx;
+        self.current_idx += limit;
+        if self.current_idx >= self.pieces.len() {
+            self.current_idx = self.pieces.len() - 1;
+        }
+        let num_consumed = self.current_idx - prev;
+        if self.current_idx >= NUM_PIECES {
+            let num_removed = (self.current_idx / NUM_PIECES) * NUM_PIECES;
+            for _ in 0..num_removed {
+                self.pieces.pop_front();
+            }
+            self.current_idx -= num_removed;
+        }
+        num_consumed
+    }
+}
+
+//---
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,5 +497,36 @@ mod tests {
         // MovePathItem { by: Rotate(1), placement: Placement { orientation: Orientation(1), pos: Vec2(0, 1) } }
         // MovePathItem { by: Rotate(1), placement: Placement { orientation: Orientation(2), pos: Vec2(1, 0) } }
         assert_eq!(6, path.len());
+    }
+
+    #[test]
+    fn test_next_piece_predictor() {
+        struct Case {
+            num_visible: usize,
+            pieces: Vec<Piece>,
+            num_consumed: usize,
+            piece: Piece,
+            offset: usize,
+            span: usize,
+            prob_permil: u16,
+        }
+        impl Case {
+            fn new(num_visible: usize, pieces_str: &'static str, num_consumed: usize, piece: Piece, offset: usize, span: usize, prob_permil: u16) -> Self {
+                let pieces = pieces_str.chars().map(|c| Piece::from_char(c).unwrap()).collect::<Vec<_>>();
+                Self { num_visible, pieces, num_consumed, piece, offset, span, prob_permil }
+            }
+        }
+        for c in &[
+            Case::new(5, "", 0, Piece::I, 0, 0, 0),
+            Case::new(5, "", 0, Piece::I, 0, 1, 142 /* 1/7 */),
+            Case::new(5, "", 0, Piece::I, 0, 2, 285 /* 2/7 */),
+        ] {
+            let mut predictor = NextPiecePredictor::new(c.num_visible);
+            predictor.append(c.pieces.as_slice());
+            let n = predictor.consume(c.num_consumed);
+            assert_eq!(c.num_consumed, n);
+            let prob = predictor.predict(c.piece, c.offset, c.span);
+            assert_eq!(c.prob_permil, (prob * 1000f32) as u16);
+        }
     }
 }
