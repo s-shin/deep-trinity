@@ -391,6 +391,7 @@ impl NextPiecePredictor {
             } else {
                 prob = span as f32 / (NUM_PIECES - (i - first_bag_idx)) as f32;
                 is_first_prob_resolved = true;
+                break;
             }
         }
         if !is_first_prob_resolved {
@@ -401,11 +402,11 @@ impl NextPiecePredictor {
                     }
                 } else {
                     prob = (i - target_idx) as f32 / (NUM_PIECES - (i - first_bag_idx)) as f32;
-                    is_first_prob_resolved = true;
+                    break;
                 }
             }
         }
-        debug_assert!(is_first_prob_resolved);
+        debug_assert!(!is_first_prob_resolved && prob == 0f32);
         for i in second_bag_idx..end_idx {
             if i < invisible_idx {
                 if self.pieces[i] == piece {
@@ -413,6 +414,7 @@ impl NextPiecePredictor {
                 }
             } else {
                 prob += (end_idx - i) as f32 / (NUM_PIECES - (i - second_bag_idx)) as f32;
+                break;
             }
         }
         prob
@@ -516,17 +518,23 @@ mod tests {
                 Self { num_visible, pieces, num_consumed, piece, offset, span, prob_permil }
             }
         }
-        for c in &[
+        for (i, c) in [
             Case::new(5, "", 0, Piece::I, 0, 0, 0),
             Case::new(5, "", 0, Piece::I, 0, 1, 142 /* 1/7 */),
             Case::new(5, "", 0, Piece::I, 0, 2, 285 /* 2/7 */),
-        ] {
+            Case::new(5, "LJSZITO", 0, Piece::T, 0, 6, 500),
+            Case::new(5, "LJSZITO", 0, Piece::T, 0, 7, 1000),
+            Case::new(5, "LJSZITO", 1, Piece::T, 0, 5, 1000),
+            Case::new(5, "LJSZITO", 1, Piece::O, 0, 5, 0),
+            Case::new(5, "LJSZITOLJSZITO", 4, Piece::J, 0, 7, 1000),
+            Case::new(5, "LJSZITOLJSZITO", 4, Piece::S, 0, 7, 400),
+        ].iter().enumerate() {
             let mut predictor = NextPiecePredictor::new(c.num_visible);
             predictor.append(c.pieces.as_slice());
             let n = predictor.consume(c.num_consumed);
-            assert_eq!(c.num_consumed, n);
+            assert_eq!(c.num_consumed, n, "test #{}", i);
             let prob = predictor.predict(c.piece, c.offset, c.span);
-            assert_eq!(c.prob_permil, (prob * 1000f32) as u16);
+            assert_eq!(c.prob_permil, (prob * 1000f32) as u16, "test #{}", i);
         }
     }
 }
