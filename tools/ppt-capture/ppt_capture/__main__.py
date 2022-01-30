@@ -1,6 +1,5 @@
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 from enum import Enum
-import time
 import signal
 import mss
 import cv2
@@ -46,8 +45,20 @@ class Rect:
         a = self.array
         return Rect(a[0], a[1], a[2], a[3], a.dtype)
 
+    def x1(self):
+        return self.array[0]
+
+    def y1(self):
+        return self.array[1]
+
     def p1(self):
         return Vec2(self.array[0], self.array[1])
+
+    def x2(self):
+        return self.array[2]
+
+    def y2(self):
+        return self.array[3]
 
     def p2(self):
         return Vec2(self.array[2], self.array[3])
@@ -68,23 +79,25 @@ class Rect:
 
 
 class Piece(Enum):
-    L = "L"
-    J = "J"
-    S = "S"
-    Z = "Z"
-    I = "I"
-    T = "T"
-    O = "O"
+    # NONE = 0
+    L = 1
+    J = 2
+    S = 3
+    Z = 4
+    I = 5
+    T = 6
+    O = 7
 
 
 class ScreenTarget(Enum):
-    HOLD = "hold"
-    PLAYFIELD = "playfield"
-    NEXT1 = "next1"
-    NEXT2 = "next2"
-    NEXT3 = "next3"
-    NEXT4 = "next4"
-    NEXT5 = "next5"
+    # NONE = 0
+    HOLD = 1
+    PLAYFIELD = 2
+    NEXT1 = 3
+    NEXT2 = 4
+    NEXT3 = 5
+    NEXT4 = 6
+    NEXT5 = 7
 
 
 class RectInfo(NamedTuple):
@@ -101,7 +114,7 @@ class RectInfo(NamedTuple):
             self.hold, self.playfield, self.next1, self.next2, self.next3, self.next4, self.next5)
 
     def get(self, t: ScreenTarget) -> Rect:
-        return getattr(self, t.value)
+        return getattr(self, t.name.lower())
 
     def scale(self, ratio):
         return RectInfo(
@@ -117,7 +130,7 @@ class RectInfo(NamedTuple):
 
 class BlockSizeInfo(NamedTuple):
     hold: Vec2 = Vec2(24, 24)
-    playfield: Vec2 = Vec2(30.7, 30.7)
+    playfield: Vec2 = Vec2(30.75, 30.75)
     next1: Vec2 = Vec2(24, 24)
     next2: Vec2 = Vec2(19, 19)
     next3: Vec2 = Vec2(19, 19)
@@ -129,7 +142,7 @@ class BlockSizeInfo(NamedTuple):
             self.hold, self.playfield, self.next1, self.next2, self.next3, self.next4, self.next5)
 
     def get(self, t: ScreenTarget) -> Vec2:
-        return getattr(self, t.value)
+        return getattr(self, t.name.lower())
 
     def scale(self, ratio: float):
         return BlockSizeInfo(
@@ -164,7 +177,7 @@ class ScreenInfo(NamedTuple):
     def resize_by_width(self, width):
         return self.scale(width / self.size.x())
 
-    def get_a_block_center_position_in_piece_rect(self, target: ScreenTarget, piece: Piece):
+    def get_upper_left_piece_block_center_point(self, target: ScreenTarget, piece: Piece, relative=False):
         if target == ScreenTarget.PLAYFIELD:
             raise ValueError()
         r = self.rects.get(target)
@@ -181,69 +194,41 @@ class ScreenInfo(NamedTuple):
         top_padding = (r.height() - s.y() * ny) * 0.5
         px = left_padding + s.x() * (0.5 + bx)
         py = top_padding + s.y() * (0.5 + by)
-        return Vec2(px, py)
+        return Vec2(px, py) if relative else Vec2(px + r.x1(), py + r.y1())
 
-    def get_top_left_block_center_position_in_playfield(self):
+    def get_upper_left_playfield_block_center_point(self, relative=False):
         s = self.block_sizes.playfield
-        return Vec2(
+        p = Vec2(
             s.x() * 0.5,
             self.size.y() - s.y() * 19.5,
         )
+        if not relative:
+            p.array += self.rects.playfield.p1().array
+        return p
 
 
 REFERENCE_SCREEN_INFO = ScreenInfo()
 
 # BGR
 PIECE_COLORS = {
-    "L": np.array([49, 114, 228]),
-    "J": np.array([168, 86, 38]),
-    "S": np.array([75, 201, 131]),
-    "Z": np.array([47, 39, 178]),
-    "I": np.array([207, 168, 76]),
-    "T": np.array([135, 40, 126]),
-    "O": np.array([72, 204, 244]),
+    Piece.L: np.array([49, 114, 228]),
+    Piece.J: np.array([168, 86, 38]),
+    Piece.S: np.array([75, 201, 131]),
+    Piece.Z: np.array([47, 39, 178]),
+    Piece.I: np.array([207, 168, 76]),
+    Piece.T: np.array([135, 40, 126]),
+    Piece.O: np.array([72, 204, 244]),
 }
 
 
-def get_monitor(x, y, width):
-    return {
-        "left": x,
-        "top": y,
-        "width": width,
-        "height": width * REFERENCE_SCREEN_INFO.aspect()
-    }
-
-
-def get_rects(size):
-    sizes = np.array([size[0], size[1], size[0], size[1]], dtype='f4')
-    r = {}
-    for k, v in NORMALIZED_RECT.items():
-        r[k] = (v * sizes).astype('i4')
+def detect_pieces_by_color(bgr_arr: np.ndarray, threshold=100):
+    if bgr_arr.ndim != 2 and bgr_arr.shape[1] != 3:
+        raise ValueError()
+    r = np.zeros(bgr_arr.shape[0], dtype='u1')
+    for piece, color in PIECE_COLORS.items():
+        d = np.sum(np.abs(bgr_arr - color), axis=1) <= threshold
+        r[d] = piece.value
     return r
-
-
-def to_binary(img):
-    # gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # gray_img = np.average(img[:, :, :3], axis=-1).astype('u1')
-    gray_img = (0.35 * img[:, :, 0] + 0.15 * img[:, :, 1] + 0.5 * img[:, :, 2]).astype('u1')
-    _, bin_img = cv2.threshold(gray_img, 63, 255, cv2.THRESH_BINARY_INV)
-    return bin_img
-
-
-def detect_piece_v1(bgr_img: np.ndarray, similarity=0.1, count=50):
-    counts = {p: 0 for p in PIECE_COLORS.keys()}
-    for y in range(bgr_img.shape[0]):
-        for x in range(bgr_img.shape[1]):
-            for p, c in PIECE_COLORS.items():
-                if np.sum(np.abs(bgr_img[y, x, :3] - c)) / float(255 * 3) <= similarity:
-                    counts[p] += 1
-                    if counts[p] >= count:
-                        return p
-    return None
-
-
-def detect_piece_v2(bin_img: np.ndarray):
-    pass
 
 
 def main():
@@ -256,76 +241,106 @@ def main():
     signal.signal(signal.SIGINT, should_stop)
     signal.signal(signal.SIGTERM, should_stop)
 
-    scrren_info = None
+    monitor = {
+        "left": 96,
+        "top": 245,
+        "width": 277,
+        "height": 277 * REFERENCE_SCREEN_INFO.aspect(),
+    }
 
-    monitor = get_monitor(96, 245, 277)
+    debug1 = False
+    debug2 = True
+    scrren_info: Optional[ScreenInfo] = None
+    hold_next_piece_pixels_mask: Optional[np.ndarray] = None
+    masked_hold_next_piece_pixel_targets: Optional[np.ndarray] = None
+    playfield_piece_pixels_mask: Optional[np.ndarray] = None
+
     with mss.mss() as sct:
         while not should_stop:
+            if cv2.waitKey(500) == ord("q"):
+                cv2.destroyAllWindows()
+                break
+            print("---")
+
             # Capture screen.
             img = np.array(sct.grab(monitor))
-            # cv2.imshow("Test", img)
-            # if cv2.waitKey(500) == ord("q"):
-            #     cv2.destroyAllWindows()
-            #     break
-            # continue
 
-            # Initialize screen_info.
+            # Initialize screen_info and caches.
             if scrren_info is None:
                 screen_info = REFERENCE_SCREEN_INFO.resize_by_width(img.shape[1])
-            for t in ScreenTarget:
-                r = screen_info.rects.get(t)
-                cv2.rectangle(img, r.p1().array.astype('u4'), r.p2().array.astype('u4'), (0, 0, 255), 2)
-                if t != ScreenTarget.PLAYFIELD:
+
+                hold_next_piece_pixels_mask = np.zeros((img.shape[0], img.shape[1]), "?")
+                targets = np.zeros(hold_next_piece_pixels_mask.shape, "u1")
+                for target in ScreenTarget:
+                    if target == ScreenTarget.PLAYFIELD:
+                        continue
                     for piece in Piece:
-                        pos = screen_info.get_a_block_center_position_in_piece_rect(t, piece)
-                        p1 = r.p1().array + pos.array - 1
-                        p2 = r.p1().array + pos.array + 1
-                        cv2.rectangle(img, p1.astype('u4'), p2.astype('u4'), (255, 255, 255), 2)
-            pf_block_pos = screen_info.get_top_left_block_center_position_in_playfield()
-            for y in range(20):
-                for x in range(10):
-                    p = screen_info.rects.playfield.p1().array + pf_block_pos.array + \
-                        screen_info.block_sizes.playfield.array * [x, y]
-                    cv2.rectangle(img, (p - 1).astype('u4'), (p + 1).astype('u4'), (255, 255, 255), 2)
-            cv2.imshow("Test", img)
-            if cv2.waitKey(500) == ord("q"):
-                cv2.destroyAllWindows()
-                break
-            continue
+                        p = screen_info.get_upper_left_piece_block_center_point(target, piece)
+                        x = int(p.x())
+                        y = int(p.y())
+                        hold_next_piece_pixels_mask[y, x] = True
+                        targets[y, x] = target.value
+                masked_hold_next_piece_pixel_targets = targets[hold_next_piece_pixels_mask]
+                del targets
 
-            # img = to_binary(img)
-            # cv2.imshow("Test", img)
-            # if cv2.waitKey(500) == ord("q"):
-            #     cv2.destroyAllWindows()
-            #     break
-            # continue
+                playfield_piece_pixels_mask = np.zeros((img.shape[0], img.shape[1]), "?")
+                pf_block_pos = screen_info.get_upper_left_playfield_block_center_point()
+                for y in range(20):
+                    for x in range(10):
+                        p = pf_block_pos.array + screen_info.block_sizes.playfield.array * [x, y]
+                        playfield_piece_pixels_mask[int(p[1]), int(p[0])] = True
 
-            r = rects["hold"]
-            img = img[r[1]:r[3], r[0]:r[2]]
-            padding = int((img.shape[1] - HOLD_BLOCK_SIZE * 4) * 0.5)
-            img = img[:, padding:(img.shape[1] - padding)]
-            cv2.imshow("Hold", img)
-            if cv2.waitKey(500) == ord("q"):
-                cv2.destroyAllWindows()
-                break
-            continue
+            if debug1:
+                for t in ScreenTarget:
+                    r = screen_info.rects.get(t)
+                    cv2.rectangle(img, r.p1().array.astype('u4'), r.p2().array.astype('u4'), (0, 0, 255), 2)
+                    if t != ScreenTarget.PLAYFIELD:
+                        for piece in Piece:
+                            pos = screen_info.get_upper_left_piece_block_center_point(t, piece)
+                            p1 = pos.array - 1
+                            p2 = pos.array + 1
+                            cv2.rectangle(img, p1.astype('u4'), p2.astype('u4'), (255, 255, 255), 2)
+                pf_block_pos = screen_info.get_upper_left_playfield_block_center_point()
+                for y in range(20):
+                    for x in range(10):
+                        p = pf_block_pos.array + screen_info.block_sizes.playfield.array * [x, y]
+                        cv2.rectangle(img, (p - 1).astype('u4'), (p + 1).astype('u4'), (255, 255, 255), 2)
+                cv2.imshow("Debug1", img)
 
-            pieces = {}
-            for t, r in rects.items():
-                if t == "playfield":
+            # Detect hold and next pieces.
+            target_pieces = {}
+            piece_pixels = img[:, :, :3][hold_next_piece_pixels_mask]
+            result = detect_pieces_by_color(piece_pixels)
+            for target in ScreenTarget:
+                if target == ScreenTarget.PLAYFIELD:
                     continue
-                p_img = img[r[1]:r[3], r[0]:r[2]]
-                print("{}".format(p_img.shape[0] * p_img.shape[1]))
-                piece = detect_piece(p_img)
-                pieces[t] = piece if piece is not None else "?"
+                target_result = result[masked_hold_next_piece_pixel_targets == target.value]
+                piece_result = target_result[target_result > 0]
+                target_pieces[target] = None if len(piece_result) == 0 else Piece(piece_result[0])
 
-            print("[{}] {}{}{}{}{}".format(pieces["hold"], pieces["next1"], pieces["next2"], pieces["next3"],
-                                           pieces["next4"], pieces["next5"]))
+            # Detect playfield pieces.
+            piece_pixels = img[:, :, :3][playfield_piece_pixels_mask]
+            result = detect_pieces_by_color(piece_pixels)
+            playfield = result.reshape((20, 10))
 
-            time.sleep(0.25)
-            # if cv2.waitKey(500) == ord("q"):
-            #     cv2.destroyAllWindows()
-            #     break
+            if debug2:
+                lines = [
+                    "[{}]  (?) {}{}{}{}{}".format(*[
+                        (target_pieces[t].name if target_pieces[t] is not None else "?")
+                        for t in ScreenTarget if t != ScreenTarget.PLAYFIELD
+                    ]),
+                    "--+----------+",
+                ]
+                for y in range(20):
+                    s = f"{19 - y:02}|"
+                    for x in range(10):
+                        piece_value = playfield[y, x]
+                        s += Piece(piece_value).name if piece_value > 0 else " "
+                    s += "|"
+                    lines.append(s)
+                lines.append("--+----------+")
+                lines.append("##|0123456789|")
+                print("\n".join(lines))
 
 
 main()
