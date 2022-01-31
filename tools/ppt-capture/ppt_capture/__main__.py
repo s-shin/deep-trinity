@@ -89,7 +89,7 @@ class Piece(Enum):
     O = 7
 
 
-class ScreenTarget(Enum):
+class Region(Enum):
     # NONE = 0
     HOLD = 1
     PLAYFIELD = 2
@@ -100,7 +100,7 @@ class ScreenTarget(Enum):
     NEXT5 = 7
 
 
-class RectInfo(NamedTuple):
+class RegionInfo(NamedTuple):
     hold: Rect = Rect(4, 50, 4 + 103, 50 + 54)
     playfield: Rect = Rect(119, 0, 119 + 307, 0 + 622)
     next1: Rect = Rect(453, 24, 453 + 103, 24 + 54)
@@ -110,14 +110,14 @@ class RectInfo(NamedTuple):
     next5: Rect = Rect(456, 372, 456 + 84, 372 + 44)
 
     def __repr__(self):
-        return "RectInfo(hold={}, playfield={}, nexts=[{}, {}, {}, {}])".format(
+        return "RegionInfo(hold={}, playfield={}, nexts=[{}, {}, {}, {}])".format(
             self.hold, self.playfield, self.next1, self.next2, self.next3, self.next4, self.next5)
 
-    def get(self, t: ScreenTarget) -> Rect:
-        return getattr(self, t.name.lower())
+    def get(self, r: Region) -> Rect:
+        return getattr(self, r.name.lower())
 
     def scale(self, ratio):
-        return RectInfo(
+        return RegionInfo(
             self.hold.scale(ratio),
             self.playfield.scale(ratio),
             self.next1.scale(ratio),
@@ -141,8 +141,8 @@ class BlockSizeInfo(NamedTuple):
         return "BlockSizeInfo(hold={}, playfield={}, nexts=[{}, {}, {}, {}])".format(
             self.hold, self.playfield, self.next1, self.next2, self.next3, self.next4, self.next5)
 
-    def get(self, t: ScreenTarget) -> Vec2:
-        return getattr(self, t.name.lower())
+    def get(self, r: Region) -> Vec2:
+        return getattr(self, r.name.lower())
 
     def scale(self, ratio: float):
         return BlockSizeInfo(
@@ -158,11 +158,11 @@ class BlockSizeInfo(NamedTuple):
 
 class ScreenInfo(NamedTuple):
     size: Vec2 = Vec2(556, 622)
-    rects: RectInfo = RectInfo()
+    regions: RegionInfo = RegionInfo()
     block_sizes: BlockSizeInfo = BlockSizeInfo()
 
     def __repr__(self):
-        return f"ScreenInfo(size={self.size}, {self.rects}, {self.block_sizes})"
+        return f"ScreenInfo(size={self.size}, {self.regions}, {self.block_sizes})"
 
     def aspect(self):
         return self.size.y() / self.size.x()
@@ -170,18 +170,18 @@ class ScreenInfo(NamedTuple):
     def scale(self, ratio: float):
         return ScreenInfo(
             self.size.scale(ratio),
-            self.rects.scale(ratio),
+            self.regions.scale(ratio),
             self.block_sizes.scale(ratio)
         )
 
     def resize_by_width(self, width):
         return self.scale(width / self.size.x())
 
-    def get_upper_left_piece_block_center_point(self, target: ScreenTarget, piece: Piece, relative=False):
-        if target == ScreenTarget.PLAYFIELD:
+    def get_upper_left_piece_block_center_point(self, region: Region, piece: Piece, relative=False):
+        if region == Region.PLAYFIELD:
             raise ValueError()
-        r = self.rects.get(target)
-        s = self.block_sizes.get(target)
+        r = self.regions.get(region)
+        s = self.block_sizes.get(region)
         if piece == Piece.I:
             nx, ny, bx, by = 4, 1, 0, 0
         elif piece == Piece.O:
@@ -203,7 +203,7 @@ class ScreenInfo(NamedTuple):
             self.size.y() - s.y() * 19.5,
         )
         if not relative:
-            p.array += self.rects.playfield.p1().array
+            p.array += self.regions.playfield.p1().array
         return p
 
 
@@ -252,7 +252,7 @@ def main():
     debug2 = True
     scrren_info: Optional[ScreenInfo] = None
     hold_next_piece_pixels_mask: Optional[np.ndarray] = None
-    masked_hold_next_piece_pixel_targets: Optional[np.ndarray] = None
+    masked_hold_next_piece_pixel_regions: Optional[np.ndarray] = None
     playfield_piece_pixels_mask: Optional[np.ndarray] = None
 
     with mss.mss() as sct:
@@ -270,18 +270,18 @@ def main():
                 screen_info = REFERENCE_SCREEN_INFO.resize_by_width(img.shape[1])
 
                 hold_next_piece_pixels_mask = np.zeros((img.shape[0], img.shape[1]), "?")
-                targets = np.zeros(hold_next_piece_pixels_mask.shape, "u1")
-                for target in ScreenTarget:
-                    if target == ScreenTarget.PLAYFIELD:
+                regions = np.zeros(hold_next_piece_pixels_mask.shape, "u1")
+                for region in Region:
+                    if region == Region.PLAYFIELD:
                         continue
                     for piece in Piece:
-                        p = screen_info.get_upper_left_piece_block_center_point(target, piece)
+                        p = screen_info.get_upper_left_piece_block_center_point(region, piece)
                         x = int(p.x())
                         y = int(p.y())
                         hold_next_piece_pixels_mask[y, x] = True
-                        targets[y, x] = target.value
-                masked_hold_next_piece_pixel_targets = targets[hold_next_piece_pixels_mask]
-                del targets
+                        regions[y, x] = region.value
+                masked_hold_next_piece_pixel_regions = regions[hold_next_piece_pixels_mask]
+                del regions
 
                 playfield_piece_pixels_mask = np.zeros((img.shape[0], img.shape[1]), "?")
                 pf_block_pos = screen_info.get_upper_left_playfield_block_center_point()
@@ -291,12 +291,12 @@ def main():
                         playfield_piece_pixels_mask[int(p[1]), int(p[0])] = True
 
             if debug1:
-                for t in ScreenTarget:
-                    r = screen_info.rects.get(t)
+                for region in Region:
+                    r = screen_info.regions.get(region)
                     cv2.rectangle(img, r.p1().array.astype('u4'), r.p2().array.astype('u4'), (0, 0, 255), 2)
-                    if t != ScreenTarget.PLAYFIELD:
+                    if region != Region.PLAYFIELD:
                         for piece in Piece:
-                            pos = screen_info.get_upper_left_piece_block_center_point(t, piece)
+                            pos = screen_info.get_upper_left_piece_block_center_point(region, piece)
                             p1 = pos.array - 1
                             p2 = pos.array + 1
                             cv2.rectangle(img, p1.astype('u4'), p2.astype('u4'), (255, 255, 255), 2)
@@ -308,15 +308,15 @@ def main():
                 cv2.imshow("Debug1", img)
 
             # Detect hold and next pieces.
-            target_pieces = {}
+            region_pieces = {}
             piece_pixels = img[:, :, :3][hold_next_piece_pixels_mask]
             result = detect_pieces_by_color(piece_pixels)
-            for target in ScreenTarget:
-                if target == ScreenTarget.PLAYFIELD:
+            for region in Region:
+                if region == Region.PLAYFIELD:
                     continue
-                target_result = result[masked_hold_next_piece_pixel_targets == target.value]
-                piece_result = target_result[target_result > 0]
-                target_pieces[target] = None if len(piece_result) == 0 else Piece(piece_result[0])
+                region_result = result[masked_hold_next_piece_pixel_regions == region.value]
+                piece_result = region_result[region_result > 0]
+                region_pieces[region] = None if len(piece_result) == 0 else Piece(piece_result[0])
 
             # Detect playfield pieces.
             piece_pixels = img[:, :, :3][playfield_piece_pixels_mask]
@@ -326,8 +326,8 @@ def main():
             if debug2:
                 lines = [
                     "[{}]  (?) {}{}{}{}{}".format(*[
-                        (target_pieces[t].name if target_pieces[t] is not None else "?")
-                        for t in ScreenTarget if t != ScreenTarget.PLAYFIELD
+                        (region_pieces[t].name if region_pieces[t] is not None else "?")
+                        for t in Region if t != Region.PLAYFIELD
                     ]),
                     "--+----------+",
                 ]
