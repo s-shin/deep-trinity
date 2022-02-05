@@ -13,16 +13,16 @@ jobs:
     - name: Run tests
       run: just test
 
-  py_core_release:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --release -p py-core --verbose
-    - name: Install
-      run: ./script/install_py_core.sh -p release tmp
-    - name: Upload detris-core.so
-      uses: actions/upload-artifact@v1
-      with:
-        name: detris-core.so
-        path: tmp/core.so
+#  py_core_release:
+#    runs-on: ubuntu-latest
+#    steps:
+#    - uses: actions/checkout@v2
+#    - name: Build
+#      run: cargo build --release -p py-core --verbose
+#    - name: Install
+#      run: ./script/install_py_core.sh -p release tmp
+#    - name: Upload detris-core.so
+#      uses: actions/upload-artifact@v1
+#      with:
+#        name: detris-core.so
+#        path: tmp/core.so
