@@ -13,7 +13,7 @@ use bitflags::bitflags;
 use once_cell::sync::Lazy;
 use grid::{CellTrait, Grid, X, Y, Vec2};
 use grid::bitgrid::BitGridTrait;
-use crate::helper::{MoveDecisionHelper, MoveDecisionStuff};
+use crate::helper::{MoveDecisionHelper, MoveDecisionMaterial};
 
 //--------------------------------------------------------------------------------------------------
 // Global Configurations
@@ -64,11 +64,28 @@ use global_defaults_internal::global_defaults;
 // Piece, Block and Cell
 //--------------------------------------------------------------------------------------------------
 
+pub const CELL_CHARS: &'static str = " @SZLJITO#";
+
 /// 0: Empty
 /// 1: Any
 /// 2-8: S, Z, L, J, I, T, O
 /// 9: Garbage
 pub struct CellTypeId(pub u8);
+
+impl CellTypeId {
+    pub fn to_piece(&self) -> Option<Piece> {
+        if self.0 < 2 || 8 < self.0 {
+            return None;
+        }
+        Some(Piece::from((self.0 - 2) as usize))
+    }
+    pub fn is_valid(&self) -> bool { self.0 <= 9 }
+    pub fn to_char(&self) -> char {
+        assert!(self.is_valid());
+        CELL_CHARS.chars().nth(self.0 as usize).unwrap()
+    }
+    pub fn from_char(c: char) -> Self { Cell::from(c).into() }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Piece {
@@ -147,8 +164,6 @@ pub enum Cell {
     Empty,
     Block(Block),
 }
-
-pub const CELL_CHARS: &'static str = " @SZLJITO#";
 
 impl From<Cell> for CellTypeId {
     fn from(c: Cell) -> Self {
@@ -1458,6 +1473,10 @@ impl<'a> Game<'a> {
             stats,
         }
     }
+    /// The performance becomes better but piece information in the playfield will be lacked.
+    pub fn fast_mode(&mut self) {
+        self.state.playfield.grid.disable_basic_grid();
+    }
     pub fn get_cell(&self, pos: Vec2) -> Cell {
         let s = &self.state;
         let mut cell = if let Some(fp) = s.falling_piece.as_ref() {
@@ -1650,8 +1669,8 @@ impl<'a> Game<'a> {
         let r = helper::get_move_candidates(&s.playfield, s.falling_piece.as_ref().unwrap(), &self.rules);
         Ok(r)
     }
-    pub fn get_move_decision_helper(&self, stuff: Option<Rc<MoveDecisionStuff>>) -> Result<MoveDecisionHelper, &'static str> {
-        MoveDecisionHelper::with_game(self, stuff)
+    pub fn get_move_decision_helper(&self, material: Option<Rc<MoveDecisionMaterial>>) -> Result<MoveDecisionHelper, &'static str> {
+        MoveDecisionHelper::with_game(self, material)
     }
     pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MovePath, &'static str> {
         let fp = if let Some(fp) = self.state.falling_piece.as_ref() {

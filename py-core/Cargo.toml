@@ -7,16 +7,14 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "core"
+name = "deep_trinity"
 crate-type = ["cdylib"]
 
 [dependencies]
 core = { path = "../core" }
 ml-core = { path = "../ml-core" }
-pyo3 = "0.11"
 rand = "0.8"
 
-[features]
-# https://github.com/PyO3/pyo3/blob/v0.9.1/guide/src/advanced.md#testing
-extension-module = ["pyo3/extension-module"]
-default = ["extension-module"]
+[dependencies.pyo3]
+version = "0.15"
+features = ["extension-module", "abi3-py36"]

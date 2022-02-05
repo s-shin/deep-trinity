@@ -1,11 +1,10 @@
-extern crate pyo3;
-extern crate core;
+mod core_wrapper;
 
 use pyo3::prelude::*;
 use ml_core::GameSession;
 
 fn to_py_err(e: &'static str) -> PyErr {
-    pyo3::exceptions::RuntimeError::py_err(e)
+    pyo3::exceptions::PyRuntimeError::new_err(e)
 }
 
 #[pyclass]
@@ -41,21 +40,21 @@ impl Environment {
 }
 
 #[pymodule]
-fn core(_py: Python, m: &PyModule) -> PyResult<()> {
+fn deep_trinity(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Environment>()?;
+    m.add_class::<core_wrapper::Cell>()?;
+    m.add_class::<core_wrapper::PlacementWrapper>()?;
+    m.add_class::<core_wrapper::GameWrapper>()?;
     Ok(())
 }
 
-// NOTE: https://pyo3.rs/v0.9.1/advanced.html#testing
-#[cfg(disabled_test)]
+// NOTE: https://pyo3.rs/v0.15.1/faq.html
+#[cfg(test)]
 mod test {
     use super::Environment;
 
     #[test]
     fn test() {
-        let mut env = Environment::new();
-        println!("{}", env.to_string());
-        env.reset(None);
-        println!("{}", env.to_string());
+        Environment::new().unwrap();
     }
 }

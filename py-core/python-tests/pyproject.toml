@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "deep-trinity-tests"
+version = "0.1.0"
+description = ""
+authors = ["Shintaro Seki <s2pch.luck@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+# deep-trinity
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

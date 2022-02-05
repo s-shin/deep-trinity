@@ -7,21 +7,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - uses: extractions/setup-just@v1
+    - uses: actions/setup-python@v2
+      with:
+        python-version: 3.7
+    - run: pip install maturin
+    - name: Install poetry
+      run: |-
+        curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+        echo "$HOME/.poetry/bin" >> $GITHUB_PATH
     - name: Build
       run: cargo build --verbose
     - name: Run tests
-      run: make test
+      run: just test
 
-  py_core_release:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --release -p py-core --verbose
-    - name: Install
-      run: ./script/install_py_core.sh release tmp
-    - name: Upload detris-core.so
-      uses: actions/upload-artifact@v1
-      with:
-        name: detris-core.so
-        path: tmp/core.so
+#  py_core_release:
+#    runs-on: ubuntu-latest
+#    steps:
+#    - uses: actions/checkout@v2
+#    - name: Build
+#      run: cargo build --release -p py-core --verbose
+#    - name: Install
+#      run: ./script/install_py_core.sh -p release tmp
+#    - name: Upload detris-core.so
+#      uses: actions/upload-artifact@v1
+#      with:
+#        name: detris-core.so
+#        path: tmp/core.so
