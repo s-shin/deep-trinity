@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Set
 
 
 class Cell:
@@ -25,6 +25,19 @@ class Cell:
     def __str__(self) -> str: ...
 
 
+class Placement:
+    def __init__(self, orientation: int, x: int, y: int): ...
+
+    @property
+    def orientation(self) -> int: ...
+
+    @property
+    def x(self) -> int: ...
+
+    @property
+    def y(self) -> int: ...
+
+
 class Game:
     def __init__(self): ...
 
@@ -47,5 +60,7 @@ class Game:
     def lock(self) -> bool: ...
 
     def hold(self) -> bool: ...
+
+    def get_dst_candidates(self) -> Set[Placement]: ...
 
     def __str__(self) -> str: ...

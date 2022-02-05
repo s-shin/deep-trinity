@@ -18,6 +18,3 @@ rand = "0.8"
 [dependencies.pyo3]
 version = "0.15"
 features = ["extension-module", "abi3-py36"]
-# https://github.com/PyO3/pyo3/blob/v0.9.1/guide/src/advanced.md#testing
-#extension-module = ["pyo3/extension-module"]
-#default = ["extension-module"]

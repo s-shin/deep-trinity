@@ -88,14 +88,14 @@ pub fn get_nearest_alternative_placement(piece: Piece, target: &Placement, src: 
 
 //---
 
-pub struct MoveDecisionStuff {
+pub struct MoveDecisionMaterial {
     /// Movable and lockable placements including all alternative placements.
     pub dst_candidates: HashSet<Placement>,
     /// The result of the search by [BruteForceMoveSearcher].
     pub brute_force_search_result: SearchResult,
 }
 
-impl MoveDecisionStuff {
+impl MoveDecisionMaterial {
     pub fn new<'a>(pf: &Playfield<'a>, fp: &FallingPiece<'a>, rules: &GameRules) -> Self {
         let mut searcher: BruteForceMoveSearcher = Default::default();
         let conf = SearchConfiguration::new(pf, fp.piece_spec, fp.placement, rules.rotation_mode);
@@ -115,34 +115,34 @@ pub struct MoveDecisionHelper<'a> {
     pub falling_piece: &'a FallingPiece<'a>,
     pub playfield: &'a Playfield<'a>,
     pub rules: &'a GameRules,
-    pub stuff: Rc<MoveDecisionStuff>,
+    pub material: Rc<MoveDecisionMaterial>,
 }
 
 impl<'a> MoveDecisionHelper<'a> {
-    pub fn new(pf: &'a Playfield<'a>, fp: &'a FallingPiece<'a>, rules: &'a GameRules, stuff: Option<Rc<MoveDecisionStuff>>) -> Self {
+    pub fn new(pf: &'a Playfield<'a>, fp: &'a FallingPiece<'a>, rules: &'a GameRules, material: Option<Rc<MoveDecisionMaterial>>) -> Self {
         Self {
             playfield: pf,
             falling_piece: fp,
             rules,
-            stuff: stuff.unwrap_or_else(|| Rc::new(MoveDecisionStuff::new(pf, fp, rules))),
+            material: material.unwrap_or_else(|| Rc::new(MoveDecisionMaterial::new(pf, fp, rules))),
         }
     }
-    pub fn with_game(game: &'a Game<'a>, stuff: Option<Rc<MoveDecisionStuff>>) -> Result<Self, &'static str> {
+    pub fn with_game(game: &'a Game<'a>, material: Option<Rc<MoveDecisionMaterial>>) -> Result<Self, &'static str> {
         if matches!(game.state.falling_piece, None) {
             return Err("The falling_piece should not be None.");
         }
-        Ok(Self::new(&game.state.playfield, game.state.falling_piece.as_ref().unwrap(), &game.rules, stuff))
+        Ok(Self::new(&game.state.playfield, game.state.falling_piece.as_ref().unwrap(), &game.rules, material))
     }
     pub fn tspin_moves(&self) -> Result<Vec<(MoveTransition, LineClear)>, &'static str> {
         if self.falling_piece.piece() != Piece::T {
             return Err("This helper is not for T piece.");
         }
         let mut r = vec![];
-        for dst in self.stuff.dst_candidates.iter() {
+        for dst in self.material.dst_candidates.iter() {
             let fp = FallingPiece::new(self.falling_piece.piece_spec, *dst);
             for cw in &[true, false] {
                 for src in self.playfield.check_reverse_rotation(self.rules.rotation_mode, &fp, *cw).iter() {
-                    if !self.stuff.brute_force_search_result.contains(src) {
+                    if !self.material.brute_force_search_result.contains(src) {
                         continue;
                     }
                     let mt = MoveTransition::new(*dst, Some(MovePathItem::new(Move::Rotate(if *cw { 1 } else { -1 }), *src)));
@@ -162,7 +162,7 @@ impl<'a> MoveDecisionHelper<'a> {
         if self.falling_piece.piece() != Piece::I {
             return Err("This helper is not for I piece.");
         }
-        let r = self.stuff.dst_candidates.iter()
+        let r = self.material.dst_candidates.iter()
             .filter(|&p| {
                 if p.orientation.is_even() {
                     return false;

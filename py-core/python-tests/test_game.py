@@ -10,4 +10,5 @@ def test_game():
     game.setup_falling_piece()
     game.firm_drop()
     assert game.lock()
-    print(game)
+    assert len(str(game)) > 0
+    assert len(game.get_dst_candidates()) > 0

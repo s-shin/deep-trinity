@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use core::prelude::*;
 use core::CellTypeId;
 use pyo3::prelude::*;
@@ -49,6 +50,30 @@ impl Cell {
     pub fn id(&self) -> PyResult<u8> { Ok(self.0.0) }
     pub fn __str__(&self) -> PyResult<String> {
         Ok(self.0.to_char().to_string())
+    }
+}
+
+#[derive(Hash, PartialEq, Eq)]
+#[pyclass(name = "Placement")]
+pub struct PlacementWrapper {
+    placement: Placement,
+}
+
+#[pymethods]
+impl PlacementWrapper {
+    #[new]
+    pub fn new(orientation: u8, x: i8, y: i8) -> Self {
+        let placement = Placement::new(Orientation::new(orientation), (x, y).into());
+        Self { placement }
+    }
+    #[getter]
+    pub fn orientation(&self) -> PyResult<u8> { Ok(self.placement.orientation.id()) }
+    #[getter]
+    pub fn x(&self) -> PyResult<i8> { Ok(self.placement.pos.0) }
+    #[getter]
+    pub fn y(&self) -> PyResult<i8> { Ok(self.placement.pos.1) }
+    fn __str__(&self) -> PyResult<String> {
+        Ok(format!("({}, {}, {})", self.placement.orientation.id(), self.placement.pos.0, self.placement.pos.1))
     }
 }
 
@@ -109,6 +134,17 @@ impl GameWrapper {
     }
     pub fn hold(&mut self) -> PyResult<bool> {
         self.game.hold().map_err(pyo3::exceptions::PyRuntimeError::new_err)
+    }
+    pub fn get_dst_candidates(&mut self) -> PyResult<HashSet<PlacementWrapper>> {
+        match self.game.get_move_decision_helper(None) {
+            Ok(helper) => {
+                let r = helper.material.dst_candidates.iter()
+                    .map(|&placement| PlacementWrapper { placement })
+                    .collect::<HashSet<_>>();
+                Ok(r)
+            }
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+        }
     }
     fn __str__(&self) -> PyResult<String> {
         Ok(format!("{}", self.game))
