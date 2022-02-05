@@ -17,7 +17,7 @@ develop_python:
 prepare_python_tests:
     cd '{{ justfile_directory() }}/py-core/python-tests' \
     && poetry install \
-    && source "$(poetry env info --path)/bin/activate" \
+    && . "$(poetry env info --path)/bin/activate" \
     && just -f '{{ justfile() }}' develop_python
 
 test_python:
