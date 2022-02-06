@@ -479,6 +479,7 @@ dependencies = [
  "core",
  "ml-core",
  "pyo3",
+ "pyo3-build-config",
  "rand",
 ]
 

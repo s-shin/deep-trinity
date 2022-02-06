@@ -1,12 +1,12 @@
 [workspace]
 members = [
-  "grid",
-  "core",
-  "bot",
-  "web-core",
-  "ml-core",
-  "py-core",
-  "playground",
-  "tree",
-  "move-finder"
+  "crates/grid",
+  "crates/core",
+  "crates/bot",
+  "crates/web-core",
+  "crates/ml-core",
+  "crates/py-core",
+  "crates/playground",
+  "crates/tree",
+  "crates/move-finder"
 ]

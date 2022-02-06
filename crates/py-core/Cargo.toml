@@ -17,4 +17,12 @@ rand = "0.8"
 
 [dependencies.pyo3]
 version = "0.15"
-features = ["extension-module", "abi3-py36"]
+features = ["abi3-py36"]
+
+[features]
+# https://pyo3.rs/v0.15.1/faq.html
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
+
+[build-dependencies]
+pyo3-build-config = "0.15"
