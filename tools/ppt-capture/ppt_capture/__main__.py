@@ -4,6 +4,7 @@ import signal
 import mss
 import cv2
 import numpy as np
+from deep_trinity import Game
 
 
 class Vec2:
@@ -249,11 +250,12 @@ def main():
     }
 
     debug1 = False
-    debug2 = True
+    debug2 = False
     scrren_info: Optional[ScreenInfo] = None
     hold_next_piece_pixels_mask: Optional[np.ndarray] = None
     masked_hold_next_piece_pixel_regions: Optional[np.ndarray] = None
     playfield_piece_pixels_mask: Optional[np.ndarray] = None
+    game: Optional[Game] = None
 
     with mss.mss() as sct:
         while not should_stop:
@@ -321,7 +323,7 @@ def main():
             # Detect playfield pieces.
             piece_pixels = img[:, :, :3][playfield_piece_pixels_mask]
             result = detect_pieces_by_color(piece_pixels)
-            playfield = result.reshape((20, 10))
+            playfield = np.flipud(result.reshape((20, 10)))
 
             if debug2:
                 lines = [
@@ -331,8 +333,9 @@ def main():
                     ]),
                     "--+----------+",
                 ]
-                for y in range(20):
-                    s = f"{19 - y:02}|"
+                for i in range(20):
+                    y = 19 - i
+                    s = f"{y:02}|"
                     for x in range(10):
                         piece_value = playfield[y, x]
                         s += Piece(piece_value).name if piece_value > 0 else " "
@@ -341,6 +344,18 @@ def main():
                 lines.append("--+----------+")
                 lines.append("##|0123456789|")
                 print("\n".join(lines))
+
+            rows = []
+            for i in range(7):
+                y = i * 6
+                row = sum(bool(b) << i for i, b in enumerate(playfield[y:y + 6].flatten()))
+                rows.append(row)
+
+            if game is None:
+                game = Game()
+
+            game.set_playfield_with_u64(rows)
+            print(game)
 
 
 main()

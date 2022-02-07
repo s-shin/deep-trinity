@@ -1,6 +1,5 @@
 use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
-use std::thread::current;
 use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0, NUM_PIECES};
 use crate::move_search::{MoveSearcher, SearchConfiguration, SearchResult};
 use crate::move_search::bruteforce::BruteForceMoveSearcher;

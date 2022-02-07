@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use core::prelude::*;
 use core::CellTypeId;
+use grid::{Grid, Y};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 
@@ -146,7 +147,31 @@ impl GameWrapper {
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
         }
     }
+    pub fn set_playfield_with_u64(&mut self, six_rows_x7: Vec<u64>) -> PyResult<()> {
+        if six_rows_x7.len() != 7 {
+            return Err(pyo3::exceptions::PyValueError::new_err("Invalid length of values."));
+        }
+        for (i, v) in six_rows_x7.iter().enumerate() {
+            self.game.state.playfield.grid.set_rows_with_bits((0, i as Y * 6).into(), 10, *v);
+        }
+        Ok(())
+    }
     fn __str__(&self) -> PyResult<String> {
         Ok(format!("{}", self.game))
+    }
+    fn __copy__(&self) -> PyResult<Self> {
+        Ok(Self { game: self.game.clone() })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_game_wrapper() {
+        let mut g = GameWrapper::new();
+        g.set_playfield_with_u64(vec![4695472149559893610, 6281985146881357, 1119713820219917312, 0, 0, 0, 0]).unwrap();
+        println!("{}", g.__str__().unwrap());
     }
 }

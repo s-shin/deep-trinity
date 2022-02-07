@@ -10,6 +10,7 @@ use std::ops;
 use std::rc::Rc;
 use rand::seq::SliceRandom;
 use bitflags::bitflags;
+use num_traits::PrimInt;
 use once_cell::sync::Lazy;
 use grid::{CellTrait, Grid, X, Y, Vec2};
 use grid::bitgrid::BitGridTrait;
@@ -298,6 +299,10 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<
     fn fill_bottom(&mut self, n: Y, cell: Cell) {
         self.basic_grid.as_mut().map(|g| g.fill_bottom(n, cell));
         self.bit_grid.fill_bottom(n, cell);
+    }
+    fn set_rows_with_bits<I: PrimInt>(&mut self, pos: Vec2, stride: u32, bits: I) {
+        self.basic_grid.as_mut().map(|g| g.set_rows_with_bits(pos, stride, bits));
+        self.bit_grid.set_rows_with_bits(pos, stride, bits)
     }
     fn is_row_filled(&self, y: Y) -> bool { self.bit_grid.is_row_filled(y) }
     fn is_row_empty(&self, y: Y) -> bool { self.bit_grid.is_row_empty(y) }

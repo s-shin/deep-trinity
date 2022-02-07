@@ -48,7 +48,6 @@ fn deep_trinity(_py: Python, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-// NOTE: https://pyo3.rs/v0.15.1/faq.html
 #[cfg(test)]
 mod test {
     use super::Environment;

@@ -435,6 +435,13 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for PrimBitGrid<'a, Int, C> {
             self.cells & self.constants.bottom_side_rows_mask(n)
         };
     }
+    fn set_rows_with_bits<I: PrimInt>(&mut self, pos: Vec2, stride: u32, bits: I) {
+        let c = self.constants;
+        if pos.0 != 0 || pos.1 != 0 || I::zero().count_zeros() != c.num_bits || stride != c.stride as u32 {
+            return super::set_rows_with_bits(self, pos, stride, bits);
+        }
+        self.cells = Int::from(bits).unwrap() & self.constants.cells_mask;
+    }
     fn is_row_filled(&self, y: Y) -> bool {
         let m = self.constants.row_mask(y);
         self.cells & m == m
@@ -678,6 +685,14 @@ impl<'a, Int: PrimInt, C: CellTrait> Grid<C> for BasicBitGrid<'a, Int, C> {
         for g in self.prim_grids.iter_mut() {
             g.fill_all(cell);
         }
+    }
+    fn set_rows_with_bits<I: PrimInt>(&mut self, pos: Vec2, stride: u32, bits: I) {
+        let c = self.first_prim_grid().constants;
+        let (i, y) = self.first_prim_grid_info(pos.1);
+        if pos.0 != 0 || y != 0 || I::zero().count_zeros() != c.num_bits || stride != c.stride as u32 {
+            return super::set_rows_with_bits(self, pos, stride, bits);
+        }
+        self.prim_grids[i].set_rows_with_bits((pos.0, y).into(), stride, bits);
     }
     fn is_row_filled(&self, y: Y) -> bool {
         let (i, y) = self.first_prim_grid_info(y);
@@ -1034,6 +1049,29 @@ mod tests {
             assert!(c.get(Vec2(10, 4)).is_some());
             assert!(c.get(Vec2(10, 6)).is_some());
             assert!(c.get(Vec2(10, 8)).is_none());
+        }
+    }
+
+    #[test]
+    fn test_set_rows_with_bits() {
+        let store = {
+            let mut r = PrimBitGridConstantsStore::<u64>::new(10);
+            r.prepare_for_prim_bit_grid((10, 6).into());
+            r
+        };
+        {
+            let mut g = PrimBitGrid::<_>::with_store(&store, (10, 6).into()).unwrap();
+            g.set_rows_with_bits((1, 1).into(), 3, 0b011001);
+            assert!(g.cell((1, 1).into()).is_block());
+            assert!(g.cell((1, 2).into()).is_block());
+            assert!(g.cell((2, 2).into()).is_block());
+        }
+        {
+            let mut g = PrimBitGrid::<_>::with_store(&store, (10, 6).into()).unwrap();
+            g.set_rows_with_bits((0, 0).into(), 10, 0b110000000001);
+            assert!(g.cell((0, 0).into()).is_block());
+            assert!(g.cell((0, 1).into()).is_block());
+            assert!(g.cell((1, 1).into()).is_block());
         }
     }
 }
