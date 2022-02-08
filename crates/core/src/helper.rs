@@ -465,13 +465,15 @@ mod tests {
         let rules: GameRules = Default::default();
         {
             let fp = FallingPiece::spawn(Piece::T.default_spec(), Some(&pf));
-            let h = MoveDecisionHelper::new(&pf, &fp, &rules, None);
+            let m = MoveDecisionMaterial::new(&pf, &fp, &rules);
+            let h = MoveDecisionHelper::new(&pf, &fp, &rules, &m);
             let moves = h.tspin_moves().unwrap();
             assert_eq!(10, moves.len());
         }
         {
             let fp = FallingPiece::spawn(Piece::I.default_spec(), Some(&pf));
-            let h = MoveDecisionHelper::new(&pf, &fp, &rules, None);
+            let m = MoveDecisionMaterial::new(&pf, &fp, &rules);
+            let h = MoveDecisionHelper::new(&pf, &fp, &rules, &m);
             let dsts = h.tetris_destinations().unwrap();
             assert_eq!(2, dsts.len());
         }

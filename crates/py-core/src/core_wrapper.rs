@@ -85,6 +85,16 @@ pub struct MoveDecisionMaterialWrapper {
     material: MoveDecisionMaterial,
 }
 
+#[pymethods]
+impl MoveDecisionMaterialWrapper {
+    pub fn get_dst_candidates(&self) -> PyResult<HashSet<PlacementWrapper>> {
+        let r = self.material.dst_candidates.iter()
+            .map(|&placement| PlacementWrapper { placement })
+            .collect::<HashSet<_>>();
+        Ok(r)
+    }
+}
+
 #[pyclass(name = "Game")]
 pub struct GameWrapper {
     game: Game,
@@ -146,17 +156,6 @@ impl GameWrapper {
     pub fn get_move_decision_material(&self) -> PyResult<MoveDecisionMaterialWrapper> {
         let material = MoveDecisionMaterial::with_game(&self.game).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(MoveDecisionMaterialWrapper { material })
-    }
-    pub fn get_dst_candidates(&mut self, material: Option<MoveDecisionMaterialWrapper>) -> PyResult<HashSet<PlacementWrapper>> {
-        let material = if let Some(m) = material {
-            m.material
-        } else {
-            MoveDecisionMaterial::with_game(&self.game).map_err(pyo3::exceptions::PyRuntimeError::new_err)?
-        };
-        let r = material.dst_candidates.iter()
-            .map(|&placement| PlacementWrapper { placement })
-            .collect::<HashSet<_>>();
-        Ok(r)
     }
     pub fn set_falling_piece_placement(&mut self, dst: PlacementWrapper) -> PyResult<()> {
         if let Some(fp) = self.game.state.falling_piece.as_mut() {
