@@ -50,7 +50,7 @@ impl BotRunner {
         let mut dummy = DummyBotRunnerHooks;
         self.run(bot, &mut dummy)
     }
-    pub fn run(&self, bot: &mut impl Bot, mut hook: &mut impl BotRunnerHooks) -> Result<Game, Box<dyn Error>> {
+    pub fn run(&self, bot: &mut impl Bot, hook: &mut impl BotRunnerHooks) -> Result<Game, Box<dyn Error>> {
         let mut game: Game = Default::default();
 
         let mut rpg = self.random_seed.map(|seed| RandomPieceGenerator::new(StdRng::seed_from_u64(seed)));

@@ -1,10 +1,10 @@
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, List
 from enum import Enum
 import signal
 import mss
 import cv2
 import numpy as np
-from deep_trinity import Game
+from deep_trinity import Game, Cell
 
 
 class Vec2:
@@ -81,24 +81,27 @@ class Rect:
 
 class Piece(Enum):
     # NONE = 0
-    L = 1
-    J = 2
-    S = 3
-    Z = 4
-    I = 5
-    T = 6
-    O = 7
+    S = Cell.S.id
+    Z = Cell.Z.id
+    L = Cell.L.id
+    J = Cell.J.id
+    I = Cell.I.id
+    T = Cell.T.id
+    O = Cell.O.id
 
 
 class Region(Enum):
     # NONE = 0
-    HOLD = 1
+    HOLD_PIECE = 1
     PLAYFIELD = 2
-    NEXT1 = 3
-    NEXT2 = 4
-    NEXT3 = 5
-    NEXT4 = 6
-    NEXT5 = 7
+    NEXT_PIECE_1 = 3
+    NEXT_PIECE_2 = 4
+    NEXT_PIECE_3 = 5
+    NEXT_PIECE_4 = 6
+    NEXT_PIECE_5 = 7
+
+
+NEXT_PIECE_REGIONS: List[Region] = [getattr(Region, f"NEXT_PIECE_{i + 1}") for i in range(5)]
 
 
 class RegionInfo(NamedTuple):
@@ -232,6 +235,38 @@ def detect_pieces_by_color(bgr_arr: np.ndarray, threshold=100):
     return r
 
 
+class GameState(NamedTuple):
+    hold_piece: Optional[Piece]
+    next_pieces: List[Piece]
+    playfield: np.ndarray
+    """This playfield can be contain piece information."""
+
+    def get_playfield_as_u64_rows(self):
+        rows = []
+        for i in range(7):
+            y = i * 6
+            row = sum(bool(b) << i for i, b in enumerate(self.playfield[y:y + 6].flatten()))
+            rows.append(row)
+        return rows
+
+    def to_game(self):
+        game = Game()
+        game.fast_mode()
+        game.set_hold_piece(self.hold_piece)
+        game.set_next_pieces([p.value for p in self.next_pieces])
+        game.set_playfield_with_u64_rows(self.get_playfield_as_u64_rows())
+        return game
+
+
+class GameStateRecognizer:
+    prev: Optional[GameState] = None
+
+    def update(self, hold_piece: Optional[Piece], next_pieces: List[Optional[Piece]], playfield: np.ndarray):
+        game = Game()
+        game.fast_mode()
+        # TODO
+
+
 def main():
     should_stop = False
 
@@ -239,8 +274,8 @@ def main():
         nonlocal should_stop
         should_stop = True
 
-    signal.signal(signal.SIGINT, should_stop)
-    signal.signal(signal.SIGTERM, should_stop)
+    signal.signal(signal.SIGINT, stop)
+    signal.signal(signal.SIGTERM, stop)
 
     monitor = {
         "left": 96,
@@ -255,7 +290,7 @@ def main():
     hold_next_piece_pixels_mask: Optional[np.ndarray] = None
     masked_hold_next_piece_pixel_regions: Optional[np.ndarray] = None
     playfield_piece_pixels_mask: Optional[np.ndarray] = None
-    game: Optional[Game] = None
+    recognizer = GameStateRecognizer()
 
     with mss.mss() as sct:
         while not should_stop:
@@ -345,17 +380,10 @@ def main():
                 lines.append("##|0123456789|")
                 print("\n".join(lines))
 
-            rows = []
-            for i in range(7):
-                y = i * 6
-                row = sum(bool(b) << i for i, b in enumerate(playfield[y:y + 6].flatten()))
-                rows.append(row)
-
-            if game is None:
-                game = Game()
-
-            game.set_playfield_with_u64(rows)
-            print(game)
+            # Update recognizer.
+            hold_piece = region_pieces[Region.HOLD_PIECE]
+            next_pieces = [region_pieces[r] for r in NEXT_PIECE_REGIONS]
+            recognizer.update(hold_piece, next_pieces, playfield)
 
 
 main()

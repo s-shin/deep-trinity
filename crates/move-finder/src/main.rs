@@ -13,12 +13,12 @@ struct NodeData {
     by_action: Option<Action>,
     game: Game,
     pps: Vec<Rc<PiecePlacement>>,
-    material: Rc<MoveDecisionMaterial>,
+    material: MoveDecisionMaterial,
 }
 
 impl NodeData {
     pub fn new(by_action: Option<Action>, game: Game, pps: Vec<Rc<PiecePlacement>>) -> Result<Self, &'static str> {
-        let material = game.get_move_decision_helper(None)?.material;
+        let material = MoveDecisionMaterial::with_game(&game)?;
         Ok(Self { by_action, game, pps, material })
     }
 }

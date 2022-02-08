@@ -530,6 +530,18 @@ impl<'a, Int: PrimInt, C: CellTrait> BasicBitGrid<'a, Int, C> {
         let prim_height = repeated.height;
         Self { size, prim_grids, prim_height }
     }
+    /// This method can be used for the purpose of serialization.
+    pub fn to_int_values(&self) -> Vec<Int> {
+        self.prim_grids.iter()
+            .map(|g| g.cells)
+            .collect::<Vec<_>>()
+    }
+    pub fn reset_by_int_values(&mut self, vs: &[Int]) {
+        assert!(vs.len() <= self.prim_grids.len());
+        for (i, v) in vs.iter().enumerate() {
+            self.prim_grids[i].cells = *v & self.prim_grids[i].constants.cells_mask;
+        }
+    }
     fn first_prim_grid(&self) -> &PrimBitGrid<'a, Int, C> { self.prim_grids.first().unwrap() }
     pub fn first_prim_grid_info(&self, y: Y) -> (usize, Y) {
         // Example #1:

@@ -7,14 +7,12 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops;
-use std::rc::Rc;
 use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use num_traits::PrimInt;
 use once_cell::sync::Lazy;
 use grid::{CellTrait, Grid, X, Y, Vec2};
 use grid::bitgrid::BitGridTrait;
-use crate::helper::{MoveDecisionHelper, MoveDecisionMaterial};
 
 //--------------------------------------------------------------------------------------------------
 // Global Configurations
@@ -1673,9 +1671,6 @@ impl<'a> Game<'a> {
         }
         let r = helper::get_move_candidates(&s.playfield, s.falling_piece.as_ref().unwrap(), &self.rules);
         Ok(r)
-    }
-    pub fn get_move_decision_helper(&self, material: Option<Rc<MoveDecisionMaterial>>) -> Result<MoveDecisionHelper, &'static str> {
-        MoveDecisionHelper::with_game(self, material)
     }
     pub fn get_almost_good_move_path(&self, last_transition: &MoveTransition) -> Result<MovePath, &'static str> {
         let fp = if let Some(fp) = self.state.falling_piece.as_ref() {
