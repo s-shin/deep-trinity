@@ -1,6 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use core::prelude::*;
 use core::CellTypeId;
+use core::helper::MoveDecisionMaterial;
+use grid::{Grid, Y};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 
@@ -53,7 +55,7 @@ impl Cell {
     }
 }
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
 #[pyclass(name = "Placement")]
 pub struct PlacementWrapper {
     placement: Placement,
@@ -74,6 +76,22 @@ impl PlacementWrapper {
     pub fn y(&self) -> PyResult<i8> { Ok(self.placement.pos.1) }
     fn __str__(&self) -> PyResult<String> {
         Ok(format!("({}, {}, {})", self.placement.orientation.id(), self.placement.pos.0, self.placement.pos.1))
+    }
+}
+
+#[derive(Clone)]
+#[pyclass(name = "MoveDecisionMaterial")]
+pub struct MoveDecisionMaterialWrapper {
+    material: MoveDecisionMaterial,
+}
+
+#[pymethods]
+impl MoveDecisionMaterialWrapper {
+    pub fn get_dst_candidates(&self) -> PyResult<HashSet<PlacementWrapper>> {
+        let r = self.material.dst_candidates.iter()
+            .map(|&placement| PlacementWrapper { placement })
+            .collect::<HashSet<_>>();
+        Ok(r)
     }
 }
 
@@ -101,7 +119,7 @@ impl GameWrapper {
             if let Some(p) = CellTypeId(*cell_id).to_piece() {
                 pieces.push(p);
             } else {
-                return Err(pyo3::exceptions::PyValueError::new_err("Invalid piece ID given."));
+                return Err(pyo3::exceptions::PyValueError::new_err("Invalid piece ID."));
             }
         }
         self.game.supply_next_pieces(&pieces);
@@ -114,7 +132,7 @@ impl GameWrapper {
         if let Some(p) = CellTypeId(piece_cell_id.unwrap()).to_piece() {
             self.game.setup_falling_piece(Some(p)).map_err(pyo3::exceptions::PyRuntimeError::new_err)
         } else {
-            Err(pyo3::exceptions::PyValueError::new_err("Invalid piece ID given."))
+            Err(pyo3::exceptions::PyValueError::new_err("Invalid piece ID."))
         }
     }
     pub fn drop(&mut self, n: i8) -> PyResult<()> {
@@ -135,18 +153,66 @@ impl GameWrapper {
     pub fn hold(&mut self) -> PyResult<bool> {
         self.game.hold().map_err(pyo3::exceptions::PyRuntimeError::new_err)
     }
-    pub fn get_dst_candidates(&mut self) -> PyResult<HashSet<PlacementWrapper>> {
-        match self.game.get_move_decision_helper(None) {
-            Ok(helper) => {
-                let r = helper.material.dst_candidates.iter()
-                    .map(|&placement| PlacementWrapper { placement })
-                    .collect::<HashSet<_>>();
-                Ok(r)
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
+    pub fn get_move_decision_material(&self) -> PyResult<MoveDecisionMaterialWrapper> {
+        let material = MoveDecisionMaterial::with_game(&self.game).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        Ok(MoveDecisionMaterialWrapper { material })
+    }
+    pub fn set_falling_piece_placement(&mut self, dst: PlacementWrapper) -> PyResult<()> {
+        if let Some(fp) = self.game.state.falling_piece.as_mut() {
+            fp.placement = dst.placement;
+        } else {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err("No falling piece."));
         }
+        Ok(())
+    }
+    pub fn set_hold_piece(&mut self, piece_cell_id: Option<u8>) -> PyResult<()> {
+        match piece_cell_id.map(|id| CellTypeId(id).to_piece()) {
+            Some(Some(p)) => self.game.state.hold_piece = Some(p),
+            Some(None) => return Err(pyo3::exceptions::PyValueError::new_err("Invalid piece ID.")),
+            None => self.game.state.hold_piece = None,
+        }
+        Ok(())
+    }
+    pub fn set_next_pieces(&mut self, next_piece_cell_ids: Vec<u8>) -> PyResult<()> {
+        let mut pieces = VecDeque::new();
+        for id in next_piece_cell_ids.iter() {
+            if let Some(p) = CellTypeId(*id).to_piece() {
+                pieces.push_back(p);
+            } else {
+                return Err(pyo3::exceptions::PyValueError::new_err("Invalid piece ID"));
+            }
+        }
+        self.game.state.next_pieces.pieces = pieces;
+        Ok(())
+    }
+    pub fn set_playfield_with_u64_rows(&mut self, six_rows_x7: Vec<u64>) -> PyResult<()> {
+        if six_rows_x7.len() != 7 {
+            return Err(pyo3::exceptions::PyValueError::new_err("Invalid length of values."));
+        }
+        for (i, v) in six_rows_x7.iter().enumerate() {
+            self.game.state.playfield.grid.set_rows_with_bits((0, i as Y * 6).into(), 10, *v);
+        }
+        Ok(())
+    }
+    pub fn get_playfield_as_u64_rows(&self) -> PyResult<Vec<u64>> {
+        Ok(self.game.state.playfield.grid.bit_grid.to_int_values())
     }
     fn __str__(&self) -> PyResult<String> {
         Ok(format!("{}", self.game))
+    }
+    fn __copy__(&self) -> PyResult<Self> {
+        Ok(Self { game: self.game.clone() })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_game_wrapper() {
+        let mut g = GameWrapper::new();
+        g.set_playfield_with_u64_rows(vec![0b1100110011, 0, 0, 0, 0, 0, 0]).unwrap();
+        println!("{}", g.__str__().unwrap());
     }
 }

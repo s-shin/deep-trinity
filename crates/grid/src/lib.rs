@@ -3,6 +3,7 @@ pub mod bitgrid;
 use std::{fmt, ops, cmp};
 use std::collections::HashSet;
 use std::marker::PhantomData;
+use num_traits::PrimInt;
 
 pub type X = i8;
 pub type Y = i8;
@@ -160,6 +161,20 @@ pub trait Grid<C: CellTrait>: Clone {
                 self.set_cell((x, y).into(), c.into());
             }
         }
+    }
+    /// Example:
+    /// ```
+    /// use grid::{Grid, CellTrait, BasicGrid, BinaryCell};
+    ///
+    /// let mut grid = BasicGrid::<BinaryCell>::new((3, 3).into());
+    /// grid.set_rows_with_bits((1, 1).into(), 3, 0b011001);
+    ///
+    /// assert!(grid.cell((1, 1).into()).is_block());
+    /// assert!(grid.cell((1, 2).into()).is_block());
+    /// assert!(grid.cell((2, 2).into()).is_block());
+    /// ```
+    fn set_rows_with_bits<I: PrimInt>(&mut self, pos: Vec2, stride: u32, bits: I) {
+        set_rows_with_bits(self, pos, stride, bits);
     }
     fn reachable_pos<G: Grid<C>>(&self, mut pos: Vec2, sub: &G, direction: Vec2) -> Vec2 {
         loop {
@@ -457,6 +472,22 @@ pub trait Grid<C: CellTrait>: Clone {
         let mut s = String::new();
         self.format(&mut s).unwrap();
         s
+    }
+}
+
+fn set_rows_with_bits<C: CellTrait, G: Grid<C>, I: PrimInt>(grid: &mut G, pos: Vec2, stride: u32, mut bits: I) {
+    while !bits.is_zero() {
+        let n = bits.trailing_zeros();
+        let x = pos.0 + (n % stride) as X;
+        let y = pos.1 + (n / stride) as Y;
+        if y < 0 || y >= grid.height() {
+            return;
+        }
+        if x < 0 || x >= grid.width() {
+            continue;
+        }
+        grid.set_cell((x, y).into(), C::any_block());
+        bits = bits & (bits - I::one());
     }
 }
 

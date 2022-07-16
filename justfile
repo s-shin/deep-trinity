@@ -1,5 +1,6 @@
 crates_dir := justfile_directory() + '/crates'
 web_dir := justfile_directory() + '/web'
+tools_dir := justfile_directory() + '/tools'
 
 default:
     @just --list
@@ -28,3 +29,8 @@ test_python_core:
     cd '{{ crates_dir }}/py-core/python-tests' && poetry run pytest
 
 prepare_and_test_python_core: prepare_python_core_tests test_python_core
+
+prepare_ppt_capture:
+    cd '{{ tools_dir }}/ppt-capture' \
+    && . "$(poetry env info --path)/bin/activate" \
+    && just -f '{{ justfile() }}' install_python_core

@@ -1,6 +1,4 @@
 use std::collections::{HashSet, VecDeque};
-use std::rc::Rc;
-use std::thread::current;
 use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0, NUM_PIECES};
 use crate::move_search::{MoveSearcher, SearchConfiguration, SearchResult};
 use crate::move_search::bruteforce::BruteForceMoveSearcher;
@@ -88,6 +86,7 @@ pub fn get_nearest_alternative_placement(piece: Piece, target: &Placement, src: 
 
 //---
 
+#[derive(Clone)]
 pub struct MoveDecisionMaterial {
     /// Movable and lockable placements including all alternative placements.
     pub dst_candidates: HashSet<Placement>,
@@ -109,28 +108,31 @@ impl MoveDecisionMaterial {
             brute_force_search_result: search_result,
         }
     }
+    pub fn with_game<'a>(game: &Game<'a>) -> Result<Self, &'static str> {
+        if matches!(game.state.falling_piece, None) {
+            return Err("The falling_piece should not be None.");
+        }
+        Ok(Self::new(&game.state.playfield, game.state.falling_piece.as_ref().unwrap(), &game.rules))
+    }
 }
 
 pub struct MoveDecisionHelper<'a> {
     pub falling_piece: &'a FallingPiece<'a>,
     pub playfield: &'a Playfield<'a>,
     pub rules: &'a GameRules,
-    pub material: Rc<MoveDecisionMaterial>,
+    pub material: &'a MoveDecisionMaterial,
 }
 
 impl<'a> MoveDecisionHelper<'a> {
-    pub fn new(pf: &'a Playfield<'a>, fp: &'a FallingPiece<'a>, rules: &'a GameRules, material: Option<Rc<MoveDecisionMaterial>>) -> Self {
+    pub fn new(pf: &'a Playfield<'a>, fp: &'a FallingPiece<'a>, rules: &'a GameRules, material: &'a MoveDecisionMaterial) -> Self {
         Self {
             playfield: pf,
             falling_piece: fp,
             rules,
-            material: material.unwrap_or_else(|| Rc::new(MoveDecisionMaterial::new(pf, fp, rules))),
+            material,
         }
     }
-    pub fn with_game(game: &'a Game<'a>, material: Option<Rc<MoveDecisionMaterial>>) -> Result<Self, &'static str> {
-        if matches!(game.state.falling_piece, None) {
-            return Err("The falling_piece should not be None.");
-        }
+    pub fn with_game(game: &'a Game<'a>, material: &'a MoveDecisionMaterial) -> Result<Self, &'static str> {
         Ok(Self::new(&game.state.playfield, game.state.falling_piece.as_ref().unwrap(), &game.rules, material))
     }
     pub fn tspin_moves(&self) -> Result<Vec<(MoveTransition, LineClear)>, &'static str> {
@@ -463,13 +465,15 @@ mod tests {
         let rules: GameRules = Default::default();
         {
             let fp = FallingPiece::spawn(Piece::T.default_spec(), Some(&pf));
-            let h = MoveDecisionHelper::new(&pf, &fp, &rules, None);
+            let m = MoveDecisionMaterial::new(&pf, &fp, &rules);
+            let h = MoveDecisionHelper::new(&pf, &fp, &rules, &m);
             let moves = h.tspin_moves().unwrap();
             assert_eq!(10, moves.len());
         }
         {
             let fp = FallingPiece::spawn(Piece::I.default_spec(), Some(&pf));
-            let h = MoveDecisionHelper::new(&pf, &fp, &rules, None);
+            let m = MoveDecisionMaterial::new(&pf, &fp, &rules);
+            let h = MoveDecisionHelper::new(&pf, &fp, &rules, &m);
             let dsts = h.tetris_destinations().unwrap();
             assert_eq!(2, dsts.len());
         }

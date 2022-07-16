@@ -145,7 +145,6 @@ impl GameSession {
         let mut r = Vec::with_capacity(state.playfield.grid.height() as usize + 2);
         // [rows[n], rows[n+1]] * 20
         r.resize(state.playfield.grid.height() as usize / 2, 0 as u32);
-        todo!();
         // for (i, row) in state.playfield.grid.bit_grid.rows.iter().enumerate() {
         //     r[i / 2] += (*row as u32) << (16 * (i % 2));
         // }
