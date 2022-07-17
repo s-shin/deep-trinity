@@ -4,7 +4,7 @@ import signal
 import mss
 import cv2
 import numpy as np
-from deep_trinity import Game, Cell
+from deep_trinity import Game, Cell, Placement
 
 
 class Vec2:
@@ -235,13 +235,51 @@ def detect_pieces_by_color(bgr_arr: np.ndarray, threshold=100):
     return r
 
 
-class GameState(NamedTuple):
-    hold_piece: Optional[Piece]
-    next_pieces: List[Piece]
-    playfield: np.ndarray
-    """This playfield can be contain piece information."""
+class Action:
+    __dst_or_hold: Optional[Placement]
 
-    def get_playfield_as_u64_rows(self):
+    def __init__(self, dst_or_hold: Optional[Placement]):
+        self.__dst_or_hold = dst_or_hold
+
+    @classmethod
+    def move(cls, dst: Placement):
+        return cls(dst)
+
+    @classmethod
+    def hold(cls):
+        return cls(None)
+
+    @property
+    def dst(self):
+        if self.__dst_or_hold is None:
+            raise RuntimeError("Not move action.")
+        return self.__dst_or_hold
+
+    @property
+    def is_hold(self):
+        return self.__dst_or_hold is None
+
+    def __eq__(self, other):
+        if not isinstance(other, Action):
+            return False
+        return self.__dst_or_hold == other.__dst_or_hold
+
+    def __hash__(self):
+        t = self.__dst_or_hold
+        if t is None:
+            return 0
+        return hash((t.orientation, t.x, t.y))
+
+
+class GameState:
+    def __init__(self, hold_piece: Optional[Piece], next_pieces: List[Piece], playfield: np.ndarray):
+        self.hold_piece = hold_piece
+        self.next_pieces = next_pieces
+        self.playfield = playfield
+        """This playfield can be contain piece information."""
+        self.playfield_by_u64_rows = self.__get_playfield_as_u64_rows()
+
+    def __get_playfield_as_u64_rows(self) -> List[int]:
         rows = []
         for i in range(7):
             y = i * 6
@@ -249,19 +287,39 @@ class GameState(NamedTuple):
             rows.append(row)
         return rows
 
-    def to_game(self):
+    def __get_game(self):
         game = Game()
         game.fast_mode()
         game.set_hold_piece(self.hold_piece)
         game.set_next_pieces([p.value for p in self.next_pieces])
-        game.set_playfield_with_u64_rows(self.get_playfield_as_u64_rows())
+        game.set_playfield_with_u64_rows(self.playfield_by_u64_rows)
         return game
+
+    def get_next_game_state_candidates(self):
+        r = {}
+        game = self.__get_game()
+        if game.can_hold():
+            g = game.__copy__()
+            g.hold()
+        # TODO
 
 
 class GameStateRecognizer:
     prev: Optional[GameState] = None
 
     def update(self, hold_piece: Optional[Piece], next_pieces: List[Optional[Piece]], playfield: np.ndarray):
+        if self.prev is None:
+            for p in next_pieces:
+                if p is None:
+                    return
+            self.prev = GameState(hold_piece, next_pieces, playfield)
+            return
+
+        if self.prev.hold_piece != hold_piece:
+            print("!!! HOLD")
+            self.prev.hold_piece = hold_piece
+            return
+
         game = Game()
         game.fast_mode()
         # TODO

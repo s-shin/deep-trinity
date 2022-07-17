@@ -37,24 +37,34 @@ impl fmt::Display for Vec2 {
     }
 }
 
-pub trait CellTrait: Copy + Clone + From<char> {
+pub trait Cell: Copy + Clone + From<char> {
     fn empty() -> Self;
     fn any_block() -> Self;
     fn is_empty(&self) -> bool;
-    fn is_block(&self) -> bool { !self.is_empty() }
-    fn char(&self) -> char;
+    fn is_filled(&self) -> bool { !self.is_empty() }
+    fn to_char(&self) -> char {
+        if self.is_filled() { '@' } else { ' ' }
+    }
+    fn from_char(c: char) -> Self {
+        match c {
+            ' ' => Self::empty(),
+            _ => Self::any_block(),
+        }
+    }
 }
 
-pub trait Grid<C: CellTrait>: Clone {
+pub trait Grid<C: Cell>: Clone {
     fn width(&self) -> X;
     fn height(&self) -> Y;
-    // TODO: Ideally, return with err.
+    /// Returns the cell of the `pos`.
     fn cell(&self, pos: Vec2) -> C;
-    /// NOTE: `cell` may be transformed to another corresponding to internal data structure.
-    /// This is the reason why the interface of mutating a cell isn't `cell_mut`.
+    // NOTE: Define if required.
+    // fn cell_safe(&self, pos: Vec2) -> Result<C>;
+    /// Sets the `cell` to the `pos`.
+    /// `cell` value might be converted to one bit data (filled or empty).
     fn set_cell(&mut self, pos: Vec2, cell: C);
+    //----------------------------------------------------------------------------------------------
     fn size(&self) -> Vec2 { Vec2(self.width(), self.height()) }
-    fn is_empty(&self) -> bool { self.bottom_padding() == self.height() }
     fn is_inside(&self, pos: Vec2) -> bool {
         0 <= pos.0 && pos.0 < self.width() && 0 <= pos.1 && pos.1 < self.height()
     }
@@ -79,7 +89,8 @@ pub trait Grid<C: CellTrait>: Clone {
             }
         }
     }
-    /// If the cells in the sub grid were put outside of this, returns false.
+    /// Returns false when any filled cells of the `sub` grid are set outside the `self` grid or
+    /// are set to the positions of the filled cells of the `self` grid.
     fn can_put<G: Grid<C>>(&self, pos: Vec2, sub: &G) -> bool {
         for sub_y in 0..sub.height() {
             for sub_x in 0..sub.width() {
@@ -135,7 +146,7 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use grid::{Grid, CellTrait, BasicGrid, BinaryCell};
+    /// use grid::{Grid, Cell, BasicGrid, BinaryCell};
     ///
     /// let mut grid = BasicGrid::<BinaryCell>::new((3, 3).into());
     /// grid.set_rows_with_strs((1, 1).into(), &[
@@ -143,9 +154,9 @@ pub trait Grid<C: CellTrait>: Clone {
     ///     "@",
     /// ]);
     ///
-    /// assert!(grid.cell((1, 1).into()).is_block());
-    /// assert!(grid.cell((1, 2).into()).is_block());
-    /// assert!(grid.cell((2, 2).into()).is_block());
+    /// assert!(grid.cell((1, 1).into()).is_filled());
+    /// assert!(grid.cell((1, 2).into()).is_filled());
+    /// assert!(grid.cell((2, 2).into()).is_filled());
     /// ```
     fn set_rows_with_strs(&mut self, pos: Vec2, rows: &[&str]) {
         for (dy, row) in rows.iter().rev().enumerate() {
@@ -164,14 +175,14 @@ pub trait Grid<C: CellTrait>: Clone {
     }
     /// Example:
     /// ```
-    /// use grid::{Grid, CellTrait, BasicGrid, BinaryCell};
+    /// use grid::{Grid, Cell, BasicGrid, BinaryCell};
     ///
     /// let mut grid = BasicGrid::<BinaryCell>::new((3, 3).into());
     /// grid.set_rows_with_bits((1, 1).into(), 3, 0b011001);
     ///
-    /// assert!(grid.cell((1, 1).into()).is_block());
-    /// assert!(grid.cell((1, 2).into()).is_block());
-    /// assert!(grid.cell((2, 2).into()).is_block());
+    /// assert!(grid.cell((1, 1).into()).is_filled());
+    /// assert!(grid.cell((1, 2).into()).is_filled());
+    /// assert!(grid.cell((2, 2).into()).is_filled());
     /// ```
     fn set_rows_with_bits<I: PrimInt>(&mut self, pos: Vec2, stride: u32, bits: I) {
         set_rows_with_bits(self, pos, stride, bits);
@@ -261,6 +272,26 @@ pub trait Grid<C: CellTrait>: Clone {
         }
         n
     }
+    fn is_empty(&self) -> bool { self.bottom_padding() == self.height() }
+    fn num_blocks_of_row(&self, y: Y) -> usize {
+        if self.is_row_empty(y) {
+            return 0;
+        }
+        let mut n = 0;
+        for x in 0..self.width() {
+            if !self.cell((x, y).into()).is_empty() {
+                n += 1;
+            }
+        }
+        n
+    }
+    fn num_blocks(&self) -> usize {
+        let mut n = 0;
+        for y in 0..self.height() {
+            n += self.num_blocks_of_row(y);
+        }
+        n
+    }
     fn swap_rows(&mut self, y1: Y, y2: Y) {
         debug_assert!(0 <= y1 && y1 < self.height());
         debug_assert!(0 <= y2 && y2 < self.height());
@@ -295,20 +326,20 @@ pub trait Grid<C: CellTrait>: Clone {
         }
         n
     }
-    /// `false` will be returned if any non-empty cells are disposed.
+    /// `false` will be returned if any filled cells are cleared.
     fn insert_rows(&mut self, y: Y, cell: C, n: Y) -> bool {
         debug_assert!(self.height() >= y + n);
-        let mut are_cells_disposed = false;
+        let mut cleared = false;
         for y in (self.height() - n)..self.height() {
             if !self.is_row_empty(y) {
-                are_cells_disposed = true;
+                cleared = true;
             }
             self.fill_row(y, cell);
         }
         for y in (0..(self.height() - n)).rev() {
             self.swap_rows(y, y + n);
         }
-        !are_cells_disposed
+        !cleared
     }
     fn num_droppable_rows<G: Grid<C>>(&self, pos: Vec2, sub: &G) -> Y {
         let mut n = 0;
@@ -316,25 +347,6 @@ pub trait Grid<C: CellTrait>: Clone {
             n += 1;
         }
         (n - 1).max(0)
-    }
-    fn num_blocks_of_row(&self, y: Y) -> usize {
-        if self.is_row_empty(y) {
-            return 0;
-        }
-        let mut n = 0;
-        for x in 0..self.width() {
-            if !self.cell((x, y).into()).is_empty() {
-                n += 1;
-            }
-        }
-        n
-    }
-    fn num_blocks(&self) -> usize {
-        let mut n = 0;
-        for y in 0..self.height() {
-            n += self.num_blocks_of_row(y);
-        }
-        n
     }
     fn traverse(&self, start_pos: Vec2, mut cb: impl FnMut(Vec2, C) -> bool) {
         let mut open = HashSet::new();
@@ -378,7 +390,7 @@ pub trait Grid<C: CellTrait>: Clone {
             }
         }
     }
-    fn detect_space(&self, pos: Vec2) -> HashSet<Vec2> {
+    fn search_space(&self, pos: Vec2) -> HashSet<Vec2> {
         let mut space = HashSet::new();
         self.traverse(pos, |p, c| {
             if c.is_empty() {
@@ -458,7 +470,7 @@ pub trait Grid<C: CellTrait>: Clone {
     fn format<Writer: std::fmt::Write>(&self, w: &mut Writer) -> fmt::Result {
         for y in (0..self.height()).rev() {
             for x in 0..self.width() {
-                let c = self.cell((x, y).into()).char();
+                let c = self.cell((x, y).into()).to_char();
                 write!(w, "{}", c)?;
             }
             if y == 0 {
@@ -475,7 +487,7 @@ pub trait Grid<C: CellTrait>: Clone {
     }
 }
 
-fn set_rows_with_bits<C: CellTrait, G: Grid<C>, I: PrimInt>(grid: &mut G, pos: Vec2, stride: u32, mut bits: I) {
+fn set_rows_with_bits<C: Cell, G: Grid<C>, I: PrimInt>(grid: &mut G, pos: Vec2, stride: u32, mut bits: I) {
     while !bits.is_zero() {
         let n = bits.trailing_zeros();
         let x = pos.0 + (n % stride) as X;
@@ -496,30 +508,16 @@ fn set_rows_with_bits<C: CellTrait, G: Grid<C>, I: PrimInt>(grid: &mut G, pos: V
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Copy, Clone)]
-pub enum BinaryCell {
-    Empty,
-    Block,
-}
+pub struct BinaryCell(bool);
 
-impl CellTrait for BinaryCell {
-    fn empty() -> Self { Self::Empty }
-    fn any_block() -> Self { Self::Block }
-    fn is_empty(&self) -> bool { matches!(self, Self::Empty) }
-    fn char(&self) -> char {
-        match self {
-            Self::Block => '@',
-            Self::Empty => ' ',
-        }
-    }
+impl Cell for BinaryCell {
+    fn empty() -> Self { Self(false) }
+    fn any_block() -> Self { Self(true) }
+    fn is_empty(&self) -> bool { !self.0 }
 }
 
 impl From<char> for BinaryCell {
-    fn from(c: char) -> Self {
-        match c {
-            '@' => Self::Block,
-            _ => Self::Empty,
-        }
-    }
+    fn from(c: char) -> Self { Self::from_char(c) }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -527,12 +525,12 @@ impl From<char> for BinaryCell {
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BasicGrid<C: CellTrait> {
+pub struct BasicGrid<C: Cell> {
     size: Vec2,
     cells: Vec<C>,
 }
 
-impl<C: CellTrait> BasicGrid<C> {
+impl<C: Cell> BasicGrid<C> {
     pub fn new(size: Vec2) -> Self {
         Self {
             size,
@@ -554,7 +552,7 @@ impl<C: CellTrait> BasicGrid<C> {
     }
 }
 
-impl<C: CellTrait> Grid<C> for BasicGrid<C> {
+impl<C: Cell> Grid<C> for BasicGrid<C> {
     fn width(&self) -> X { self.size.0 }
     fn height(&self) -> Y { self.size.1 }
     fn cell(&self, pos: Vec2) -> C {
@@ -566,7 +564,7 @@ impl<C: CellTrait> Grid<C> for BasicGrid<C> {
     }
 }
 
-impl<C: CellTrait> fmt::Display for BasicGrid<C> {
+impl<C: Cell> fmt::Display for BasicGrid<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
 }
 
@@ -574,12 +572,12 @@ impl<C: CellTrait> fmt::Display for BasicGrid<C> {
 // TestSuite
 //--------------------------------------------------------------------------------------------------
 
-pub struct TestSuite<C: CellTrait, G: Grid<C>, F: Fn() -> G> {
+pub struct TestSuite<C: Cell, G: Grid<C>, F: Fn() -> G> {
     new_empty_grid: F,
     phantom: PhantomData<fn() -> C>,
 }
 
-impl<C: CellTrait, G: Grid<C>, F: Fn() -> G> TestSuite<C, G, F> {
+impl<C: Cell, G: Grid<C>, F: Fn() -> G> TestSuite<C, G, F> {
     pub fn new(new_empty_grid: F) -> Self {
         let g = new_empty_grid();
         assert!(g.is_empty());
@@ -593,7 +591,7 @@ impl<C: CellTrait, G: Grid<C>, F: Fn() -> G> TestSuite<C, G, F> {
 
         g.set_cell((1, 1).into(), C::any_block());
         assert!(!g.is_empty());
-        assert!(g.cell((1, 1).into()).is_block());
+        assert!(g.cell((1, 1).into()).is_filled());
         assert_eq!(1, g.num_blocks());
         assert!(!g.is_row_empty(1));
         assert!(!g.is_row_filled(1));
@@ -623,7 +621,7 @@ impl<C: CellTrait, G: Grid<C>, F: Fn() -> G> TestSuite<C, G, F> {
         g.fill_all(C::empty());
         assert!(g.is_empty());
     }
-    pub fn detect_space(&self) {
+    pub fn search_space(&self) {
         let mut g = self.new_empty_grid();
         g.set_rows_with_strs((0, 0).into(), &[
             "@@@@ ",
@@ -632,7 +630,7 @@ impl<C: CellTrait, G: Grid<C>, F: Fn() -> G> TestSuite<C, G, F> {
             "  @ @",
             " @  @",
         ]);
-        let spaces = g.detect_space((0, 0).into());
+        let spaces = g.search_space((0, 0).into());
         let expected = [
             (0, 0), (2, 0), (3, 0),
             (0, 1), (1, 1), (3, 1),
@@ -656,6 +654,6 @@ mod tests {
     fn suite() {
         let suite = TestSuite::new(|| BasicGrid::<BinaryCell>::new((5, 5).into()));
         suite.basic();
-        suite.detect_space();
+        suite.search_space();
     }
 }

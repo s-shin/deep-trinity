@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use grid::{Grid, CellTrait};
+use grid::{Grid, Cell};
 
 #[cfg(feature = "async_session")]
 pub mod async_session;

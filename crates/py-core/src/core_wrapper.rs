@@ -153,6 +153,9 @@ impl GameWrapper {
     pub fn hold(&mut self) -> PyResult<bool> {
         self.game.hold().map_err(pyo3::exceptions::PyRuntimeError::new_err)
     }
+    pub fn can_hold(&self) -> PyResult<bool> {
+        Ok(self.game.state.can_hold)
+    }
     pub fn get_move_decision_material(&self) -> PyResult<MoveDecisionMaterialWrapper> {
         let material = MoveDecisionMaterial::with_game(&self.game).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
         Ok(MoveDecisionMaterialWrapper { material })
