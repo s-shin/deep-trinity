@@ -11,7 +11,7 @@ use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use num_traits::PrimInt;
 use once_cell::sync::Lazy;
-use grid::{CellTrait, Grid, X, Y, Vec2};
+use grid::{Cell as CellTrait, Grid, X, Y, Vec2};
 use grid::bitgrid::BitGridTrait;
 
 //--------------------------------------------------------------------------------------------------
@@ -19,45 +19,45 @@ use grid::bitgrid::BitGridTrait;
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Copy, Clone, Debug)]
-pub struct GlobalDefaults {
+pub struct GlobalConfig {
     playfield_size: Vec2,
     playfield_visible_height: Y,
     num_visible_next_pieces: usize,
 }
 
-impl GlobalDefaults {
+impl GlobalConfig {
     pub fn new(playfield_size: Vec2, playfield_visible_height: Y, num_visible_next_pieces: usize) -> Self {
         Self { playfield_size, playfield_visible_height, num_visible_next_pieces }
     }
 }
 
-impl Default for GlobalDefaults {
+impl Default for GlobalConfig {
     fn default() -> Self {
         Self::new((10, 40).into(), 20, 5)
     }
 }
 
-mod global_defaults_internal {
+mod global_config_internal {
     use once_cell::sync::OnceCell;
-    use super::GlobalDefaults;
+    use super::GlobalConfig;
 
-    static GLOBAL_DEFAULTS: OnceCell<GlobalDefaults> = OnceCell::new();
+    static GLOBAL_CONFIG: OnceCell<GlobalConfig> = OnceCell::new();
 
-    pub fn init_global_defaults(v: GlobalDefaults) -> Result<(), &'static str> {
-        GLOBAL_DEFAULTS.set(v).map_err(|_| "Already initialized.")
+    pub fn init_global_config(v: GlobalConfig) -> Result<(), &'static str> {
+        GLOBAL_CONFIG.set(v).map_err(|_| "Already initialized.")
     }
 
-    pub fn global_defaults() -> &'static GlobalDefaults {
-        if let Some(c) = GLOBAL_DEFAULTS.get() {
+    pub fn global_config() -> &'static GlobalConfig {
+        if let Some(c) = GLOBAL_CONFIG.get() {
             return c;
         }
-        GLOBAL_DEFAULTS.set(Default::default()).ok();
-        GLOBAL_DEFAULTS.get().unwrap()
+        GLOBAL_CONFIG.set(Default::default()).ok();
+        GLOBAL_CONFIG.get().unwrap()
     }
 }
 
-pub use global_defaults_internal::init_global_defaults;
-use global_defaults_internal::global_defaults;
+pub use global_config_internal::init_global_config;
+use global_config_internal::global_config;
 
 //--------------------------------------------------------------------------------------------------
 // Piece, Block and Cell
@@ -98,11 +98,12 @@ pub enum Piece {
 }
 
 impl Piece {
+    /// This method should be used only in tests.
     pub fn default_spec(self) -> &'static PieceSpec<'static> {
         &DEFAULT_PIECE_SPEC_COLLECTION.get(self)
     }
     pub fn char(self) -> char {
-        Cell::Block(Block::Piece(self)).char()
+        Cell::Block(Block::Piece(self)).to_char()
     }
     pub fn from_char(c: char) -> Result<Self, &'static str> {
         match Cell::from(c) {
@@ -118,7 +119,7 @@ pub const PIECES: [Piece; NUM_PIECES] = [Piece::S, Piece::Z, Piece::L, Piece::J,
 
 impl From<usize> for Piece {
     fn from(n: usize) -> Self {
-        assert!(n < 7);
+        assert!(n < NUM_PIECES);
         PIECES[n]
     }
 }
@@ -194,7 +195,7 @@ impl CellTrait for Cell {
     fn empty() -> Self { Self::Empty }
     fn any_block() -> Self { Self::Block(Block::Any) }
     fn is_empty(&self) -> bool { *self == Self::Empty }
-    fn char(&self) -> char {
+    fn to_char(&self) -> char {
         let id = CellTypeId::from(*self);
         CELL_CHARS.chars().nth(id.0 as usize).unwrap()
     }
@@ -212,7 +213,7 @@ type PrimBitGrid<'a> = grid::bitgrid::PrimBitGrid<'a, BitGridInt, Cell>;
 type BasicBitGrid<'a> = grid::bitgrid::BasicBitGrid<'a, BitGridInt, Cell>;
 
 pub static DEFAULT_PRIM_GRID_CONSTANTS_STORE: Lazy<PrimBitGridConstantsStore> = Lazy::new(|| {
-    let def = global_defaults();
+    let def = global_config();
     // Use the width of a playfield as the stride.
     let mut store = PrimBitGridConstantsStore::new(def.playfield_size.0);
     // For I piece.
@@ -281,7 +282,6 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<
         self.basic_grid.as_mut().map(|g| g.set_cell(pos, cell));
         self.bit_grid.set_cell(pos, cell);
     }
-    fn is_empty(&self) -> bool { self.bit_grid.is_empty() }
     fn fill_row(&mut self, y: Y, cell: Cell) {
         self.basic_grid.as_mut().map(|g| g.fill_row(y, cell));
         self.bit_grid.fill_row(y, cell);
@@ -306,12 +306,13 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<
     fn is_row_empty(&self, y: Y) -> bool { self.bit_grid.is_row_empty(y) }
     fn is_col_filled(&self, x: X) -> bool { self.bit_grid.is_col_filled(x) }
     fn is_col_empty(&self, x: X) -> bool { self.bit_grid.is_col_empty(x) }
+    fn is_empty(&self) -> bool { self.bit_grid.is_empty() }
+    fn num_blocks_of_row(&self, y: Y) -> usize { self.bit_grid.num_blocks_of_row(y) }
+    fn num_blocks(&self) -> usize { self.bit_grid.num_blocks() }
     fn swap_rows(&mut self, y1: Y, y2: Y) {
         self.basic_grid.as_mut().map(|g| g.swap_rows(y1, y2));
         self.bit_grid.swap_rows(y1, y2);
     }
-    fn num_blocks_of_row(&self, y: Y) -> usize { self.bit_grid.num_blocks_of_row(y) }
-    fn num_blocks(&self) -> usize { self.bit_grid.num_blocks() }
 }
 
 impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> fmt::Display for HybridGrid<'a, BitGrid> {
@@ -1223,7 +1224,7 @@ impl<'a> Playfield<'a> {
 
 impl Default for Playfield<'static> {
     fn default() -> Self {
-        let def = global_defaults();
+        let def = global_config();
         Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, def.playfield_size, true, def.playfield_visible_height).unwrap()
     }
 }
@@ -1252,7 +1253,7 @@ impl NextPieces {
 }
 
 impl Default for NextPieces {
-    fn default() -> Self { Self::new(global_defaults().num_visible_next_pieces) }
+    fn default() -> Self { Self::new(global_config().num_visible_next_pieces) }
 }
 
 impl fmt::Display for NextPieces {
@@ -1261,7 +1262,7 @@ impl fmt::Display for NextPieces {
             if i >= self.visible_num {
                 break;
             }
-            write!(f, "{}", Cell::Block(Block::Piece(*p)).char())?;
+            write!(f, "{}", Cell::Block(Block::Piece(*p)).to_char())?;
         }
         Ok(())
     }
@@ -1476,7 +1477,7 @@ impl<'a> Game<'a> {
             stats,
         }
     }
-    /// The performance becomes better but piece information in the playfield will be lacked.
+    /// Makes the performance better but discards piece information in the playfield.
     pub fn fast_mode(&mut self) {
         self.state.playfield.grid.disable_basic_grid();
     }
@@ -1697,11 +1698,11 @@ impl<'a> fmt::Display for Game<'a> {
         let h = self.state.playfield.visible_height as usize;
         let num_next = std::cmp::min(self.state.next_pieces.visible_num, self.state.next_pieces.len());
         write!(f, "[{}]", s.hold_piece.map_or(
-            Cell::Empty, |p| { Cell::Block(Block::Piece(p)) }).char(),
+            Cell::Empty, |p| { Cell::Block(Block::Piece(p)) }).to_char(),
         )?;
         write!(f, "{}", " ".repeat(w - num_next - 2))?;
         write!(f, "({})", s.falling_piece.as_ref().map_or(
-            Cell::Empty, |fp| { Cell::Block(Block::Piece(fp.piece())) }).char(),
+            Cell::Empty, |fp| { Cell::Block(Block::Piece(fp.piece())) }).to_char(),
         )?;
         writeln!(f, "{}", s.next_pieces)?;
         writeln!(f, "--+{}+", "-".repeat(w))?;
@@ -1710,7 +1711,7 @@ impl<'a> fmt::Display for Game<'a> {
             write!(f, "{:02}|", y)?;
             for x in 0..w {
                 let cell = self.get_cell((x as X, y as Y).into());
-                write!(f, "{}", cell.char())?;
+                write!(f, "{}", cell.to_char())?;
             }
             write!(f, "|")?;
             match i {
