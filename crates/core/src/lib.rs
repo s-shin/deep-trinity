@@ -726,6 +726,9 @@ impl<'a> PieceSpec<'a> {
             srs_offset_data,
         }
     }
+    pub fn grid(&self, o: Orientation) -> &HybridGrid<'a, PrimBitGrid<'a>> {
+        self.grids.get(o.id() as usize).unwrap()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
