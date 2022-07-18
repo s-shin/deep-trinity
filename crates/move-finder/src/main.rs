@@ -7,6 +7,7 @@ use rand::prelude::*;
 use core::prelude::*;
 use core::helper::MoveDecisionMaterial;
 use bot::Action;
+use grid::Grid;
 use tree::arena::{NodeArena, NodeHandle};
 
 struct NodeData {
@@ -164,30 +165,35 @@ fn main() {
 
     let pps = args.positions.iter().map(|&pp| Rc::new(pp)).collect::<Vec<_>>();
     let pps_len = pps.len();
-    println!("## Positions");
-    for ps in pps.iter() {
-        println!("{} {} {}", ps.piece.char(), ps.placement.orientation.id(), ps.placement.pos);
+    println!("### Positions");
+    {
+        let mut game: Game = Default::default();
+        for ps in pps.iter() {
+            println!("{} {} {}", ps.piece.char(), ps.placement.orientation.id(), ps.placement.pos);
+            game.state.playfield.grid.put_fast(ps.placement.pos, game.piece_specs.get(ps.piece).grid(ps.placement.orientation));
+        }
+        println!("Try to find:\n{}", game);
     }
 
-    let mut game: Game = Default::default();
-    game.state.playfield.grid.disable_basic_grid();
-    game.supply_next_pieces(args.pieces.as_slice());
+    let mut initial_game: Game = Default::default();
+    initial_game.state.playfield.grid.disable_basic_grid();
+    initial_game.supply_next_pieces(args.pieces.as_slice());
     {
         let mut n = args.pieces.len();
         if n < pps_len {
             let mut rpg = RandomPieceGenerator::new(StdRng::seed_from_u64(args.random_seed));
             while n < pps_len {
                 let pieces = rpg.generate();
-                game.supply_next_pieces(&pieces);
+                initial_game.supply_next_pieces(&pieces);
                 n += pieces.len();
             }
         }
     }
-    game.setup_falling_piece(None).unwrap();
-    println!("## Game\n{}", game);
+    initial_game.setup_falling_piece(None).unwrap();
+    println!("\n### Initial Game\n{}", initial_game);
 
     let mut arena = VecNodeArena::default();
-    let root = arena.create(NodeData::new(None, game, pps).unwrap());
+    let root = arena.create(NodeData::new(None, initial_game.clone(), pps).unwrap());
 
     let mut open = vec![root];
     while !open.is_empty() {
@@ -206,7 +212,7 @@ fn main() {
         });
     }
 
-    println!("## Result");
+    println!("\n### Result");
 
     let mut found = Vec::new();
     arena.visit_depth_first(root, |arena, node, ctx| {
@@ -219,8 +225,15 @@ fn main() {
     for (i, route) in found.iter().enumerate() {
         println!("--- {} ---", i);
         for n in route.iter() {
-            if let Some(action) = arena[*n].data.by_action {
-                println!("{:?}", action);
+            let prev_game = arena[*n].parent().map_or(&initial_game, |pn| &arena[pn].data.game);
+            let data = &arena[*n].data;
+            if let Some(action) = data.by_action {
+                println!(
+                    "[{}] {} => {:?}",
+                    prev_game.state.hold_piece.map_or(' ', |p| p.char()),
+                    prev_game.state.falling_piece.as_ref().map_or('?', |fp| fp.piece().char()),
+                    action,
+                );
             }
         }
     }
@@ -228,12 +241,17 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+    use std::io::Write;
     use assert_cmd::Command;
 
     #[test]
     fn basic() {
-        let mut cmd = Command::cargo_bin("move-finder").unwrap();
-        let assert = cmd.args("-p ISZTOJLISZTOJL I0,2,-2 O0,7,-1 L1,-1,0 S1,5,0 Z0,3,0 J2,3,2 T2,1,0".split(" ").collect::<Vec<_>>()).assert();
-        assert.code(0);
+        let r = Command::cargo_bin("move-finder")
+            .unwrap()
+            .args("-p ISZTOJLISZTOJL I0,2,-2 O0,7,-1 L1,-1,0 S1,5,0 Z0,3,0 J2,3,2 T2,1,0".split(" ").collect::<Vec<_>>())
+            .assert()
+            .success();
+        io::stdout().write_all(&r.get_output().stdout).unwrap()
     }
 }
