@@ -11,13 +11,13 @@ use tree::arena::{NodeArena, NodeHandle};
 
 struct NodeData {
     by_action: Option<Action>,
-    game: Game,
+    game: Game<'static>,
     pps: Vec<Rc<PiecePlacement>>,
     resource: MoveDecisionResource,
 }
 
 impl NodeData {
-    pub fn new(by_action: Option<Action>, game: Game, pps: Vec<Rc<PiecePlacement>>) -> Result<Self, &'static str> {
+    pub fn new(by_action: Option<Action>, game: Game<'static>, pps: Vec<Rc<PiecePlacement>>) -> Result<Self, &'static str> {
         let resource = MoveDecisionResource::with_game(&game)?;
         Ok(Self { by_action, game, pps, resource })
     }
@@ -202,7 +202,7 @@ fn main() {
     }
     if debug_trace {
         arena.visit_depth_first(root, |arena, node, ctx| {
-            let indent = "  ".repeat(ctx.depth);
+            let indent = "  ".repeat(ctx.depth());
             let n = &arena[node];
             println!("{}- by_action: {:?}", indent, n.data.by_action);
             println!("{}  game: |-\n{}", indent, n.data.game.to_string().split("\n")
