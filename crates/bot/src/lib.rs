@@ -8,6 +8,8 @@ pub mod simple_tree;
 pub mod mcts_puct;
 pub mod tree;
 pub mod template;
+pub mod pc;
+pub mod helper;
 
 pub type Game = core::Game<'static>;
 

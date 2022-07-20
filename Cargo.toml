@@ -8,5 +8,6 @@ members = [
   "crates/py-core",
   "crates/playground",
   "crates/tree",
-  "crates/move-finder"
+  "crates/move-finder",
+  "crates/pc-finder",
 ]

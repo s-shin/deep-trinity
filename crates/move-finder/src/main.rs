@@ -5,7 +5,6 @@ use std::str::FromStr;
 use clap::Parser;
 use rand::prelude::*;
 use core::prelude::*;
-use core::helper::MoveDecisionMaterial;
 use bot::Action;
 use grid::Grid;
 use tree::arena::{NodeArena, NodeHandle};
@@ -14,13 +13,13 @@ struct NodeData {
     by_action: Option<Action>,
     game: Game,
     pps: Vec<Rc<PiecePlacement>>,
-    material: MoveDecisionMaterial,
+    resource: MoveDecisionResource,
 }
 
 impl NodeData {
     pub fn new(by_action: Option<Action>, game: Game, pps: Vec<Rc<PiecePlacement>>) -> Result<Self, &'static str> {
-        let material = MoveDecisionMaterial::with_game(&game)?;
-        Ok(Self { by_action, game, pps, material })
+        let resource = MoveDecisionResource::with_game(&game)?;
+        Ok(Self { by_action, game, pps, resource })
     }
 }
 
@@ -33,7 +32,7 @@ fn expand_node(arena: &mut VecNodeArena, node: NodeHandle) {
             let pp = arena[node].data.pps.get(i).cloned().unwrap();
             let (game, pps) = {
                 let data = &arena[node].data;
-                if pp.piece != fp.piece() || !data.material.dst_candidates.contains(&pp.placement) {
+                if pp.piece != fp.piece() || !data.resource.dst_candidates.contains(&pp.placement) {
                     continue;
                 }
                 let mut game = data.game.clone();

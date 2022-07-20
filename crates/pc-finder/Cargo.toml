@@ -1,0 +1,15 @@
+[package]
+name = "pc-finder"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+core = { path = "../core" }
+grid = { path = "../grid" }
+bot = { path = "../bot" }
+tree = { path = "../tree" }
+rand = "0.8"
+clap =  { version = "3.0", features = ["derive"] }
+assert_cmd = "2.0"

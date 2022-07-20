@@ -1,5 +1,5 @@
 /// Move searcher by brute force approach.
-/// By using this, we can get all movable placements.
+/// By using this, we can get all reachable placements.
 ///
 /// Remarks: Since this searcher doesn't search all move transitions,
 /// the result will lack some meaningful special rotations (e.g. T-Spin Mini).

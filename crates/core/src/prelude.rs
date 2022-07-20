@@ -4,8 +4,12 @@ pub use crate::{
     Placement,
     MoveTransition,
     RandomPieceGenerator,
+    FallingPiece,
+    Playfield,
+    Game,
 };
 
-pub type FallingPiece = crate::FallingPiece<'static>;
-pub type Playfield = crate::Playfield<'static>;
-pub type Game = crate::Game<'static>;
+pub use crate::helper::{
+    MoveDecisionResource,
+    MoveDecisionHelper,
+};

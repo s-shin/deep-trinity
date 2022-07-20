@@ -4,7 +4,9 @@ use crate::{Playfield, Placement, RotationMode, MovePathItem, MovePath, PieceSpe
 pub mod astar;
 pub mod bruteforce;
 pub mod humanly_optimized;
+pub mod heuristic_bruteforce;
 
+#[derive(Clone)]
 pub struct SearchConfiguration<'a> {
     pf: &'a Playfield<'a>,
     piece_spec: &'a PieceSpec<'a>,
@@ -18,7 +20,8 @@ impl<'a> SearchConfiguration<'a> {
     }
 }
 
-/// The placement of MoveRecordItem is **source** one.
+/// The placement of the kay value is the destination.
+/// The placement of the MoveRecordItem of the value is the source.
 pub type MoveDestinations = HashMap<Placement, MovePathItem>;
 
 #[derive(Clone, Debug)]

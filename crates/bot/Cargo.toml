@@ -9,3 +9,7 @@ core = { path = "../core" }
 grid = { path = "../grid" }
 tree = { path = "../tree" }
 rand = "0.8"
+
+[dev-dependencies]
+prost = "0.10.4"
+pprof = { version = "0.10.0", features = ["prost-codec"] }
