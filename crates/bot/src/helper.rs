@@ -1,5 +1,5 @@
 use std::io::Write;
-use core::Game;
+use core::{Game, Placement};
 use core::helper::MoveDecisionResource;
 use tree::arena::{Node, NodeArena, NodeHandle, VecNodeArena, VisitContext};
 use crate::{Action, MoveTransition};
@@ -19,6 +19,27 @@ impl<'a> StackTreeNodeData<'a> {
 
 pub type StackTreeNodeArena<'a> = VecNodeArena<StackTreeNodeData<'a>>;
 
+#[allow(unused_variables)]
+pub trait StackTreeNodeExpansionFilter {
+    /// Filter of the candidate's placement where the falling piece will be moved.
+    /// At this time, the game in `node_data` is not cloned.
+    fn filter_destination(&mut self, node_data: &StackTreeNodeData, dst: &Placement) -> bool { true }
+    /// Filter of the hold action.
+    /// At this time, the game in `node_data` is not cloned.
+    fn filter_hold(&mut self, node_data: &StackTreeNodeData) -> bool { true }
+    /// Filter to the game that will be contained in the new node data.
+    /// At this time, the new node data is not created.
+    fn filter_new_game(&mut self, node_data: &StackTreeNodeData, new_game: &Game) -> bool { true }
+    /// Filter to the data of the new node.
+    /// If false was returned, the data is discarded.
+    fn filter_new_node_data(&mut self, node_data: &StackTreeNodeData, new_node_data: &StackTreeNodeData) -> bool { true }
+}
+
+#[derive(Default)]
+pub struct DefaultStackTreeNodeExpansionFilter;
+
+impl StackTreeNodeExpansionFilter for DefaultStackTreeNodeExpansionFilter {}
+
 pub struct StackTree<'a> {
     arena: StackTreeNodeArena<'a>,
     root: NodeHandle,
@@ -36,28 +57,50 @@ impl<'a> StackTree<'a> {
     pub fn visit(&self, visitor: impl FnMut(&StackTreeNodeArena, NodeHandle, &mut VisitContext)) {
         self.arena.visit_depth_first(self.root, visitor);
     }
-    pub fn expand(&mut self, target: NodeHandle) -> Result<(), &'static str> {
+    pub fn expand(&mut self, target: NodeHandle, filter: &mut impl StackTreeNodeExpansionFilter) -> Result<(), &'static str> {
         let mut children_data = Vec::new();
         {
             let target_data = &self.arena[target].data;
 
             if target_data.game.state.falling_piece.is_some() {
                 for placement in target_data.move_decision_resource.dst_candidates.iter() {
+                    if !filter.filter_destination(&target_data, placement) {
+                        continue;
+                    }
                     let mut game = target_data.game.clone();
                     game.state.falling_piece.as_mut().unwrap().placement = *placement;
                     if game.lock().unwrap() {
+                        if !filter.filter_new_game(&target_data, &game) {
+                            continue;
+                        }
                         let by = Some(Action::Move(MoveTransition::new(*placement, None)));
-                        children_data.push(StackTreeNodeData::new(by, game)?);
+                        let new_data = StackTreeNodeData::new(by, game)?;
+                        if !filter.filter_new_node_data(&target_data, &new_data) {
+                            continue;
+                        }
+                        children_data.push(new_data);
                     }
                 }
             }
 
-            if target_data.game.state.can_hold {
+            // Using while for the readability.
+            while target_data.game.state.can_hold {
+                if !filter.filter_hold(&target_data) {
+                    break;
+                }
                 let mut game = target_data.game.clone();
                 game.hold().unwrap();
                 if game.state.falling_piece.is_some() {
-                    children_data.push(StackTreeNodeData::new(Some(Action::Hold), game)?);
+                    if !filter.filter_new_game(&target_data, &game) {
+                        break;
+                    }
+                    let new_data = StackTreeNodeData::new(Some(Action::Hold), game)?;
+                    if !filter.filter_new_node_data(&target_data, &new_data) {
+                        break;
+                    }
+                    children_data.push(new_data);
                 }
+                break;
             }
         }
 
@@ -99,8 +142,8 @@ mod tests {
         let mut tree = StackTree::new(game).unwrap();
         let mut leaf_nodes = VecDeque::from([tree.root()]);
         let depth_first = false;
-        let max_height = 4;
-        const N: i32 = 100;
+        let max_height = 2;
+        const N: i32 = 10;
         for i in 0.. {
             if i % 10 == 0 {
                 writeln!(&mut log_file, "{}...", i).unwrap();
@@ -115,7 +158,7 @@ mod tests {
                 _ => break,
             };
 
-            tree.expand(target).unwrap();
+            tree.expand(target, &mut DefaultStackTreeNodeExpansionFilter::default()).unwrap();
 
             let children = tree.arena()[target].children().iter()
                 .filter(|&&h| {
