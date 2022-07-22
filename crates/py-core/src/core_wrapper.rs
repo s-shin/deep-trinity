@@ -97,7 +97,7 @@ impl MoveDecisionMaterialWrapper {
 
 #[pyclass(name = "Game")]
 pub struct GameWrapper {
-    game: Game,
+    game: Game<'static>,
 }
 
 #[pymethods]
