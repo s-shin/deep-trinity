@@ -114,41 +114,61 @@ impl<'a> StackTree<'a> {
 
 #[cfg(test)]
 mod tests {
-    use rand::thread_rng;
     use crate::RandomPieceGenerator;
     use super::*;
     use std::collections::VecDeque;
     use std::fs::File;
+    use std::time::SystemTime;
+    use rand::thread_rng;
+    use chrono::prelude::*;
     use prost::Message;
     use grid::Grid;
 
     #[test]
     fn test_stack_finder() {
-        // let guard = pprof::ProfilerGuardBuilder::default()
-        //     .frequency(1000).blocklist(&["libc", "libgcc", "pthread", "vdso"]).build().unwrap();
+        let now = Local::now().format("%Y%m%d_%H%M%S_%.3f").to_string();
 
-        // let cwd = std::env::current_dir().unwrap();
-        // println!("{}", cwd.display());
-        // return;
-        let mut log_file = File::create("tmp/a.log").unwrap();
+        let enable_profiling = false;
+        let profile_result_file_path = format!("tmp/{}-profile.pb", now);
+        let max_expansion_count = 10;
+        let enable_logging = false;
+        let log_file_path = format!("tmp/{}.log", now);
+        let progress_log_interval = 10;
+        let performance_mode = false;
+
+        let guard = if enable_profiling {
+            let guard = pprof::ProfilerGuardBuilder::default()
+                .frequency(1000).blocklist(&["libc", "libgcc", "pthread", "vdso"]).build().unwrap();
+            Some(guard)
+        } else {
+            None
+        };
+
+        let mut log_file: Box<dyn Write> = if enable_logging {
+            Box::new(File::create(log_file_path).unwrap())
+        } else {
+            Box::new(std::io::sink())
+        };
 
         let mut game: Game<'static> = Default::default();
-        // game.fast_mode();
+        if performance_mode {
+            game.performance_mode();
+        }
         let mut rpg = RandomPieceGenerator::new(thread_rng());
-        game.supply_next_pieces(&rpg.generate());
-        game.supply_next_pieces(&rpg.generate());
+        for _ in 0..3 {
+            game.supply_next_pieces(&rpg.generate());
+        }
         game.setup_falling_piece(None).unwrap();
 
         let mut tree = StackTree::new(game).unwrap();
         let mut leaf_nodes = VecDeque::from([tree.root()]);
         let depth_first = false;
         let max_height = 2;
-        const N: i32 = 10;
         for i in 0.. {
-            if i % 10 == 0 {
-                writeln!(&mut log_file, "{}...", i).unwrap();
+            if i % progress_log_interval == 0 {
+                writeln!(&mut log_file, "[{}] {}...", Local::now().to_rfc3339_opts(SecondsFormat::Millis, false), i).unwrap();
             }
-            if i == N {
+            if i == max_expansion_count {
                 break;
             }
 
@@ -168,21 +188,25 @@ mod tests {
             leaf_nodes.extend(children);
         }
 
-        tree.visit(|arena, node, ctx| {
-            let n = &arena[node];
-            let indent = "  ".repeat(ctx.depth());
-            writeln!(&mut log_file, "{}- by_action: {:?}", indent, n.data.by).unwrap();
-            writeln!(&mut log_file, "{}  game: |-\n{}", indent, n.data.game.to_string().split("\n")
-                .map(|line| format!("{}    {}", indent, line)).collect::<Vec<_>>().join("\n")).unwrap();
-            writeln!(&mut log_file, "{}  children: {}", indent, if n.is_leaf() { "[]" } else { "" }).unwrap();
-        });
+        if enable_logging {
+            tree.visit(|arena, node, ctx| {
+                let n = &arena[node];
+                let indent = "  ".repeat(ctx.depth());
+                writeln!(&mut log_file, "{}- by_action: {:?}", indent, n.data.by).unwrap();
+                writeln!(&mut log_file, "{}  game: |-\n{}", indent, n.data.game.to_string().split("\n")
+                    .map(|line| format!("{}    {}", indent, line)).collect::<Vec<_>>().join("\n")).unwrap();
+                writeln!(&mut log_file, "{}  children: {}", indent, if n.is_leaf() { "[]" } else { "" }).unwrap();
+            });
+        }
 
-        // if let Ok(report) = guard.report().build() {
-        //     let mut file = File::create("tmp/profile.pb").unwrap();
-        //     let profile = report.pprof().unwrap();
-        //     let mut content = Vec::new();
-        //     profile.encode(&mut content).unwrap();
-        //     file.write_all(&content).unwrap();
-        // }
+        if let Some(guard) = guard {
+            if let Ok(report) = guard.report().build() {
+                let mut file = File::create(profile_result_file_path).unwrap();
+                let profile = report.pprof().unwrap();
+                let mut content = Vec::new();
+                profile.encode(&mut content).unwrap();
+                file.write_all(&content).unwrap();
+            }
+        }
     }
 }

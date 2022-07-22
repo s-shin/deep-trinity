@@ -1481,7 +1481,7 @@ impl<'a> Game<'a> {
         }
     }
     /// Makes the performance better but discards piece information in the playfield.
-    pub fn fast_mode(&mut self) {
+    pub fn performance_mode(&mut self) {
         self.state.playfield.grid.disable_basic_grid();
     }
     pub fn get_cell(&self, pos: Vec2) -> Cell {

@@ -107,7 +107,7 @@ impl GameWrapper {
         Self { game: Default::default() }
     }
     pub fn fast_mode(&mut self) -> PyResult<()> {
-        self.game.fast_mode();
+        self.game.performance_mode();
         Ok(())
     }
     pub fn should_supply_next_pieces(&self) -> PyResult<bool> {
