@@ -165,21 +165,60 @@ mod tests {
     use crate::RandomPieceGenerator;
     use super::*;
     use std::collections::VecDeque;
+    use std::fmt;
+    use std::fmt::Formatter;
     use std::fs::File;
     use std::time::SystemTime;
     use rand::thread_rng;
     use chrono::prelude::*;
     use prost::Message;
+    use grid::Grid;
 
-    struct SimpleExpansionFilter {}
+    #[derive(Default)]
+    struct ExpansionStats {
+        new_games: i32,
+        max_height_violations: i32,
+        spaces_violations: i32,
+    }
+
+    impl fmt::Display for ExpansionStats {
+        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+            write!(f, "new_games: {}, max_height_violations: {}, spaces_violations: {}",
+                   self.new_games, self.max_height_violations, self.spaces_violations)
+        }
+    }
+
+    #[derive(Default)]
+    struct SimpleExpansionFilter {
+        stats: ExpansionStats,
+    }
 
     impl<'a> StackTreeNodeExpansionFilter<'a> for SimpleExpansionFilter {
         type NodeData = DefaultStackTreeNodeData<'a>;
         fn filter_new_game(&mut self, _node_data: &Self::NodeData, new_game: &Game) -> bool {
+            self.stats.new_games += 1;
+
+            let pf = &new_game.state.playfield;
             let max_height = 4;
-            new_game.state.playfield.stack_height() <= max_height
+            if pf.stack_height() > max_height {
+                self.stats.max_height_violations += 1;
+                return false;
+            }
+
+            // Each count of separated spaces should be a multiple of 4.
+            let spaces = pf.grid.search_spaces((0, 0).into(), (pf.width(), max_height).into());
+            for space in spaces.iter() {
+                if space.len() % 4 != 0 {
+                    self.stats.spaces_violations += 1;
+                    return false;
+                }
+            }
+
+            true
         }
     }
+
+    const DEPTH_FIRST: bool = true;
 
     struct SimpleSimulator {
         leaf_nodes: VecDeque<NodeHandle>,
@@ -189,8 +228,34 @@ mod tests {
     impl SimpleSimulator {
         fn new(target: NodeHandle) -> Self {
             let leaf_nodes = VecDeque::from([target]);
-            let filter = SimpleExpansionFilter {};
+            let filter = SimpleExpansionFilter::default();
             Self { leaf_nodes, filter }
+        }
+        fn next_node(&self) -> Option<NodeHandle> {
+            if DEPTH_FIRST {
+                self.leaf_nodes.back().copied()
+            } else {
+                self.leaf_nodes.front().copied()
+            }
+        }
+        fn pop_next_node(&mut self) -> Option<NodeHandle> {
+            if DEPTH_FIRST {
+                self.leaf_nodes.pop_back()
+            } else {
+                self.leaf_nodes.pop_front()
+            }
+        }
+        fn info<'a>(&self, tree: &StackTree<'a, DefaultStackTreeNodeData<'a>>) -> String {
+            let route = self.next_node()
+                .map(|n| {
+                    tree.arena().route(n).iter()
+                        .map(|&n| format!("{}", n))
+                        .collect::<Vec<_>>()
+                        .join(" -> ")
+                })
+                .unwrap_or("end".into());
+            format!("leaf_node_count: {}, expansion_stats: {{ {} }}, next: {}",
+                    self.leaf_nodes.len(), self.filter.stats, route)
         }
     }
 
@@ -198,13 +263,7 @@ mod tests {
         type NodeData = DefaultStackTreeNodeData<'a>;
         type NodeExpansionFilter = SimpleExpansionFilter;
         fn select(&mut self, _tree: &mut StackTree<'a, Self::NodeData>) -> Result<Option<NodeHandle>, Box<dyn Error>> {
-            let depth_first = true;
-            let target = if depth_first {
-                self.leaf_nodes.pop_back()
-            } else {
-                self.leaf_nodes.pop_front()
-            };
-            Ok(target)
+            Ok(self.pop_next_node())
         }
         fn expansion_filter(&mut self, _tree: &mut StackTree<'a, Self::NodeData>, _target: NodeHandle) -> Result<&mut Self::NodeExpansionFilter, Box<dyn Error>> {
             Ok(&mut self.filter)
@@ -217,16 +276,27 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_stack_finder() {
         let now = Local::now().format("%Y%m%d_%H%M%S_%.3f").to_string();
 
+        enum LogSink {
+            Null,
+            Stdio,
+            Stderr,
+            File(String),
+        }
+
         let enable_profiling = false;
         let profile_result_file_path = format!("tmp/{}-profile.pb", now);
-        let max_expansion_count = 10;
+        // let max_expansion_count = 10;
+        let max_expansion_count = -1;
         let enable_logging = true;
-        let log_file_path = format!("tmp/{}.log", now);
-        let progress_log_interval = 10;
-        let performance_mode = false;
+        // let log_file_path = LogSink::File(format!("tmp/{}.log", now));
+        let log_sink = LogSink::Stderr;
+        let progress_log_interval = 1000;
+        let enable_debug_log = false;
+        let performance_mode = true;
 
         let guard = if enable_profiling {
             let guard = pprof::ProfilerGuardBuilder::default()
@@ -236,10 +306,11 @@ mod tests {
             None
         };
 
-        let mut log_file: Box<dyn Write> = if enable_logging {
-            Box::new(File::create(log_file_path).unwrap())
-        } else {
-            Box::new(std::io::sink())
+        let mut log_file: Box<dyn Write> = match log_sink {
+            LogSink::Null => Box::new(std::io::sink()),
+            LogSink::Stdio => Box::new(std::io::stdout()),
+            LogSink::Stderr => Box::new(std::io::stderr()),
+            LogSink::File(path) => Box::new(File::create(path).unwrap())
         };
 
         let mut game: Game<'static> = Default::default();
@@ -262,7 +333,7 @@ mod tests {
                 break;
             }
             if i % progress_log_interval == 0 {
-                writeln!(&mut log_file, "[{}] {}...", Local::now().to_rfc3339_opts(SecondsFormat::Millis, false), i).unwrap();
+                writeln!(&mut log_file, "[{}] {}... ({})", Local::now().to_rfc3339_opts(SecondsFormat::Millis, false), i, simulator.info(&tree)).unwrap();
             }
             if !simulate_once(&mut tree, &mut simulator).unwrap() {
                 last_i = i;
@@ -271,7 +342,16 @@ mod tests {
         }
         writeln!(&mut log_file, "[{}] {} (finished)", Local::now().to_rfc3339_opts(SecondsFormat::Millis, false), last_i).unwrap();
 
-        if enable_logging {
+        let mut found = Vec::new();
+        let root_pc_count = tree.arena()[tree.root()].data.common_data().game.stats.perfect_clear;
+        tree.visit(|tree, node, _| {
+            if tree[node].data.common_data.game.stats.perfect_clear > root_pc_count {
+                found.push(node);
+            }
+        });
+        writeln!(&mut log_file, "found: {:?}", found).unwrap();
+
+        if enable_logging && enable_debug_log {
             tree.visit(|arena, node, ctx| {
                 let n = &arena[node];
                 let indent = "  ".repeat(ctx.depth());
