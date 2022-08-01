@@ -3,24 +3,27 @@ use std::io::Write;
 use std::marker::PhantomData;
 use core::{Game, Placement};
 use core::helper::MoveDecisionResource;
-use tree::arena::{Node, NodeArena, NodeHandle, VecNodeArena, VisitContext};
+use tree::arena::{NodeArena, NodeHandle, VecNodeArena, VisitContext};
 use crate::{Action, MoveTransition};
 
+//--------------------------------------------------------------------------------------------------
+// StackTreeNodeData
+//--------------------------------------------------------------------------------------------------
+
 pub struct StackTreeCommonNodeData<'a> {
-    by: Option<Action>,
-    game: Game<'a>,
-    move_decision_resource: MoveDecisionResource,
+    pub by: Option<Action>,
+    pub game: Game<'a>,
+    pub move_decision_resource: MoveDecisionResource,
 }
 
 impl<'a> StackTreeCommonNodeData<'a> {
-    fn new(by: Option<Action>, game: Game<'a>) -> Result<Self, &'static str> {
+    pub fn new(by: Option<Action>, game: Game<'a>) -> Result<Self, &'static str> {
         let move_decision_resource = MoveDecisionResource::with_game(&game)?;
         Ok(Self { by, game, move_decision_resource })
     }
 }
 
 pub trait StackTreeNodeData<'a> {
-    fn new(common_data: StackTreeCommonNodeData<'a>) -> Self;
     fn common_data(&self) -> &StackTreeCommonNodeData<'a>;
 }
 
@@ -28,38 +31,48 @@ pub struct DefaultStackTreeNodeData<'a> {
     common_data: StackTreeCommonNodeData<'a>,
 }
 
-impl<'a> StackTreeNodeData<'a> for DefaultStackTreeNodeData<'a> {
+impl<'a> DefaultStackTreeNodeData<'a> {
     fn new(common_data: StackTreeCommonNodeData<'a>) -> Self { Self { common_data } }
+}
+
+impl<'a> StackTreeNodeData<'a> for DefaultStackTreeNodeData<'a> {
     fn common_data(&self) -> &StackTreeCommonNodeData<'a> { &self.common_data }
 }
 
-pub type StackTreeNodeArena<NodeData> = VecNodeArena<NodeData>;
+//--------------------------------------------------------------------------------------------------
+// StackTreeNodeExpander
+//--------------------------------------------------------------------------------------------------
 
-#[allow(unused_variables)]
-pub trait StackTreeNodeExpansionFilter<'a> {
+/// Trait of the implementation that is passed to [StackTree::expand].
+/// For each call of [StackTree::expand], one instance will be created
+/// by [StackTreeSimulator::expander] (also see [simulate_once]).
+/// In this trait, there are some filter methods due to get better performance.
+/// The trait methods can be called sequentially by two patterns;
+/// in moving a piece to a destination,
+/// `filter_destination` -> `filter_new_game` -> `new_node_data`,
+/// and in holding a piece,
+/// `filter_hold` -> `filter_new_game` -> `new_node_data`.
+pub trait StackTreeNodeExpander<'a> {
     type NodeData: StackTreeNodeData<'a>;
     /// Filter of the candidate's placement where the falling piece will be moved.
     /// At this time, the game in `node_data` is not cloned.
-    fn filter_destination(&mut self, node_data: &Self::NodeData, dst: &Placement) -> bool { true }
+    fn filter_destination(&mut self, _node_data: &Self::NodeData, _dst: &Placement) -> bool { true }
     /// Filter of the hold action.
     /// At this time, the game in `node_data` is not cloned.
-    fn filter_hold(&mut self, node_data: &Self::NodeData) -> bool { true }
+    fn filter_hold(&mut self, _node_data: &Self::NodeData) -> bool { true }
     /// Filter to the game that will be contained in the new node data.
-    /// At this time, the new node data is not created.
-    fn filter_new_game(&mut self, node_data: &Self::NodeData, new_game: &Game) -> bool { true }
-    /// Filter to the data of the new node.
-    /// If false was returned, the data is discarded.
-    fn filter_new_node_data(&mut self, node_data: &Self::NodeData, new_node_data: &Self::NodeData) -> bool { true }
+    /// At this time, the new common node data is not created.
+    fn filter_new_game(&mut self, _node_data: &Self::NodeData, _new_game: &Game) -> bool { true }
+    /// Factory method to create a new node data with `new_common_node_data`.
+    /// If `Ok(None)` was returned, `new_common_node_data` is discarded and no new node is appended to the tree.
+    fn new_node_data(&mut self, node_data: &Self::NodeData, new_common_node_data: StackTreeCommonNodeData<'a>) -> Result<Option<Self::NodeData>, Box<dyn Error>>;
 }
 
-#[derive(Default)]
-pub struct DefaultStackTreeNodeExpansionFilter<'a, NodeData: StackTreeNodeData<'a>> {
-    phantom: PhantomData<fn() -> &'a NodeData>,
-}
+//--------------------------------------------------------------------------------------------------
+// StackTree
+//--------------------------------------------------------------------------------------------------
 
-impl<'a, NodeData: StackTreeNodeData<'a>> StackTreeNodeExpansionFilter<'a> for DefaultStackTreeNodeExpansionFilter<'a, NodeData> {
-    type NodeData = NodeData;
-}
+pub type StackTreeNodeArena<NodeData> = VecNodeArena<NodeData>;
 
 pub struct StackTree<'a, NodeData: StackTreeNodeData<'a>> {
     arena: StackTreeNodeArena<NodeData>,
@@ -68,10 +81,9 @@ pub struct StackTree<'a, NodeData: StackTreeNodeData<'a>> {
 }
 
 impl<'a, NodeData: StackTreeNodeData<'a>> StackTree<'a, NodeData> {
-    pub fn new(game: Game<'a>) -> Result<Self, &'static str> {
+    pub fn new(root_node_data: NodeData) -> Result<Self, &'static str> {
         let mut arena: StackTreeNodeArena<NodeData> = Default::default();
-        let common_data = StackTreeCommonNodeData::new(None, game)?;
-        let root = arena.create(NodeData::new(common_data));
+        let root = arena.create(root_node_data);
         Ok(Self { arena, root, phantom: PhantomData })
     }
     pub fn arena(&self) -> &StackTreeNodeArena<NodeData> { &self.arena }
@@ -80,7 +92,7 @@ impl<'a, NodeData: StackTreeNodeData<'a>> StackTree<'a, NodeData> {
     pub fn visit(&self, visitor: impl FnMut(&StackTreeNodeArena<NodeData>, NodeHandle, &mut VisitContext)) {
         self.arena.visit_depth_first(self.root, visitor);
     }
-    pub fn expand(&mut self, target: NodeHandle, filter: &mut impl StackTreeNodeExpansionFilter<'a, NodeData=NodeData>) -> Result<(), &'static str> {
+    pub fn expand(&mut self, target: NodeHandle, expander: &mut impl StackTreeNodeExpander<'a, NodeData=NodeData>) -> Result<(), Box<dyn Error>> {
         let mut children_data = Vec::new();
         {
             let target_data = &self.arena[target].data;
@@ -88,43 +100,39 @@ impl<'a, NodeData: StackTreeNodeData<'a>> StackTree<'a, NodeData> {
 
             if common_data.game.state.falling_piece.is_some() {
                 for placement in common_data.move_decision_resource.dst_candidates.iter() {
-                    if !filter.filter_destination(&target_data, placement) {
+                    if !expander.filter_destination(&target_data, placement) {
                         continue;
                     }
                     let mut game = common_data.game.clone();
                     game.state.falling_piece.as_mut().unwrap().placement = *placement;
                     if game.lock().unwrap() {
-                        if !filter.filter_new_game(&target_data, &game) {
+                        if !expander.filter_new_game(&target_data, &game) {
                             continue;
                         }
                         let by = Some(Action::Move(MoveTransition::new(*placement, None)));
                         let new_common_data = StackTreeCommonNodeData::new(by, game)?;
-                        let new_data = NodeData::new(new_common_data);
-                        if !filter.filter_new_node_data(&target_data, &new_data) {
-                            continue;
+                        if let Some(new_data) = expander.new_node_data(&target_data, new_common_data)? {
+                            children_data.push(new_data);
                         }
-                        children_data.push(new_data);
                     }
                 }
             }
 
-            // Using while for the readability.
+            // Using only one loop while for the readability.
             while common_data.game.state.can_hold {
-                if !filter.filter_hold(&target_data) {
+                if !expander.filter_hold(&target_data) {
                     break;
                 }
                 let mut game = common_data.game.clone();
                 game.hold().unwrap();
                 if game.state.falling_piece.is_some() {
-                    if !filter.filter_new_game(&target_data, &game) {
+                    if !expander.filter_new_game(&target_data, &game) {
                         break;
                     }
                     let new_common_data = StackTreeCommonNodeData::new(Some(Action::Hold), game)?;
-                    let new_data = NodeData::new(new_common_data);
-                    if !filter.filter_new_node_data(&target_data, &new_data) {
-                        break;
+                    if let Some(new_data) = expander.new_node_data(&target_data, new_common_data)? {
+                        children_data.push(new_data);
                     }
-                    children_data.push(new_data);
                 }
                 break;
             }
@@ -138,27 +146,36 @@ impl<'a, NodeData: StackTreeNodeData<'a>> StackTree<'a, NodeData> {
     }
 }
 
-pub trait Simulator<'a> {
+//--------------------------------------------------------------------------------------------------
+// StackTreeSimulator
+//--------------------------------------------------------------------------------------------------
+
+pub trait StackTreeSimulator<'a> {
     type NodeData: StackTreeNodeData<'a>;
-    type NodeExpansionFilter: StackTreeNodeExpansionFilter<'a, NodeData=Self::NodeData>;
+    type NodeExpander: StackTreeNodeExpander<'a, NodeData=Self::NodeData>;
     fn select(&mut self, tree: &mut StackTree<'a, Self::NodeData>) -> Result<Option<NodeHandle>, Box<dyn Error>>;
-    fn expansion_filter(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle) -> Result<&mut Self::NodeExpansionFilter, Box<dyn Error>>;
-    fn on_expanded(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle) -> Result<(), Box<dyn Error>>;
+    fn expander(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle) -> Result<Self::NodeExpander, Box<dyn Error>>;
+    fn on_expanded(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle, expander: &Self::NodeExpander) -> Result<(), Box<dyn Error>>;
 }
 
-pub fn simulate_once<'a, NodeData, NodeExpansionFilter>(tree: &mut StackTree<'a, NodeData>, simulator: &mut impl Simulator<'a, NodeData=NodeData, NodeExpansionFilter=NodeExpansionFilter>) -> Result<bool, Box<dyn Error>> where
+pub fn simulate_once<'a, NodeData, NodeExpander>(
+    tree: &mut StackTree<'a, NodeData>,
+    simulator: &mut impl StackTreeSimulator<'a, NodeData=NodeData, NodeExpander=NodeExpander>,
+) -> Result<bool, Box<dyn Error>> where
     NodeData: StackTreeNodeData<'a>,
-    NodeExpansionFilter: StackTreeNodeExpansionFilter<'a, NodeData=NodeData>
+    NodeExpander: StackTreeNodeExpander<'a, NodeData=NodeData>
 {
     if let Some(target) = simulator.select(tree)? {
-        let filter = simulator.expansion_filter(tree, target)?;
-        tree.expand(target, filter)?;
-        simulator.on_expanded(tree, target)?;
+        let mut expander = simulator.expander(tree, target)?;
+        tree.expand(target, &mut expander)?;
+        simulator.on_expanded(tree, target, &expander)?;
         Ok(true)
     } else {
         Ok(false)
     }
 }
+
+//--------------------------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -181,6 +198,14 @@ mod tests {
         spaces_violations: i32,
     }
 
+    impl ExpansionStats {
+        fn merge(&mut self, other: &Self) {
+            self.new_games += other.new_games;
+            self.max_height_violations += other.max_height_violations;
+            self.spaces_violations += other.spaces_violations;
+        }
+    }
+
     impl fmt::Display for ExpansionStats {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             write!(f, "new_games: {}, max_height_violations: {}, spaces_violations: {}",
@@ -189,12 +214,13 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct SimpleExpansionFilter {
+    struct SimpleExpander {
         stats: ExpansionStats,
     }
 
-    impl<'a> StackTreeNodeExpansionFilter<'a> for SimpleExpansionFilter {
+    impl<'a> StackTreeNodeExpander<'a> for SimpleExpander {
         type NodeData = DefaultStackTreeNodeData<'a>;
+
         fn filter_new_game(&mut self, _node_data: &Self::NodeData, new_game: &Game) -> bool {
             self.stats.new_games += 1;
 
@@ -216,20 +242,23 @@ mod tests {
 
             true
         }
+
+        fn new_node_data(&mut self, _node_data: &Self::NodeData, new_common_node_data: StackTreeCommonNodeData<'a>) -> Result<Option<Self::NodeData>, Box<dyn Error>> {
+            Ok(Some(Self::NodeData::new(new_common_node_data)))
+        }
     }
 
     const DEPTH_FIRST: bool = true;
 
     struct SimpleSimulator {
         leaf_nodes: VecDeque<NodeHandle>,
-        filter: SimpleExpansionFilter,
+        stats: ExpansionStats,
     }
 
     impl SimpleSimulator {
         fn new(target: NodeHandle) -> Self {
             let leaf_nodes = VecDeque::from([target]);
-            let filter = SimpleExpansionFilter::default();
-            Self { leaf_nodes, filter }
+            Self { leaf_nodes, stats: Default::default() }
         }
         fn next_node(&self) -> Option<NodeHandle> {
             if DEPTH_FIRST {
@@ -255,22 +284,23 @@ mod tests {
                 })
                 .unwrap_or("end".into());
             format!("leaf_node_count: {}, expansion_stats: {{ {} }}, next: {}",
-                    self.leaf_nodes.len(), self.filter.stats, route)
+                    self.leaf_nodes.len(), self.stats, route)
         }
     }
 
-    impl<'a> Simulator<'a> for SimpleSimulator {
+    impl<'a, 'b> StackTreeSimulator<'a> for SimpleSimulator {
         type NodeData = DefaultStackTreeNodeData<'a>;
-        type NodeExpansionFilter = SimpleExpansionFilter;
+        type NodeExpander = SimpleExpander;
         fn select(&mut self, _tree: &mut StackTree<'a, Self::NodeData>) -> Result<Option<NodeHandle>, Box<dyn Error>> {
             Ok(self.pop_next_node())
         }
-        fn expansion_filter(&mut self, _tree: &mut StackTree<'a, Self::NodeData>, _target: NodeHandle) -> Result<&mut Self::NodeExpansionFilter, Box<dyn Error>> {
-            Ok(&mut self.filter)
+        fn expander(&mut self, _tree: &mut StackTree<'a, Self::NodeData>, _target: NodeHandle) -> Result<Self::NodeExpander, Box<dyn Error>> {
+            Ok(Self::NodeExpander::default())
         }
-        fn on_expanded(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle) -> Result<(), Box<dyn Error>> {
+        fn on_expanded(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle, expander: &Self::NodeExpander) -> Result<(), Box<dyn Error>> {
             let children = tree.arena()[target].children();
             self.leaf_nodes.extend(children.iter());
+            self.stats.merge(&expander.stats);
             Ok(())
         }
     }
@@ -323,7 +353,8 @@ mod tests {
         }
         game.setup_falling_piece(None).unwrap();
 
-        let mut tree = StackTree::<DefaultStackTreeNodeData<'static>>::new(game).unwrap();
+        let root_node_data = DefaultStackTreeNodeData::new(StackTreeCommonNodeData::new(None, game).unwrap());
+        let mut tree = StackTree::<DefaultStackTreeNodeData<'static>>::new(root_node_data).unwrap();
         let mut simulator = SimpleSimulator::new(tree.root());
 
         let mut last_i = 0;
