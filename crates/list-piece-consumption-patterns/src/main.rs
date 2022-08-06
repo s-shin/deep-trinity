@@ -44,8 +44,8 @@ impl From<u8> for Piece {
 struct PieceSequence(u64);
 
 impl PieceSequence {
+    pub const MAX_SIZE: u8 = 8;
     const NUM_BITS: u8 = 64;
-    const MAX_COUNT: u8 = 8;
     const PIECE_FLAGS: [u64; 7] = [
         0b0000001,
         0b0000010,
@@ -75,7 +75,7 @@ impl PieceSequence {
     pub fn push_back(&mut self, piece: Piece) -> bool {
         if let Some(last_i) = self.last_idx() {
             let i = last_i + 1;
-            if i == Self::MAX_COUNT {
+            if i == Self::MAX_SIZE {
                 return false;
             }
             self.0 |= Self::PIECE_FLAGS[piece as usize] << (i * NUM_PIECES);
@@ -111,32 +111,23 @@ impl Debug for PieceSequence {
     }
 }
 
-#[derive(Copy, Clone)]
-struct RemainingPieces(u16);
+#[derive(Default, Copy, Clone)]
+struct UniquePieceBag(u8);
 
-impl RemainingPieces {
-    const FIRST_BAG_ALL: u16 = 0b1111111;
-    const FIRST_BAG: [u16; 7] = [
-        0b00000000000001,
-        0b00000000000010,
-        0b00000000000100,
-        0b00000000001000,
-        0b00000000010000,
-        0b00000000100000,
-        0b00000001000000,
+impl UniquePieceBag {
+    pub const EMPTY: UniquePieceBag = UniquePieceBag(0);
+    pub const ALL: UniquePieceBag = UniquePieceBag(0b1111111);
+    const PIECE_FLAGS: [u8; 7] = [
+        0b0000001,
+        0b0000010,
+        0b0000100,
+        0b0001000,
+        0b0010000,
+        0b0100000,
+        0b1000000,
     ];
-    const SECOND_BAG: [u16; 7] = [
-        0b00000010000000,
-        0b00000100000000,
-        0b00001000000000,
-        0b00010000000000,
-        0b00100000000000,
-        0b01000000000000,
-        0b10000000000000,
-    ];
-
-    fn is_empty(&self) -> bool { self.0 == 0 }
-    fn pop(&mut self) -> Option<Piece> {
+    pub fn is_empty(&self) -> bool { self.0 == 0 }
+    pub fn pop(&mut self) -> Option<Piece> {
         if self.is_empty() {
             None
         } else {
@@ -145,20 +136,46 @@ impl RemainingPieces {
             Some(Piece::from(idx % NUM_PIECES))
         }
     }
-    fn flags(&self, piece: Piece) -> [u16; 2] { [Self::FIRST_BAG[piece as usize], Self::SECOND_BAG[piece as usize]] }
     fn remove(&mut self, piece: Piece) -> bool {
-        for flag in self.flags(piece).iter() {
-            if self.0 & flag != 0 {
-                self.0 &= !flag;
-                return true;
-            }
+        let flag = Self::PIECE_FLAGS[piece as usize];
+        if self.0 & flag != 0 {
+            self.0 &= !flag;
+            return true;
         }
         false
     }
 }
 
+#[derive(Copy, Clone)]
+struct RemainingPieces {
+    bag1: UniquePieceBag,
+    bag2: UniquePieceBag,
+}
+
+impl RemainingPieces {
+    fn is_empty(&self) -> bool { self.bag1.is_empty() && self.bag2.is_empty() }
+    fn pop(&mut self) -> Option<Piece> {
+        if self.is_empty() {
+            None
+        } else {
+            self.bag1.pop().or_else(|| self.bag2.pop())
+        }
+    }
+    fn remove(&mut self, piece: Piece) -> bool {
+        if self.bag1.remove(piece) {
+            return true;
+        }
+        self.bag2.remove(piece)
+    }
+}
+
 impl Default for RemainingPieces {
-    fn default() -> Self { Self(Self::FIRST_BAG_ALL) }
+    fn default() -> Self {
+        Self {
+            bag1: UniquePieceBag::ALL,
+            bag2: UniquePieceBag::EMPTY,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
