@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::str::FromStr;
 use bitvec::prelude::*;
@@ -57,21 +58,44 @@ impl FromStr for PiecePlacement {
     }
 }
 
+struct PiecePlacementList(Vec<PiecePlacement>);
+
+impl FromStr for PiecePlacementList {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut pps = Vec::new();
+        for chunk in s.split_whitespace() {
+            pps.push(PiecePlacement::from_str(chunk)?);
+        }
+        Ok(Self(pps))
+    }
+}
+
+impl Deref for PiecePlacementList {
+    type Target = Vec<PiecePlacement>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for PiecePlacementList {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
 //--------------------------------------------------------------------------------------------------
 // NodeData
 //--------------------------------------------------------------------------------------------------
 
 struct NodeData<'a> {
     common_data: StackTreeCommonNodeData<'a>,
-    patterns: Rc<Vec<Vec<PiecePlacement>>>,
+    patterns: Rc<Vec<PiecePlacementList>>,
     check_lists: Vec<BitVec>,
 }
 
 impl<'a> NodeData<'a> {
-    fn new(common_data: StackTreeCommonNodeData<'a>, patterns: Rc<Vec<Vec<PiecePlacement>>>, check_lists: Vec<BitVec>) -> Self {
+    fn new(common_data: StackTreeCommonNodeData<'a>, patterns: Rc<Vec<PiecePlacementList>>, check_lists: Vec<BitVec>) -> Self {
         Self { common_data, patterns, check_lists }
     }
-    fn new_for_root(game: Game<'a>, patterns: Rc<Vec<Vec<PiecePlacement>>>) -> Result<Self, &'static str> {
+    fn new_for_root(game: Game<'a>, patterns: Rc<Vec<PiecePlacementList>>) -> Result<Self, &'static str> {
         let common_data = StackTreeCommonNodeData::new(None, game)?;
         let check_lists = patterns.iter()
             .map(|pattern| bitvec!(0; pattern.len()))
@@ -182,12 +206,30 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_simulator() {
-        // TODO
-        let mut patterns = Rc::new(vec![vec![]]);
+        let debug = true;
+
+        let mut patterns = Rc::new([
+            "I,0,2,-2 O,0,7,-1 L,1,-1,0 S,1,5,0 Z,0,3,0 J,2,3,2 T,2,1,0",
+            "I,0,2,-2 O,0,7,-1 L,1,-1,0 J,2,5,0 S,3,3,1 Z,0,4,1 T,2,1,0",
+            "I,0,2,-2 O,0,-1,-1 J,3,8,0 S,0,4,0 Z,1,1,0 L,2,4,2 T,2,6,0",
+            "I,0,2,-2 O,0,-1,-1 J,3,8,0 L,2,2,0 Z,1,4,1 S,0,3,1 T,2,6,0",
+        ].iter().map(|s| PiecePlacementList::from_str(s).unwrap()).collect::<Vec<_>>());
+
+        if debug {
+            for pattern in patterns.iter() {
+                let mut game: Game<'static> = Default::default();
+                for pp in pattern.iter() {
+                    let piece_spec = game.piece_specs.get(pp.piece);
+                    game.state.playfield.grid.put_fast(pp.placement.pos, piece_spec.grid(pp.placement.orientation));
+                }
+                println!("{}\n---", &game);
+            }
+        }
 
         let mut game: Game<'static> = Default::default();
-        let mut rpg = RandomPieceGenerator::new(StdRng::seed_from_u64(0));
+        let mut rpg = RandomPieceGenerator::new(StdRng::seed_from_u64(2));
         game.supply_next_pieces(&rpg.generate());
         game.supply_next_pieces(&rpg.generate());
         game.supply_next_pieces(&rpg.generate());
@@ -195,12 +237,29 @@ mod tests {
 
         let mut tree = StackTree::new(NodeData::new_for_root(game, patterns.clone()).unwrap()).unwrap();
         let mut simulator = Simulator::new(tree.root());
-        for _i in 0..5000 {
+        for i in 0..5000 {
+            if debug && i % 1000 == 0 {
+                println!("{}...", i)
+            }
             if !simulate_once(&mut tree, &mut simulator).unwrap() {
                 break;
             }
         }
 
-        println!("{:?}", &simulator);
+        if debug {
+            println!("nodes: {}", tree.arena().len());
+            tree.visit(|arena, node, ctx| {
+                let n = &arena[node];
+                if !n.is_leaf() {
+                    return;
+                }
+                for i in n.data.check_lists.iter().enumerate()
+                    .filter(|(_, cl)| cl.all())
+                    .map(|(i, _)| i) {
+                    println!("{}: {}", node, i);
+                }
+            });
+            println!("{:?}", &simulator);
+        }
     }
 }
