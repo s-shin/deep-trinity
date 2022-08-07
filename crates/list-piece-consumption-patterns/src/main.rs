@@ -350,7 +350,7 @@ fn main() {
 
     for initial_hold_state in initial_hold_states {
         let mut i = 0;
-        println!("# {:?}", initial_hold_state.piece);
+        println!("# Hold: {:?}", initial_hold_state.piece);
         enumerate(initial_hold_state, &mut |pattern, hold_state| {
             i += 1;
             const INTERVAL: i32 = 100000;
