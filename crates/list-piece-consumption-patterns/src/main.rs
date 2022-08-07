@@ -1,9 +1,13 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
 
+//--------------------------------------------------------------------------------------------------
+// Piece
+//--------------------------------------------------------------------------------------------------
+
 const NUM_PIECES: u8 = 7;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
 enum Piece {
     L,
@@ -19,6 +23,18 @@ const PIECE_CHARS: [char; 7] = ['L', 'J', 'S', 'Z', 'I', 'T', 'O'];
 
 impl Piece {
     pub fn to_char(&self) -> char { PIECE_CHARS[*self as usize] }
+    pub fn from_char(c: char) -> Result<Self, &'static str> {
+        Ok(match c {
+            'L' => Self::L,
+            'J' => Self::J,
+            'S' => Self::S,
+            'Z' => Self::Z,
+            'I' => Self::I,
+            'T' => Self::T,
+            'O' => Self::O,
+            _ => return Err("invalid piece char"),
+        })
+    }
 }
 
 impl Display for Piece {
@@ -40,58 +56,67 @@ impl From<u8> for Piece {
     }
 }
 
+impl From<char> for Piece {
+    fn from(c: char) -> Self { Self::from_char(c).unwrap() }
+}
+
+//--------------------------------------------------------------------------------------------------
+// PieceSequence
+//--------------------------------------------------------------------------------------------------
+
 #[derive(Copy, Clone, Default)]
 struct PieceSequence(u64);
 
 impl PieceSequence {
-    pub const MAX_SIZE: u8 = 8;
     const NUM_BITS: u8 = 64;
-    const PIECE_FLAGS: [u64; 7] = [
-        0b0000001,
-        0b0000010,
-        0b0000100,
-        0b0001000,
-        0b0010000,
-        0b0100000,
-        0b1000000,
-    ];
-
-    pub fn len(&self) -> u8 { self.last_idx().map(|i| i + 1).unwrap_or(0) }
-    pub fn is_empty(&self) -> bool { self.0 == 0 }
-    fn first_idx(&self) -> Option<u8> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.0.trailing_zeros() as u8 / NUM_PIECES)
-        }
-    }
+    const NUM_PIECE_BITS: u8 = 3;
+    const PIECE_MASK: u64 = 0b111;
+    pub const MAX_SIZE: u8 = Self::NUM_BITS / Self::NUM_PIECE_BITS;
+    fn piece_to_value(p: Piece) -> u8 { p as u8 + 1 }
+    fn value_to_piece(v: u8) -> Piece { (v - 1).into() }
     fn last_idx(&self) -> Option<u8> {
         if self.is_empty() {
             None
         } else {
-            Some((Self::NUM_BITS - 1 - self.0.leading_zeros() as u8) / NUM_PIECES)
+            Some((Self::NUM_BITS - 1 - self.0.leading_zeros() as u8) / Self::NUM_PIECE_BITS)
+        }
+    }
+    pub fn is_empty(&self) -> bool { self.0 == 0 }
+    pub fn len(&self) -> u8 { self.last_idx().map(|i| i + 1).unwrap_or(0) }
+    pub fn get(&self, i: u8) -> Option<Piece> {
+        let v = (self.0 >> (i * Self::NUM_PIECE_BITS)) & Self::PIECE_MASK;
+        if v == 0 {
+            None
+        } else {
+            Some(Self::value_to_piece(v as u8))
         }
     }
     pub fn push_back(&mut self, piece: Piece) -> bool {
         if let Some(last_i) = self.last_idx() {
             let i = last_i + 1;
+            debug_assert!(i > 0);
             if i == Self::MAX_SIZE {
                 return false;
             }
-            self.0 |= Self::PIECE_FLAGS[piece as usize] << (i * NUM_PIECES);
+            self.0 |= (Self::piece_to_value(piece) as u64) << (i * Self::NUM_PIECE_BITS);
         } else {
-            self.0 |= Self::PIECE_FLAGS[piece as usize];
+            self.0 |= Self::piece_to_value(piece) as u64;
         }
         true
     }
     pub fn pop_front(&mut self) -> Option<Piece> {
-        if let Some(i) = self.first_idx() {
-            let p = Piece::from((self.0 >> (i * NUM_PIECES)).trailing_zeros() as u8);
-            self.0 &= self.0 - 1;
-            Some(p)
-        } else {
-            None
+        let p = self.get(0);
+        if p.is_some() {
+            self.0 = self.0 >> Self::NUM_PIECE_BITS;
         }
+        p
+    }
+    pub fn from_str(s: &str) -> Result<Self, &'static str> {
+        let mut seq: Self = Default::default();
+        for c in s.chars() {
+            seq.push_back(Piece::from_char(c)?);
+        }
+        Ok(seq)
     }
 }
 
@@ -110,6 +135,14 @@ impl Debug for PieceSequence {
         write!(f, "{}", self)
     }
 }
+
+impl From<&str> for PieceSequence {
+    fn from(s: &str) -> Self { Self::from_str(s).unwrap() }
+}
+
+//--------------------------------------------------------------------------------------------------
+// UniquePieceBag
+//--------------------------------------------------------------------------------------------------
 
 #[derive(Default, Copy, Clone)]
 struct UniquePieceBag(u8);
@@ -146,6 +179,10 @@ impl UniquePieceBag {
     }
 }
 
+//--------------------------------------------------------------------------------------------------
+// RemainingPiece
+//--------------------------------------------------------------------------------------------------
+
 #[derive(Copy, Clone)]
 struct RemainingPieces {
     bag1: UniquePieceBag,
@@ -177,6 +214,10 @@ impl Default for RemainingPieces {
         }
     }
 }
+
+//--------------------------------------------------------------------------------------------------
+// HoldRecorder
+//--------------------------------------------------------------------------------------------------
 
 #[derive(Copy, Clone)]
 struct HoldRecorder(u8);
@@ -223,6 +264,10 @@ impl Debug for HoldRecorder {
     }
 }
 
+//--------------------------------------------------------------------------------------------------
+// HoldState
+//--------------------------------------------------------------------------------------------------
+
 #[derive(Copy, Clone)]
 struct HoldState {
     piece: Option<Piece>,
@@ -244,6 +289,10 @@ impl Display for HoldState {
         )
     }
 }
+
+//--------------------------------------------------------------------------------------------------
+// enumerate
+//--------------------------------------------------------------------------------------------------
 
 fn enumerate_internal(remains: RemainingPieces, consumed: PieceSequence, hold_state: HoldState, cb: &mut impl FnMut(PieceSequence, HoldState) -> ()) {
     if remains.is_empty() {
@@ -285,6 +334,10 @@ fn enumerate(hold_state: HoldState, cb: &mut impl FnMut(PieceSequence, HoldState
     enumerate_internal(Default::default(), Default::default(), hold_state, cb);
 }
 
+//--------------------------------------------------------------------------------------------------
+// main
+//--------------------------------------------------------------------------------------------------
+
 fn main() {
     use Piece::*;
 
@@ -306,5 +359,38 @@ fn main() {
             }
         });
         println!("{} patterns found.", i);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn piece_sequence_basic() {
+        let mut seq = PieceSequence::default();
+        // is_empty, len, push_back
+        assert!(seq.is_empty());
+        assert_eq!(0, seq.len());
+        assert!(seq.push_back(Piece::I));
+        assert!(!seq.is_empty());
+        assert_eq!(1, seq.len());
+        assert!(seq.push_back(Piece::T));
+        assert!(seq.push_back(Piece::O));
+        assert_eq!(3, seq.len());
+        // Display
+        assert_eq!("ITO", format!("{}", &seq));
+        // get
+        assert_eq!(Some(Piece::I), seq.get(0));
+        assert_eq!(Some(Piece::T), seq.get(1));
+        assert_eq!(Some(Piece::O), seq.get(2));
+        // pop_front
+        assert_eq!(Some(Piece::I), seq.pop_front());
+        assert_eq!(Some(Piece::T), seq.pop_front());
+        assert_eq!(Some(Piece::O), seq.pop_front());
+        assert_eq!(None, seq.pop_front());
+        assert!(seq.is_empty());
     }
 }
