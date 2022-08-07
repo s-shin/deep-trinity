@@ -606,19 +606,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pc-finder"
-version = "0.1.0"
-dependencies = [
- "assert_cmd",
- "bot",
- "clap",
- "core",
- "grid",
- "rand",
- "tree",
-]
-
-[[package]]
 name = "petgraph"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -9,6 +9,5 @@ members = [
   "crates/playground",
   "crates/tree",
   "crates/move-finder",
-  "crates/pc-finder",
   "crates/list-piece-consumption-patterns",
 ]
