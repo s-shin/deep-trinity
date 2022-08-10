@@ -91,7 +91,7 @@ pub fn get_nearest_alternative_placement(piece: Piece, target: &Placement, src: 
 pub struct MoveDecisionResource {
     /// Reachable and lockable placements including all alternative placements.
     pub dst_candidates: HashSet<Placement>,
-    /// The result of the search by [BruteForceMoveSearcher].
+    /// The result of the search by [HeuristicBruteForceMoveSearcher].
     pub brute_force_search_result: SearchResult,
 }
 
