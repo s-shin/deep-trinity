@@ -44,7 +44,7 @@ fn deep_trinity(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Environment>()?;
     m.add_class::<core_wrapper::Cell>()?;
     m.add_class::<core_wrapper::PlacementWrapper>()?;
-    m.add_class::<core_wrapper::MoveDecisionMaterialWrapper>()?;
+    m.add_class::<core_wrapper::MoveDecisionResourceWrapper>()?;
     m.add_class::<core_wrapper::GameWrapper>()?;
     Ok(())
 }

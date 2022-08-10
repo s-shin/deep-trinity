@@ -1006,8 +1006,9 @@ impl<'a> Playfield<'a> {
         HybridGrid::with_store(store, size, with_basic_grid).map(|grid| Self { grid, visible_height })
     }
     pub fn width(&self) -> X { self.grid.width() }
-    pub fn height(&self) -> X { self.grid.height() }
+    pub fn height(&self) -> Y { self.grid.height() }
     pub fn is_empty(&self) -> bool { self.grid.is_empty() }
+    pub fn stack_height(&self) -> Y { self.grid.height() - self.grid.top_padding() }
     pub fn set_rows_with_strs(&mut self, pos: Vec2, rows: &[&str]) {
         self.grid.set_rows_with_strs(pos, rows);
     }
@@ -1481,7 +1482,7 @@ impl<'a> Game<'a> {
         }
     }
     /// Makes the performance better but discards piece information in the playfield.
-    pub fn fast_mode(&mut self) {
+    pub fn performance_mode(&mut self) {
         self.state.playfield.grid.disable_basic_grid();
     }
     pub fn get_cell(&self, pos: Vec2) -> Cell {

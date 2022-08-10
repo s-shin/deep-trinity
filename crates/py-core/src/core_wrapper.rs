@@ -1,7 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 use core::prelude::*;
 use core::CellTypeId;
-use core::helper::MoveDecisionMaterial;
+use core::helper::MoveDecisionResource;
 use grid::{Grid, Y};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
@@ -80,15 +80,15 @@ impl PlacementWrapper {
 }
 
 #[derive(Clone)]
-#[pyclass(name = "MoveDecisionMaterial")]
-pub struct MoveDecisionMaterialWrapper {
-    material: MoveDecisionMaterial,
+#[pyclass(name = "MoveDecisionResource")]
+pub struct MoveDecisionResourceWrapper {
+    resource: MoveDecisionResource,
 }
 
 #[pymethods]
-impl MoveDecisionMaterialWrapper {
+impl MoveDecisionResourceWrapper {
     pub fn get_dst_candidates(&self) -> PyResult<HashSet<PlacementWrapper>> {
-        let r = self.material.dst_candidates.iter()
+        let r = self.resource.dst_candidates.iter()
             .map(|&placement| PlacementWrapper { placement })
             .collect::<HashSet<_>>();
         Ok(r)
@@ -97,7 +97,7 @@ impl MoveDecisionMaterialWrapper {
 
 #[pyclass(name = "Game")]
 pub struct GameWrapper {
-    game: Game,
+    game: Game<'static>,
 }
 
 #[pymethods]
@@ -107,7 +107,7 @@ impl GameWrapper {
         Self { game: Default::default() }
     }
     pub fn fast_mode(&mut self) -> PyResult<()> {
-        self.game.fast_mode();
+        self.game.performance_mode();
         Ok(())
     }
     pub fn should_supply_next_pieces(&self) -> PyResult<bool> {
@@ -156,9 +156,9 @@ impl GameWrapper {
     pub fn can_hold(&self) -> PyResult<bool> {
         Ok(self.game.state.can_hold)
     }
-    pub fn get_move_decision_material(&self) -> PyResult<MoveDecisionMaterialWrapper> {
-        let material = MoveDecisionMaterial::with_game(&self.game).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(MoveDecisionMaterialWrapper { material })
+    pub fn get_move_decision_resource(&self) -> PyResult<MoveDecisionResourceWrapper> {
+        let resource = MoveDecisionResource::with_game(&self.game).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+        Ok(MoveDecisionResourceWrapper { resource })
     }
     pub fn set_falling_piece_placement(&mut self, dst: PlacementWrapper) -> PyResult<()> {
         if let Some(fp) = self.game.state.falling_piece.as_mut() {

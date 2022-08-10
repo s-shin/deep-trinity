@@ -390,6 +390,7 @@ pub trait Grid<C: Cell>: Clone {
             }
         }
     }
+    /// Search a space (empty area) including the `pos`.
     fn search_space(&self, pos: Vec2) -> HashSet<Vec2> {
         let mut space = HashSet::new();
         self.traverse(pos, |p, c| {
@@ -400,6 +401,35 @@ pub trait Grid<C: Cell>: Clone {
             false
         });
         space
+    }
+    /// Search spaces in the rect represented by `pos` and `size` of interest.
+    fn search_spaces(&self, pos: Vec2, size: Vec2) -> Vec<HashSet<Vec2>> {
+        let mut spaces = Vec::new();
+        let mut check_list = HashSet::<Vec2>::with_capacity(size.0 as usize * size.1 as usize);
+        for y in pos.1..(pos.1 + size.1) {
+            for x in pos.0..(pos.0 + size.0) {
+                check_list.insert((x, y).into());
+            }
+        }
+        while let Some(start) = check_list.iter().next().copied() {
+            if self.cell(start).is_filled() {
+                check_list.remove(&start);
+                continue;
+            }
+            let mut space = HashSet::new();
+            self.traverse(start, |p, c| {
+                if !check_list.remove(&p) {
+                    return false;
+                }
+                if c.is_empty() {
+                    space.insert(p);
+                    return true;
+                }
+                false
+            });
+            spaces.push(space);
+        }
+        spaces
     }
     /// Example:
     /// ```
@@ -642,6 +672,30 @@ impl<C: Cell, G: Grid<C>, F: Fn() -> G> TestSuite<C, G, F> {
             assert!(spaces.contains(pos));
         }
     }
+    pub fn search_spaces(&self) {
+        let mut g = self.new_empty_grid();
+        g.set_rows_with_strs((0, 0).into(), &[
+            "@@@@ ",
+            "   @ ",
+            " @  @",
+            "  @ @",
+            " @  @",
+        ]);
+        let spaces = g.search_spaces((1, 1).into(), (4, 4).into());
+        let expected_spaces: Vec<Vec<Vec2>> = vec![
+            [(1, 1)].iter().map(|&p| p.into()).collect::<Vec<_>>(),
+            [(1, 3), (2, 2), (2, 3), (3, 1), (3, 2)].iter().map(|&p| p.into()).collect::<Vec<_>>(),
+            [(4, 3), (4, 4)].iter().map(|&p| p.into()).collect::<Vec<_>>(),
+        ];
+        assert_eq!(expected_spaces.len(), spaces.len());
+        for space in &spaces {
+            let expected_space = expected_spaces.iter().find(|s| space.contains(s.first().unwrap()));
+            assert!(expected_space.is_some());
+            for pos in expected_space.unwrap() {
+                assert!(space.contains(pos));
+            }
+        }
+    }
 }
 
 //---
@@ -655,5 +709,6 @@ mod tests {
         let suite = TestSuite::new(|| BasicGrid::<BinaryCell>::new((5, 5).into()));
         suite.basic();
         suite.search_space();
+        suite.search_spaces();
     }
 }

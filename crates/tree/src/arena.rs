@@ -30,7 +30,7 @@ enum VisitPlan {
 }
 
 pub struct VisitContext {
-    pub depth: usize,
+    depth: usize,
     next_plan: VisitPlan,
 }
 
@@ -38,6 +38,7 @@ impl VisitContext {
     fn new(depth: usize) -> Self {
         Self { depth, next_plan: VisitPlan::Next }
     }
+    pub fn depth(&self) -> usize { self.depth }
     pub fn skip(&mut self) { self.next_plan = VisitPlan::Skip }
     pub fn finish(&mut self) { self.next_plan = VisitPlan::Finish }
 }
