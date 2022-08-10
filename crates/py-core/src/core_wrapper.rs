@@ -80,13 +80,13 @@ impl PlacementWrapper {
 }
 
 #[derive(Clone)]
-#[pyclass(name = "MoveDecisionMaterial")]
-pub struct MoveDecisionMaterialWrapper {
+#[pyclass(name = "MoveDecisionResource")]
+pub struct MoveDecisionResourceWrapper {
     resource: MoveDecisionResource,
 }
 
 #[pymethods]
-impl MoveDecisionMaterialWrapper {
+impl MoveDecisionResourceWrapper {
     pub fn get_dst_candidates(&self) -> PyResult<HashSet<PlacementWrapper>> {
         let r = self.resource.dst_candidates.iter()
             .map(|&placement| PlacementWrapper { placement })
@@ -156,9 +156,9 @@ impl GameWrapper {
     pub fn can_hold(&self) -> PyResult<bool> {
         Ok(self.game.state.can_hold)
     }
-    pub fn get_move_decision_resource(&self) -> PyResult<MoveDecisionMaterialWrapper> {
+    pub fn get_move_decision_resource(&self) -> PyResult<MoveDecisionResourceWrapper> {
         let resource = MoveDecisionResource::with_game(&self.game).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(MoveDecisionMaterialWrapper { resource })
+        Ok(MoveDecisionResourceWrapper { resource })
     }
     pub fn set_falling_piece_placement(&mut self, dst: PlacementWrapper) -> PyResult<()> {
         if let Some(fp) = self.game.state.falling_piece.as_mut() {

@@ -11,5 +11,5 @@ def test_game():
     game.firm_drop()
     assert game.lock()
     assert len(str(game)) > 0
-    material = game.get_move_decision_material()
-    assert len(material.get_dst_candidates()) > 0
+    resource = game.get_move_decision_resource()
+    assert len(resource.get_dst_candidates()) > 0
