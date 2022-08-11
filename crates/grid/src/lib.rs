@@ -37,20 +37,13 @@ impl fmt::Display for Vec2 {
     }
 }
 
-pub trait Cell: Copy + Clone + From<char> {
+pub trait Cell: Copy + Clone {
     fn empty() -> Self;
     fn any_block() -> Self;
     fn is_empty(&self) -> bool;
     fn is_filled(&self) -> bool { !self.is_empty() }
-    fn to_char(&self) -> char {
-        if self.is_filled() { '@' } else { ' ' }
-    }
-    fn from_char(c: char) -> Self {
-        match c {
-            ' ' => Self::empty(),
-            _ => Self::any_block(),
-        }
-    }
+    fn to_char(&self) -> char;
+    fn try_from_char(c: char) -> Result<Self, &'static str>;
 }
 
 pub trait Grid<C: Cell>: Clone {
@@ -169,7 +162,7 @@ pub trait Grid<C: Cell>: Clone {
                 if x < 0 || x >= self.width() {
                     break;
                 }
-                self.set_cell((x, y).into(), c.into());
+                self.set_cell((x, y).into(), C::try_from_char(c).unwrap());
             }
         }
     }
@@ -544,10 +537,15 @@ impl Cell for BinaryCell {
     fn empty() -> Self { Self(false) }
     fn any_block() -> Self { Self(true) }
     fn is_empty(&self) -> bool { !self.0 }
-}
-
-impl From<char> for BinaryCell {
-    fn from(c: char) -> Self { Self::from_char(c) }
+    fn to_char(&self) -> char {
+        if self.0 { '@' } else { ' ' }
+    }
+    fn try_from_char(c: char) -> Result<Self, &'static str> {
+        Ok(match c {
+            ' ' | '_' => Self::empty(),
+            _ => Self::any_block(),
+        })
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
