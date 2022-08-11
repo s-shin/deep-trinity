@@ -97,7 +97,7 @@ impl FromStr for PiecePlacement {
         let part2 = parts.next().ok_or::<Self::Err>(err_msg.into())?;
 
         let piece = if let Some(c) = part0.next() {
-            if let Ok(p) = Piece::from_char(c) {
+            if let Ok(p) = Piece::try_from_char(c) {
                 p
             } else {
                 return Err(format!("'{}' is not piece character.", c).into());
@@ -130,7 +130,7 @@ impl FromStr for PieceList {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut r = Vec::with_capacity(s.len());
         for c in s.chars() {
-            r.push(Piece::from_char(c)?);
+            r.push(Piece::try_from_char(c)?);
         }
         Ok(PieceList(r))
     }
@@ -168,7 +168,7 @@ fn main() {
     {
         let mut game: Game = Default::default();
         for ps in pps.iter() {
-            println!("{} {} {}", ps.piece.char(), ps.placement.orientation.id(), ps.placement.pos);
+            println!("{} {} {}", ps.piece.to_char(), ps.placement.orientation.id(), ps.placement.pos);
             game.state.playfield.grid.put_fast(ps.placement.pos, game.piece_specs.get(ps.piece).grid(ps.placement.orientation));
         }
         println!("Try to find:\n{}", game);
@@ -229,8 +229,8 @@ fn main() {
             if let Some(action) = data.by_action {
                 println!(
                     "[{}] {} => {:?}",
-                    prev_game.state.hold_piece.map_or(' ', |p| p.char()),
-                    prev_game.state.falling_piece.as_ref().map_or('?', |fp| fp.piece().char()),
+                    prev_game.state.hold_piece.map_or(' ', |p| p.to_char()),
+                    prev_game.state.falling_piece.as_ref().map_or('?', |fp| fp.piece().to_char()),
                     action,
                 );
             }

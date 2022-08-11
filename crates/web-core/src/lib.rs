@@ -18,6 +18,7 @@ pub fn set_panic_hook() {
 
 #[wasm_bindgen]
 #[derive(Copy, Clone)]
+#[repr(u8)]
 pub enum Piece {
     S,
     Z,
@@ -30,6 +31,7 @@ pub enum Piece {
 
 #[wasm_bindgen]
 #[derive(Copy, Clone)]
+#[repr(u8)]
 pub enum Cell {
     Empty,
     Any,
@@ -46,7 +48,7 @@ pub enum Cell {
 static CELLS: [Cell; 10] = [Cell::Empty, Cell::Any, Cell::S, Cell::Z, Cell::L, Cell::J, Cell::I, Cell::T, Cell::O, Cell::Garbage];
 
 impl From<core::Cell> for Cell {
-    fn from(c: core::Cell) -> Self { CELLS[core::CellTypeId::from(c).0 as usize] }
+    fn from(c: core::Cell) -> Self { CELLS[c.to_u8() as usize] }
 }
 
 #[wasm_bindgen]
@@ -213,7 +215,7 @@ impl Game {
     pub fn supply_next_pieces(&mut self, pieces: &[u8]) {
         let mut ps: Vec<core::Piece> = Vec::new();
         for p in pieces.iter() {
-            ps.push((*p as usize).into());
+            ps.push(core::Piece::try_from_u8(*p).unwrap());
         }
         self.game.supply_next_pieces(&ps);
     }

@@ -38,7 +38,7 @@ impl FromStr for PiecePlacement {
         let part3 = parts.next().ok_or::<Self::Err>(err_msg.into())?;
 
         let piece = if let Some(c) = part0.trim().chars().next() {
-            if let Ok(p) = Piece::from_char(c) {
+            if let Ok(p) = Piece::try_from_char(c) {
                 p
             } else {
                 return Err(format!("'{}' is not piece character.", c).into());

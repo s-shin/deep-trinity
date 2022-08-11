@@ -7,6 +7,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops;
+use std::ops::Range;
 use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use num_traits::PrimInt;
@@ -60,33 +61,15 @@ pub use global_config_internal::init_global_config;
 use global_config_internal::global_config;
 
 //--------------------------------------------------------------------------------------------------
-// Piece, Block and Cell
+// Piece and Cell
 //--------------------------------------------------------------------------------------------------
 
-pub const CELL_CHARS: &'static str = " @SZLJITO#";
+pub const NUM_PIECES: usize = 7;
 
-/// 0: Empty
-/// 1: Any
-/// 2-8: S, Z, L, J, I, T, O
-/// 9: Garbage
-pub struct CellTypeId(pub u8);
-
-impl CellTypeId {
-    pub fn to_piece(&self) -> Option<Piece> {
-        if self.0 < 2 || 8 < self.0 {
-            return None;
-        }
-        Some(Piece::from((self.0 - 2) as usize))
-    }
-    pub fn is_valid(&self) -> bool { self.0 <= 9 }
-    pub fn to_char(&self) -> char {
-        assert!(self.is_valid());
-        CELL_CHARS.chars().nth(self.0 as usize).unwrap()
-    }
-    pub fn from_char(c: char) -> Self { Cell::from(c).into() }
-}
+pub const PIECES: [Piece; NUM_PIECES] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum Piece {
     S,
     Z,
@@ -98,106 +81,84 @@ pub enum Piece {
 }
 
 impl Piece {
+    pub fn to_u8(&self) -> u8 { *self as u8 }
+    pub fn try_from_u8(v: u8) -> Result<Self, &'static str> {
+        if v <= NUM_PIECES as u8 {
+            unsafe { Ok(std::mem::transmute(v)) }
+        } else {
+            Err("invalid piece value")
+        }
+    }
     /// This method should be used only in tests.
-    pub fn default_spec(self) -> &'static PieceSpec<'static> {
-        &DEFAULT_PIECE_SPEC_COLLECTION.get(self)
+    pub fn default_spec(&self) -> &'static PieceSpec<'static> {
+        &DEFAULT_PIECE_SPEC_COLLECTION.get(*self)
     }
-    pub fn char(self) -> char {
-        Cell::Block(Block::Piece(self)).to_char()
-    }
-    pub fn from_char(c: char) -> Result<Self, &'static str> {
-        match Cell::from(c) {
-            Cell::Block(Block::Piece(p)) => Ok(p),
-            _ => Err("not piece char"),
-        }
+    pub fn to_char(&self) -> char { Cell::from(*self).to_char() }
+    pub fn try_from_char(c: char) -> Result<Self, &'static str> {
+        Cell::try_from_char(c)?.try_to_piece()
     }
 }
 
-pub const NUM_PIECES: usize = 7;
-
-pub const PIECES: [Piece; NUM_PIECES] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
-
-impl From<usize> for Piece {
-    fn from(n: usize) -> Self {
-        assert!(n < NUM_PIECES);
-        PIECES[n]
-    }
-}
-
-impl Piece {
-    pub fn to_usize(&self) -> usize {
-        match self {
-            Piece::S => 0,
-            Piece::Z => 1,
-            Piece::L => 2,
-            Piece::J => 3,
-            Piece::I => 4,
-            Piece::T => 5,
-            Piece::O => 6,
-        }
-    }
-}
-
-impl From<Piece> for CellTypeId {
-    fn from(p: Piece) -> Self { Self(2 + (p as u8)) }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Block {
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[repr(u8)]
+pub enum Cell {
+    Empty,
     Any,
-    Piece(Piece),
+    S,
+    Z,
+    L,
+    J,
+    I,
+    T,
+    O,
     Garbage,
 }
 
-impl From<Block> for CellTypeId {
-    fn from(b: Block) -> Self {
-        match b {
-            Block::Any => Self(1),
-            Block::Piece(p) => p.into(),
-            Block::Garbage => CellTypeId(9),
+impl Cell {
+    const CHARS: [char; 10] = [' ', '@', 'S', 'Z', 'L', 'J', 'I', 'T', 'O', '#'];
+    const PIECE_RANGE: Range<u8> = 2..9;
+
+    pub fn try_from_u8(v: u8) -> Result<Self, &'static str> {
+        if v <= 9 {
+            unsafe { Ok(std::mem::transmute(v)) }
+        } else {
+            Err("invalid cell value")
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Cell {
-    Empty,
-    Block(Block),
-}
-
-impl From<Cell> for CellTypeId {
-    fn from(c: Cell) -> Self {
-        match c {
-            Cell::Empty => Self(0),
-            Cell::Block(b) => b.into(),
-        }
+    pub fn to_u8(&self) -> u8 {
+        *self as u8
     }
-}
-
-impl From<char> for Cell {
-    fn from(c: char) -> Self {
-        match c.to_ascii_uppercase() {
-            ' ' | '_' => Cell::Empty,
-            '@' => Cell::Block(Block::Any),
-            'S' => Cell::Block(Block::Piece(Piece::S)),
-            'Z' => Cell::Block(Block::Piece(Piece::Z)),
-            'L' => Cell::Block(Block::Piece(Piece::L)),
-            'J' => Cell::Block(Block::Piece(Piece::J)),
-            'I' => Cell::Block(Block::Piece(Piece::I)),
-            'T' => Cell::Block(Block::Piece(Piece::T)),
-            'O' => Cell::Block(Block::Piece(Piece::O)),
-            _ => Cell::Block(Block::Garbage),
+    pub fn is_a_piece(&self) -> bool {
+        Self::PIECE_RANGE.contains(&self.to_u8())
+    }
+    pub fn try_to_piece(&self) -> Result<Piece, &'static str> {
+        let v = self.to_u8();
+        if Self::PIECE_RANGE.contains(&v) {
+            Ok(Piece::try_from_u8(v - Self::PIECE_RANGE.start).unwrap())
+        } else {
+            Err("not a piece")
         }
     }
 }
 
 impl CellTrait for Cell {
     fn empty() -> Self { Self::Empty }
-    fn any_block() -> Self { Self::Block(Block::Any) }
+    fn any_block() -> Self { Self::Any }
     fn is_empty(&self) -> bool { *self == Self::Empty }
-    fn to_char(&self) -> char {
-        let id = CellTypeId::from(*self);
-        CELL_CHARS.chars().nth(id.0 as usize).unwrap()
+    fn to_char(&self) -> char { Cell::CHARS[self.to_u8() as usize] }
+    fn try_from_char(c: char) -> Result<Self, &'static str> {
+        for (i, &cc) in Self::CHARS.iter().enumerate() {
+            if c == cc {
+                return Ok(Self::try_from_u8(i as u8).unwrap());
+            }
+        }
+        Err("invalid cell char")
+    }
+}
+
+impl From<Piece> for Cell {
+    fn from(p: Piece) -> Self {
+        Self::try_from_u8(p.to_u8() + Cell::PIECE_RANGE.start).expect("should be converted")
     }
 }
 
@@ -700,7 +661,7 @@ pub struct PieceSpec<'a> {
 impl<'a> PieceSpec<'a> {
     fn new(store: &'a PrimBitGridConstantsStore, piece: Piece, size: (X, Y), block_pos_list: Vec<(X, Y)>,
            initial_pos: (X, Y), srs_offset_data: Vec<Vec<(X, Y)>>) -> Self {
-        let piece_cell = Cell::Block(Block::Piece(piece));
+        let piece_cell = piece.into();
         let mut grid = BasicGrid::new(size.into());
         for pos in block_pos_list {
             grid.set_cell(pos.into(), piece_cell);
@@ -1014,7 +975,7 @@ impl<'a> Playfield<'a> {
     }
     // If garbage out, `true` will be returned.
     pub fn append_garbage(&mut self, gap_x_list: &[X]) -> bool {
-        let ok = self.grid.insert_rows(0, Cell::Block(Block::Garbage), gap_x_list.len() as Y);
+        let ok = self.grid.insert_rows(0, Cell::Garbage, gap_x_list.len() as Y);
         for (y, x) in gap_x_list.iter().enumerate() {
             self.grid.set_cell((*x, y as Y).into(), Cell::Empty);
         }
@@ -1266,7 +1227,7 @@ impl fmt::Display for NextPieces {
             if i >= self.visible_num {
                 break;
             }
-            write!(f, "{}", Cell::Block(Block::Piece(*p)).to_char())?;
+            write!(f, "{}", p.to_char())?;
         }
         Ok(())
     }
@@ -1702,11 +1663,11 @@ impl<'a> fmt::Display for Game<'a> {
         let h = self.state.playfield.visible_height as usize;
         let num_next = std::cmp::min(self.state.next_pieces.visible_num, self.state.next_pieces.len());
         write!(f, "[{}]", s.hold_piece.map_or(
-            Cell::Empty, |p| { Cell::Block(Block::Piece(p)) }).to_char(),
+            Cell::Empty, |p| p.into()).to_char(),
         )?;
         write!(f, "{}", " ".repeat(w - num_next - 2))?;
         write!(f, "({})", s.falling_piece.as_ref().map_or(
-            Cell::Empty, |fp| { Cell::Block(Block::Piece(fp.piece())) }).to_char(),
+            Cell::Empty, |fp| fp.piece().into()).to_char(),
         )?;
         writeln!(f, "{}", s.next_pieces)?;
         writeln!(f, "--+{}+", "-".repeat(w))?;
@@ -1813,9 +1774,9 @@ mod tests {
     #[test]
     fn test_grid_num_covered_empty_cells() {
         let mut grid = BasicGrid::new((10, 10).into());
-        grid.set_cell((0, 5).into(), Cell::Block(Block::Any));
-        grid.set_cell((0, 2).into(), Cell::Block(Block::Any));
-        grid.set_cell((2, 1).into(), Cell::Block(Block::Any));
+        grid.set_cell((0, 5).into(), Cell::Any);
+        grid.set_cell((0, 2).into(), Cell::Any);
+        grid.set_cell((2, 1).into(), Cell::Any);
         assert_eq!(5, grid.num_covered_empty_cells());
     }
 

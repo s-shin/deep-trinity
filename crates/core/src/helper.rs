@@ -519,7 +519,7 @@ mod tests {
         }
         impl Case {
             fn new(num_visible: usize, pieces_str: &'static str, num_consumed: usize, piece: Piece, offset: usize, span: usize, prob_permil: u16) -> Self {
-                let pieces = pieces_str.chars().map(|c| Piece::from_char(c).unwrap()).collect::<Vec<_>>();
+                let pieces = pieces_str.chars().map(|c| Piece::try_from_char(c).unwrap()).collect::<Vec<_>>();
                 Self { num_visible, pieces, num_consumed, piece, offset, span, prob_permil }
             }
         }

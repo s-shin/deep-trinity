@@ -166,7 +166,7 @@ impl Bot for TemplateBot {
 mod tests {
     use super::*;
     use crate::{BotRunner, BotRunnerHooks};
-    use core::{Cell, Block};
+    use core::Cell;
 
     #[test]
     fn test_template_bot() {
@@ -203,10 +203,7 @@ mod tests {
         impl Params {
             fn new(tmpl: Opener, next_pieces_str: &'static str, debug_print: bool) -> Self {
                 let next_pieces = next_pieces_str.chars().map(|c| {
-                    match Cell::from(c) {
-                        Cell::Block(Block::Piece(p)) => p,
-                        _ => panic!(),
-                    }
+                    Piece::try_from_char(c).unwrap()
                 }).collect::<_>();
                 Self { tmpl, next_pieces, debug_print }
             }
