@@ -16,49 +16,49 @@ use grid::{Cell as CellTrait, Grid, X, Y, Vec2};
 use grid::bitgrid::BitGridTrait;
 
 //--------------------------------------------------------------------------------------------------
-// Global Configurations
+// Default Value Configurations
 //--------------------------------------------------------------------------------------------------
 
 #[derive(Copy, Clone, Debug)]
-pub struct GlobalConfig {
+pub struct DefaultValueConfig {
     playfield_size: Vec2,
     playfield_visible_height: Y,
     num_visible_next_pieces: usize,
 }
 
-impl GlobalConfig {
+impl DefaultValueConfig {
     pub fn new(playfield_size: Vec2, playfield_visible_height: Y, num_visible_next_pieces: usize) -> Self {
         Self { playfield_size, playfield_visible_height, num_visible_next_pieces }
     }
 }
 
-impl Default for GlobalConfig {
+impl Default for DefaultValueConfig {
     fn default() -> Self {
         Self::new((10, 40).into(), 20, 5)
     }
 }
 
-mod global_config_internal {
+mod default_value_config_internal {
     use once_cell::sync::OnceCell;
-    use super::GlobalConfig;
+    use super::DefaultValueConfig;
 
-    static GLOBAL_CONFIG: OnceCell<GlobalConfig> = OnceCell::new();
+    static CONFIG: OnceCell<DefaultValueConfig> = OnceCell::new();
 
-    pub fn init_global_config(v: GlobalConfig) -> Result<(), &'static str> {
-        GLOBAL_CONFIG.set(v).map_err(|_| "Already initialized.")
+    pub fn configure_default_values(v: DefaultValueConfig) -> Result<(), &'static str> {
+        CONFIG.set(v).map_err(|_| "Already initialized.")
     }
 
-    pub fn global_config() -> &'static GlobalConfig {
-        if let Some(c) = GLOBAL_CONFIG.get() {
+    pub fn default_value_config() -> &'static DefaultValueConfig {
+        if let Some(c) = CONFIG.get() {
             return c;
         }
-        GLOBAL_CONFIG.set(Default::default()).ok();
-        GLOBAL_CONFIG.get().unwrap()
+        CONFIG.set(Default::default()).ok();
+        CONFIG.get().unwrap()
     }
 }
 
-pub use global_config_internal::init_global_config;
-use global_config_internal::global_config;
+pub use default_value_config_internal::configure_default_values;
+use default_value_config_internal::default_value_config;
 
 //--------------------------------------------------------------------------------------------------
 // Piece and Cell
@@ -174,7 +174,7 @@ type PrimBitGrid<'a> = grid::bitgrid::PrimBitGrid<'a, BitGridInt, Cell>;
 type BasicBitGrid<'a> = grid::bitgrid::BasicBitGrid<'a, BitGridInt, Cell>;
 
 pub static DEFAULT_PRIM_GRID_CONSTANTS_STORE: Lazy<PrimBitGridConstantsStore> = Lazy::new(|| {
-    let def = global_config();
+    let def = default_value_config();
     // Use the width of a playfield as the stride.
     let mut store = PrimBitGridConstantsStore::new(def.playfield_size.0);
     // For I piece.
@@ -1189,7 +1189,7 @@ impl<'a> Playfield<'a> {
 
 impl Default for Playfield<'static> {
     fn default() -> Self {
-        let def = global_config();
+        let def = default_value_config();
         Self::new(&DEFAULT_PRIM_GRID_CONSTANTS_STORE, def.playfield_size, true, def.playfield_visible_height).unwrap()
     }
 }
@@ -1218,7 +1218,7 @@ impl NextPieces {
 }
 
 impl Default for NextPieces {
-    fn default() -> Self { Self::new(global_config().num_visible_next_pieces) }
+    fn default() -> Self { Self::new(default_value_config().num_visible_next_pieces) }
 }
 
 impl fmt::Display for NextPieces {
