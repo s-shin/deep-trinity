@@ -4,6 +4,7 @@ pub mod prelude;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
+use std::fmt::{Debug, Display, Formatter, Write};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops;
@@ -68,7 +69,7 @@ pub const NUM_PIECES: usize = 7;
 
 pub const PIECES: [Piece; NUM_PIECES] = [Piece::S, Piece::Z, Piece::L, Piece::J, Piece::I, Piece::T, Piece::O];
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Piece {
     S,
@@ -84,10 +85,13 @@ impl Piece {
     pub fn to_u8(&self) -> u8 { *self as u8 }
     pub fn try_from_u8(v: u8) -> Result<Self, &'static str> {
         if v <= NUM_PIECES as u8 {
-            unsafe { Ok(std::mem::transmute(v)) }
+            Ok(Self::from_u8_unchecked(v))
         } else {
             Err("invalid piece value")
         }
+    }
+    pub fn from_u8_unchecked(v: u8) -> Self {
+        unsafe { std::mem::transmute(v) }
     }
     /// This method should be used only in tests.
     pub fn default_spec(&self) -> &'static PieceSpec<'static> {
@@ -99,7 +103,19 @@ impl Piece {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+impl Display for Piece {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_char())
+    }
+}
+
+impl Debug for Piece {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Piece {{ {} }}", self.to_char())
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum Cell {
     Empty,
@@ -120,10 +136,13 @@ impl Cell {
 
     pub fn try_from_u8(v: u8) -> Result<Self, &'static str> {
         if v <= 9 {
-            unsafe { Ok(std::mem::transmute(v)) }
+            Ok(Self::from_u8_unchecked(v))
         } else {
             Err("invalid cell value")
         }
+    }
+    pub fn from_u8_unchecked(v: u8) -> Self {
+        unsafe { std::mem::transmute(v) }
     }
     pub fn to_u8(&self) -> u8 {
         *self as u8
@@ -159,6 +178,18 @@ impl CellTrait for Cell {
 impl From<Piece> for Cell {
     fn from(p: Piece) -> Self {
         Self::try_from_u8(p.to_u8() + Cell::PIECE_RANGE.start).expect("should be converted")
+    }
+}
+
+impl Display for Cell {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_char())
+    }
+}
+
+impl Debug for Cell {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Cell {{ {} }}", self.to_char())
     }
 }
 
@@ -276,8 +307,8 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Grid<Cell> for HybridGrid<
     }
 }
 
-impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> fmt::Display for HybridGrid<'a, BitGrid> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.format(f) }
+impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Display for HybridGrid<'a, BitGrid> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result { self.format(f) }
 }
 
 impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> PartialEq for HybridGrid<'a, BitGrid> {
@@ -538,8 +569,8 @@ impl LineClear {
     pub fn is_tsmz(&self) -> bool { self.is_tspin_mini() && self.num_lines == 0 }
 }
 
-impl fmt::Display for LineClear {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for LineClear {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let n = self.num_lines as usize;
         if self.is_normal() {
             static STRS: [&'static str; 5] = ["zero", "single", "double", "triple", "tetris"];
@@ -1221,8 +1252,8 @@ impl Default for NextPieces {
     fn default() -> Self { Self::new(default_value_config().num_visible_next_pieces) }
 }
 
-impl fmt::Display for NextPieces {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for NextPieces {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for (i, p) in self.iter().enumerate() {
             if i >= self.visible_num {
                 break;
@@ -1332,8 +1363,8 @@ pub enum StatisticsEntryType {
     Lock,
 }
 
-impl fmt::Display for StatisticsEntryType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for StatisticsEntryType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             StatisticsEntryType::LineClear(lc) => write!(f, "{}", lc),
             StatisticsEntryType::Combo(n) => write!(f, "combo[{}]", n),
@@ -1404,6 +1435,24 @@ pub struct GameState<'a> {
 
 impl<'a> GameState<'a> {
     pub fn is_game_over(&self) -> bool { !self.game_over_reason.is_empty() }
+    /// Return the cell of `pos` from the playfield or the falling piece.
+    pub fn get_cell(&self, pos: Vec2) -> Cell {
+        let mut cell = if let Some(fp) = self.falling_piece.as_ref() {
+            let grid = fp.grid();
+            let grid_pos = pos - fp.placement.pos;
+            if grid.is_inside(grid_pos) {
+                grid.cell(grid_pos.into())
+            } else {
+                Cell::Empty
+            }
+        } else {
+            Cell::Empty
+        };
+        if cell == Cell::Empty {
+            cell = s.playfield.grid.cell(pos.into());
+        }
+        cell
+    }
 }
 
 impl Default for GameState<'static> {
@@ -1447,22 +1496,7 @@ impl<'a> Game<'a> {
         self.state.playfield.grid.disable_basic_grid();
     }
     pub fn get_cell(&self, pos: Vec2) -> Cell {
-        let s = &self.state;
-        let mut cell = if let Some(fp) = s.falling_piece.as_ref() {
-            let grid = fp.grid();
-            let grid_pos = pos - fp.placement.pos;
-            if grid.is_inside(grid_pos) {
-                grid.cell(grid_pos.into())
-            } else {
-                Cell::Empty
-            }
-        } else {
-            Cell::Empty
-        };
-        if cell == Cell::Empty {
-            cell = s.playfield.grid.cell(pos.into());
-        }
-        cell
+        self.state.get_cell(pos)
     }
     pub fn should_supply_next_pieces(&self) -> bool {
         self.state.next_pieces.should_supply()
@@ -1656,8 +1690,8 @@ impl<'a> Game<'a> {
     }
 }
 
-impl<'a> fmt::Display for Game<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<'a> Display for Game<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let s = &self.state;
         let w = self.state.playfield.width() as usize;
         let h = self.state.playfield.visible_height as usize;
@@ -1810,7 +1844,7 @@ mod tests {
     #[test]
     fn test_random_piece_generator() {
         let mut rpg = RandomPieceGenerator::new(rand::thread_rng());
-        let piece_set: std::collections::HashSet<Piece> = rpg.generate().iter().copied().collect::<_>();
+        let piece_set: HashSet<Piece> = rpg.generate().iter().copied().collect::<_>();
         assert_eq!(NUM_PIECES, piece_set.len());
     }
 
