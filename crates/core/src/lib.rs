@@ -1774,9 +1774,9 @@ mod tests {
     #[test]
     fn test_grid_num_covered_empty_cells() {
         let mut grid = BasicGrid::new((10, 10).into());
-        grid.set_cell((0, 5).into(), Cell::Block(Block::Any));
-        grid.set_cell((0, 2).into(), Cell::Block(Block::Any));
-        grid.set_cell((2, 1).into(), Cell::Block(Block::Any));
+        grid.set_cell((0, 5).into(), Cell::Any);
+        grid.set_cell((0, 2).into(), Cell::Any);
+        grid.set_cell((2, 1).into(), Cell::Any);
         assert_eq!(5, grid.num_covered_empty_cells());
     }
 
