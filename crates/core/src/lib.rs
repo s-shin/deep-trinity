@@ -3,12 +3,14 @@ pub mod helper;
 pub mod prelude;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
+use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops;
 use std::ops::Range;
+use std::str::FromStr;
 use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use num_traits::PrimInt;
@@ -115,6 +117,14 @@ impl Debug for Piece {
     }
 }
 
+impl FromStr for Piece {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Cell::from_str(s)?.try_to_piece()
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 #[repr(u8)]
 pub enum Cell {
@@ -190,6 +200,22 @@ impl Display for Cell {
 impl Debug for Cell {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Cell {{ {} }}", self.to_char())
+    }
+}
+
+impl FromStr for Cell {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut chars = s.chars();
+        if let Some(c) = chars.next() {
+            if let Some(_) = chars.next() {
+                return Err("invalid length of str");
+            }
+            Self::try_from_char(c)
+        } else {
+            Err("str is empty")
+        }
     }
 }
 
@@ -323,34 +349,66 @@ impl<'a, BitGrid: BitGridTrait<'a, BitGridInt, Cell>> Hash for HybridGrid<'a, Bi
 // Orientation
 //--------------------------------------------------------------------------------------------------
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Orientation(u8);
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[repr(u8)]
+pub enum Orientation {
+    Orientation0,
+    Orientation1,
+    Orientation2,
+    Orientation3,
+}
 
-pub const ORIENTATION_0: Orientation = Orientation(0);
-pub const ORIENTATION_1: Orientation = Orientation(1);
-pub const ORIENTATION_2: Orientation = Orientation(2);
-pub const ORIENTATION_3: Orientation = Orientation(3);
-pub const ORIENTATIONS: [Orientation; 4] = [ORIENTATION_0, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3];
+use Orientation::*;
+
+pub const ORIENTATIONS: [Orientation; 4] = [Orientation0, Orientation1, Orientation2, Orientation3];
 
 impl Orientation {
-    pub fn new(n: u8) -> Self { Orientation(n % 4) }
-    pub fn normalize(&mut self) {
-        self.0 %= 4;
-    }
-    pub fn is(&self, n: u8) -> bool {
-        debug_assert!(n < 4);
-        self.0 % 4 == n
-    }
-    pub fn rotate(self, n: i8) -> Self {
-        let mut n = (self.0 as i8 + n) % 4;
+    pub fn rotate(&self, n: i8) -> Self {
+        let mut n = (*self as i8 + n) % 4;
         if n < 0 {
             n += 4;
         }
-        Self(n as u8)
+        Self::from_u8_unchecked(n as u8)
     }
-    pub fn id(self) -> u8 { self.0 % 4 }
-    pub fn is_even(self) -> bool { self.0 % 2 == 0 }
-    pub fn is_odd(self) -> bool { self.0 % 2 == 1 }
+    pub fn try_from_u8(v: u8) -> Result<Self, &'static str> {
+        if v < 4 {
+            Ok(Self::from_u8_unchecked(v))
+        } else {
+            Err("invalid orientation value")
+        }
+    }
+    pub fn from_u8_unchecked(v: u8) -> Self {
+        unsafe { std::mem::transmute(v) }
+    }
+    pub fn to_u8(&self) -> u8 { *self as u8 }
+    pub fn to_usize(&self) -> usize { self.to_u8() as usize }
+    pub fn is_even(&self) -> bool { self.to_u8() % 2 == 0 }
+    pub fn is_odd(&self) -> bool { self.to_u8() % 2 == 1 }
+}
+
+impl Default for Orientation {
+    fn default() -> Self { Orientation0 }
+}
+
+impl FromStr for Orientation {
+    type Err = Box<dyn Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = u8::from_str(s)?;
+        if v < 4 {
+            Ok(Self::from_u8_unchecked(v))
+        } else {
+            Err("invalid number".into())
+        }
+    }
+}
+
+impl From<Orientation> for u8 {
+    fn from(o: Orientation) -> Self { o.to_u8() }
+}
+
+impl From<Orientation> for usize {
+    fn from(o: Orientation) -> Self { o.to_usize() }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -377,12 +435,12 @@ impl Placement {
         let (fo, fx, fy) = factors.unwrap_or((1, 1, 1));
         (dp.0.abs() as usize) * fx
             + (dp.1.abs() as usize) * fy
-            + ((self.orientation.id() as i8 - other.orientation.id() as i8).abs() as usize) * fo
+            + ((self.orientation as i8 - other.orientation as i8).abs() as usize) * fo
     }
     pub fn normalize(&self, piece: Piece) -> Placement {
         let alts = helper::get_alternative_placements(piece, self);
-        match alts.iter().min_by(|p1, p2| p1.orientation.id().cmp(&p2.orientation.id())) {
-            Some(p) => if self.orientation.id() < p.orientation.id() {
+        match alts.iter().min_by(|p1, p2| p1.orientation.cmp(&p2.orientation)) {
+            Some(p) => if self.orientation < p.orientation {
                 self.clone()
             } else {
                 *p
@@ -715,12 +773,12 @@ impl<'a> PieceSpec<'a> {
         Self {
             piece,
             grids,
-            initial_placement: Placement::new(ORIENTATION_0, initial_pos.into()),
+            initial_placement: Placement::new(Orientation0, initial_pos.into()),
             srs_offset_data,
         }
     }
     pub fn grid(&self, o: Orientation) -> &HybridGrid<'a, PrimBitGrid<'a>> {
-        self.grids.get(o.id() as usize).unwrap()
+        self.grids.get(o.to_usize()).unwrap()
     }
 }
 
@@ -929,7 +987,7 @@ impl<'a> FallingPiece<'a> {
     }
     pub fn piece(&self) -> Piece { self.piece_spec.piece }
     pub fn grid(&self) -> &'a HybridGrid<PrimBitGrid<'a>> {
-        &self.piece_spec.grids[self.placement.orientation.id() as usize]
+        &self.piece_spec.grids[self.placement.orientation as usize]
     }
     pub fn apply_move(&mut self, mv: Move, pf: &Playfield, mode: RotationMode) -> bool {
         debug_assert_eq!(RotationMode::Srs, mode);
@@ -1061,9 +1119,9 @@ impl<'a> Playfield<'a> {
     pub fn check_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Option<Placement> {
         let next_orientation: Orientation = fp.placement.orientation.rotate(if cw { 1 } else { -1 });
         let spec = fp.piece_spec;
-        let next_grid = &spec.grids[next_orientation.id() as usize];
-        let offsets1 = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
-        let offsets2 = &spec.srs_offset_data[next_orientation.id() as usize];
+        let next_grid = &spec.grids[next_orientation as usize];
+        let offsets1 = &spec.srs_offset_data[fp.placement.orientation as usize];
+        let offsets2 = &spec.srs_offset_data[next_orientation as usize];
         for i in 0..offsets1.len() {
             let p = fp.placement.pos + offsets1[i].into() - offsets2[i].into();
             if self.grid.can_put_fast(p, next_grid) {
@@ -1080,9 +1138,9 @@ impl<'a> Playfield<'a> {
     pub fn check_reverse_rotation_by_srs(&self, fp: &FallingPiece, cw: bool) -> Vec<Placement> {
         let prev_orientation: Orientation = fp.placement.orientation.rotate(if cw { -1 } else { 1 });
         let spec = fp.piece_spec;
-        let prev_grid = &spec.grids[prev_orientation.id() as usize];
-        let offsets1 = &spec.srs_offset_data[prev_orientation.id() as usize];
-        let offsets2 = &spec.srs_offset_data[fp.placement.orientation.id() as usize];
+        let prev_grid = &spec.grids[prev_orientation as usize];
+        let offsets1 = &spec.srs_offset_data[prev_orientation as usize];
+        let offsets2 = &spec.srs_offset_data[fp.placement.orientation as usize];
         let mut r = Vec::new();
         for i in 0..offsets1.len() {
             let p = fp.placement.pos - offsets1[i].into() + offsets2[i].into();
@@ -1116,10 +1174,10 @@ impl<'a> Playfield<'a> {
                 if is_wall || !self.grid.cell(pos.into()).is_empty() {
                     num_corners += 1;
                     if match fp.placement.orientation {
-                        ORIENTATION_0 => { (dx, dy) == (0, 2) || (dx, dy) == (2, 2) }
-                        ORIENTATION_1 => { (dx, dy) == (2, 0) || (dx, dy) == (2, 2) }
-                        ORIENTATION_2 => { (dx, dy) == (0, 0) || (dx, dy) == (2, 0) }
-                        ORIENTATION_3 => { (dx, dy) == (0, 0) || (dx, dy) == (0, 2) }
+                        Orientation0 => { (dx, dy) == (0, 2) || (dx, dy) == (2, 2) }
+                        Orientation1 => { (dx, dy) == (2, 0) || (dx, dy) == (2, 2) }
+                        Orientation2 => { (dx, dy) == (0, 0) || (dx, dy) == (2, 0) }
+                        Orientation3 => { (dx, dy) == (0, 0) || (dx, dy) == (0, 2) }
                         _ => panic!(),
                     } {
                         num_pointing_side_corners += 1;
@@ -1192,16 +1250,16 @@ impl<'a> Playfield<'a> {
         };
         let yend = (self.grid.height() - self.grid.top_padding()) as Y;
         let piece_grids = [
-            &spec.grids[ORIENTATION_0.id() as usize],
-            &spec.grids[ORIENTATION_1.id() as usize],
-            &spec.grids[ORIENTATION_2.id() as usize],
-            &spec.grids[ORIENTATION_3.id() as usize],
+            &spec.grids[Orientation0.to_usize()],
+            &spec.grids[Orientation1.to_usize()],
+            &spec.grids[Orientation2.to_usize()],
+            &spec.grids[Orientation3.to_usize()],
         ];
         let mut r: Vec<Placement> = Vec::new();
         for y in -max_padding..=yend {
             for x in -max_padding..=(self.grid.width() as X - max_padding) {
                 for o in &ORIENTATIONS {
-                    let g = piece_grids[o.id() as usize];
+                    let g = piece_grids[o.to_usize()];
                     let can_put = self.grid.can_put_fast((x, y).into(), g);
                     if !can_put {
                         continue;
@@ -1829,15 +1887,15 @@ mod tests {
         assert!(fp.apply_move(Move::Shift(-1), &pf, RotationMode::Srs));
         assert!(fp.apply_move(Move::Shift(-1), &pf, RotationMode::Srs));
         let path = fp.move_path.normalize();
-        assert_eq!(Placement::new(ORIENTATION_0, (3, 18).into()), path.initial_placement);
+        assert_eq!(Placement::new(Orientation0, (3, 18).into()), path.initial_placement);
         assert_eq!(vec![
-            MovePathItem::new(Move::Shift(2), Placement::new(ORIENTATION_0, (5, 18).into())),
-            MovePathItem::new(Move::Rotate(1), Placement::new(ORIENTATION_1, (5, 19).into())),
-            MovePathItem::new(Move::Rotate(1), Placement::new(ORIENTATION_2, (6, 19).into())),
-            MovePathItem::new(Move::Drop(2), Placement::new(ORIENTATION_2, (6, 17).into())),
-            MovePathItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_1, (5, 17).into())),
-            MovePathItem::new(Move::Rotate(-1), Placement::new(ORIENTATION_0, (5, 16).into())),
-            MovePathItem::new(Move::Shift(-2), Placement::new(ORIENTATION_0, (3, 16).into())),
+            MovePathItem::new(Move::Shift(2), Placement::new(Orientation0, (5, 18).into())),
+            MovePathItem::new(Move::Rotate(1), Placement::new(Orientation1, (5, 19).into())),
+            MovePathItem::new(Move::Rotate(1), Placement::new(Orientation2, (6, 19).into())),
+            MovePathItem::new(Move::Drop(2), Placement::new(Orientation2, (6, 17).into())),
+            MovePathItem::new(Move::Rotate(-1), Placement::new(Orientation1, (5, 17).into())),
+            MovePathItem::new(Move::Rotate(-1), Placement::new(Orientation0, (5, 16).into())),
+            MovePathItem::new(Move::Shift(-2), Placement::new(Orientation0, (3, 16).into())),
         ], path.items);
     }
 
@@ -1882,15 +1940,15 @@ mod tests {
             "   @@@@@@@",
             "@ @@@@@@@@",
         ]);
-        let fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(ORIENTATION_2, (0, 0).into()));
+        let fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(Orientation2, (0, 0).into()));
         let r_cw = pf.check_reverse_rotation_by_srs(&fp, true);
         assert_eq!(vec![
-            Placement::new(ORIENTATION_1, (0, 0).into()),
-            Placement::new(ORIENTATION_1, (-1, 1).into()),
+            Placement::new(Orientation1, (0, 0).into()),
+            Placement::new(Orientation1, (-1, 1).into()),
         ], r_cw);
         let r_ccw = pf.check_reverse_rotation_by_srs(&fp, false);
         assert_eq!(vec![
-            Placement::new(ORIENTATION_3, (0, 0).into()),
+            Placement::new(Orientation3, (0, 0).into()),
         ], r_ccw);
     }
 
@@ -1900,9 +1958,9 @@ mod tests {
         pf.set_rows_with_strs((0, 0).into(), &[
             " @@@@@@@@@",
         ]);
-        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(ORIENTATION_0, (0, 0).into()));
+        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(Orientation0, (0, 0).into()));
         assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
-        assert_eq!(Placement::new(ORIENTATION_1, (-1, 0).into()), fp.placement);
+        assert_eq!(Placement::new(Orientation1, (-1, 0).into()), fp.placement);
         let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
         assert_eq!(Some(TSpin::Mini), tspin);
     }
@@ -1917,9 +1975,9 @@ mod tests {
             "@@@@@@  @@",
             "@@@@@@@ @@",
         ]);
-        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(ORIENTATION_2, (6, 2).into()));
+        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(Orientation2, (6, 2).into()));
         assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
-        assert_eq!(Placement::new(ORIENTATION_3, (6, 0).into()), fp.placement);
+        assert_eq!(Placement::new(Orientation3, (6, 0).into()), fp.placement);
         let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
         assert_eq!(Some(TSpin::Mini), tspin);
     }
@@ -1934,9 +1992,9 @@ mod tests {
             "@@@@@@@  @",
             "@@@@@@@@ @",
         ]);
-        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(ORIENTATION_2, (6, 2).into()));
+        let mut fp = FallingPiece::new(Piece::T.default_spec(), Placement::new(Orientation2, (6, 2).into()));
         assert!(fp.apply_move(Move::Rotate(1), &pf, RotationMode::Srs));
-        assert_eq!(Placement::new(ORIENTATION_3, (7, 0).into()), fp.placement);
+        assert_eq!(Placement::new(Orientation3, (7, 0).into()), fp.placement);
         let tspin = pf.check_tspin(&fp, TSpinJudgementMode::PuyoPuyoTetris);
         assert_eq!(Some(TSpin::Standard), tspin);
     }
@@ -1951,8 +2009,8 @@ mod tests {
             " @@@@@@@@ ",
         ]);
         let ps = pf.search_lockable_placements(Piece::I.default_spec());
-        assert!(ps.contains(&Placement::new(ORIENTATION_1, (-2, 0).into())));
-        assert!(ps.contains(&Placement::new(ORIENTATION_3, (-2, -1).into())));
+        assert!(ps.contains(&Placement::new(Orientation1, (-2, 0).into())));
+        assert!(ps.contains(&Placement::new(Orientation3, (-2, -1).into())));
     }
 
     #[test]
@@ -1986,7 +2044,7 @@ mod tests {
         let fp = game.state.falling_piece.as_ref().unwrap();
         let lockable = pf.search_lockable_placements(fp.piece().default_spec());
 
-        let dst = Placement::new(ORIENTATION_3, (1, 0).into());
+        let dst = Placement::new(Orientation3, (1, 0).into());
         assert!(lockable.iter().any(|p| { *p == dst }));
 
         for i in 0..=1 {

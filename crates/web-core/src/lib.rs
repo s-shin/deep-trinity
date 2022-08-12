@@ -80,13 +80,13 @@ pub struct Placement {
 
 impl Into<core::Placement> for Placement {
     fn into(self) -> core::Placement {
-        core::Placement::new(core::Orientation::new(self.orientation), (self.x, self.y).into())
+        core::Placement::new(core::Orientation::try_from_u8(self.orientation).unwrap(), (self.x, self.y).into())
     }
 }
 
 impl From<core::Placement> for Placement {
     fn from(p: core::Placement) -> Self {
-        Self { orientation: p.orientation.id(), x: p.pos.0, y: p.pos.1 }
+        Self { orientation: p.orientation.to_u8(), x: p.pos.0, y: p.pos.1 }
     }
 }
 

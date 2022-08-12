@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::error::Error;
 use grid::Vec2;
-use core::{ORIENTATION_0, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, Orientation, Piece, Move, MoveTransition, Placement, MovePathItem};
+use core::{Orientation, Orientation::*, Piece, Move, MoveTransition, Placement, MovePathItem};
 use crate::{Game, Bot, Action};
 
 pub type MoveName = &'static str;
@@ -31,56 +31,56 @@ impl Opener {
 pub fn tsd_opener_l_01() -> Opener {
     Opener::new(
         &[
-            (Piece::I, ORIENTATION_0, Vec2(2, -2), "i", vec![]),
-            (Piece::O, ORIENTATION_0, Vec2(7, -1), "", vec![]),
-            (Piece::L, ORIENTATION_1, Vec2(-1, 0), "", vec![]),
-            (Piece::S, ORIENTATION_1, Vec2(5, 0), "", vec!["i"]),
-            (Piece::Z, ORIENTATION_0, Vec2(3, 0), "z", vec!["i"]),
-            (Piece::J, ORIENTATION_2, Vec2(3, 2), "", vec!["z"]),
+            (Piece::I, Orientation0, Vec2(2, -2), "i", vec![]),
+            (Piece::O, Orientation0, Vec2(7, -1), "", vec![]),
+            (Piece::L, Orientation1, Vec2(-1, 0), "", vec![]),
+            (Piece::S, Orientation1, Vec2(5, 0), "", vec!["i"]),
+            (Piece::Z, Orientation0, Vec2(3, 0), "z", vec!["i"]),
+            (Piece::J, Orientation2, Vec2(3, 2), "", vec!["z"]),
         ],
-        (Piece::T, ORIENTATION_2, Vec2(1, 0), Some((Move::Rotate(1), ORIENTATION_1, Vec2(0, 1)))),
+        (Piece::T, Orientation2, Vec2(1, 0), Some((Move::Rotate(1), Orientation1, Vec2(0, 1)))),
     )
 }
 
 pub fn tsd_opener_l_02() -> Opener {
     Opener::new(
         &[
-            (Piece::I, ORIENTATION_0, Vec2(2, -2), "i", vec![]),
-            (Piece::O, ORIENTATION_0, Vec2(7, -1), "", vec![]),
-            (Piece::L, ORIENTATION_1, Vec2(-1, 0), "", vec![]),
-            (Piece::J, ORIENTATION_2, Vec2(5, 0), "j", vec!["i"]),
-            (Piece::S, ORIENTATION_3, Vec2(3, 1), "s", vec!["i"]),
-            (Piece::Z, ORIENTATION_0, Vec2(4, 1), "", vec!["j", "s"]),
+            (Piece::I, Orientation0, Vec2(2, -2), "i", vec![]),
+            (Piece::O, Orientation0, Vec2(7, -1), "", vec![]),
+            (Piece::L, Orientation1, Vec2(-1, 0), "", vec![]),
+            (Piece::J, Orientation2, Vec2(5, 0), "j", vec!["i"]),
+            (Piece::S, Orientation3, Vec2(3, 1), "s", vec!["i"]),
+            (Piece::Z, Orientation0, Vec2(4, 1), "", vec!["j", "s"]),
         ],
-        (Piece::T, ORIENTATION_2, Vec2(1, 0), Some((Move::Rotate(1), ORIENTATION_1, Vec2(0, 1)))),
+        (Piece::T, Orientation2, Vec2(1, 0), Some((Move::Rotate(1), Orientation1, Vec2(0, 1)))),
     )
 }
 
 pub fn tsd_opener_r_01() -> Opener {
     Opener::new(
         &[
-            (Piece::I, ORIENTATION_0, Vec2(2, -2), "i", vec![]),
-            (Piece::O, ORIENTATION_0, Vec2(-1, -1), "", vec![]),
-            (Piece::J, ORIENTATION_3, Vec2(8, 0), "", vec![]),
-            (Piece::Z, ORIENTATION_3, Vec2(2, 0), "", vec!["i"]),
-            (Piece::S, ORIENTATION_0, Vec2(4, 0), "s", vec!["i"]),
-            (Piece::L, ORIENTATION_2, Vec2(4, 2), "", vec!["s"]),
+            (Piece::I, Orientation0, Vec2(2, -2), "i", vec![]),
+            (Piece::O, Orientation0, Vec2(-1, -1), "", vec![]),
+            (Piece::J, Orientation3, Vec2(8, 0), "", vec![]),
+            (Piece::Z, Orientation3, Vec2(2, 0), "", vec!["i"]),
+            (Piece::S, Orientation0, Vec2(4, 0), "s", vec!["i"]),
+            (Piece::L, Orientation2, Vec2(4, 2), "", vec!["s"]),
         ],
-        (Piece::T, ORIENTATION_2, Vec2(6, 0), Some((Move::Rotate(-1), ORIENTATION_3, Vec2(7, 1)))),
+        (Piece::T, Orientation2, Vec2(6, 0), Some((Move::Rotate(-1), Orientation3, Vec2(7, 1)))),
     )
 }
 
 pub fn tsd_opener_r_02() -> Opener {
     Opener::new(
         &[
-            (Piece::I, ORIENTATION_0, Vec2(2, -2), "i", vec![]),
-            (Piece::O, ORIENTATION_0, Vec2(-1, -1), "", vec![]),
-            (Piece::J, ORIENTATION_3, Vec2(8, 0), "", vec![]),
-            (Piece::L, ORIENTATION_2, Vec2(2, 0), "l", vec!["i"]),
-            (Piece::Z, ORIENTATION_1, Vec2(4, 1), "z", vec!["i"]),
-            (Piece::S, ORIENTATION_0, Vec2(3, 1), "", vec!["l", "z"]),
+            (Piece::I, Orientation0, Vec2(2, -2), "i", vec![]),
+            (Piece::O, Orientation0, Vec2(-1, -1), "", vec![]),
+            (Piece::J, Orientation3, Vec2(8, 0), "", vec![]),
+            (Piece::L, Orientation2, Vec2(2, 0), "l", vec!["i"]),
+            (Piece::Z, Orientation1, Vec2(4, 1), "z", vec!["i"]),
+            (Piece::S, Orientation0, Vec2(3, 1), "", vec!["l", "z"]),
         ],
-        (Piece::T, ORIENTATION_2, Vec2(6, 0), Some((Move::Rotate(-1), ORIENTATION_3, Vec2(7, 1)))),
+        (Piece::T, Orientation2, Vec2(6, 0), Some((Move::Rotate(-1), Orientation3, Vec2(7, 1)))),
     )
 }
 

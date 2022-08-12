@@ -1,5 +1,5 @@
 use std::collections::{HashSet, VecDeque};
-use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, Placement, ORIENTATION_1, ORIENTATION_2, ORIENTATION_3, ORIENTATION_0, NUM_PIECES};
+use crate::{Game, MoveTransition, FallingPiece, Playfield, GameRules, Piece, MovePathItem, Move, MovePath, LineClear, RotationMode, Placement, Orientation::*, NUM_PIECES};
 use crate::move_search::{MoveSearcher, SearchConfiguration, SearchResult};
 use crate::move_search::heuristic_bruteforce::HeuristicBruteForceMoveSearcher;
 use crate::move_search::bruteforce::BruteForceMoveSearcher;
@@ -10,59 +10,59 @@ pub fn get_alternative_placements(piece: Piece, placement: &Placement) -> Vec<Pl
     match piece {
         Piece::O => {
             match placement.orientation {
-                ORIENTATION_0 => vec![
-                    Placement::new(ORIENTATION_1, placement.pos + (0, 1).into()),
-                    Placement::new(ORIENTATION_2, placement.pos + (1, 1).into()),
-                    Placement::new(ORIENTATION_3, placement.pos + (1, 0).into()),
+                Orientation0 => vec![
+                    Placement::new(Orientation1, placement.pos + (0, 1).into()),
+                    Placement::new(Orientation2, placement.pos + (1, 1).into()),
+                    Placement::new(Orientation3, placement.pos + (1, 0).into()),
                 ],
-                ORIENTATION_1 => vec![
-                    Placement::new(ORIENTATION_0, placement.pos + (0, -1).into()),
-                    Placement::new(ORIENTATION_2, placement.pos + (1, 0).into()),
-                    Placement::new(ORIENTATION_3, placement.pos + (1, -1).into()),
+                Orientation1 => vec![
+                    Placement::new(Orientation0, placement.pos + (0, -1).into()),
+                    Placement::new(Orientation2, placement.pos + (1, 0).into()),
+                    Placement::new(Orientation3, placement.pos + (1, -1).into()),
                 ],
-                ORIENTATION_2 => vec![
-                    Placement::new(ORIENTATION_0, placement.pos + (-1, -1).into()),
-                    Placement::new(ORIENTATION_1, placement.pos + (-1, 0).into()),
-                    Placement::new(ORIENTATION_3, placement.pos + (0, -1).into()),
+                Orientation2 => vec![
+                    Placement::new(Orientation0, placement.pos + (-1, -1).into()),
+                    Placement::new(Orientation1, placement.pos + (-1, 0).into()),
+                    Placement::new(Orientation3, placement.pos + (0, -1).into()),
                 ],
-                ORIENTATION_3 => vec![
-                    Placement::new(ORIENTATION_0, placement.pos + (-1, 0).into()),
-                    Placement::new(ORIENTATION_1, placement.pos + (-1, 1).into()),
-                    Placement::new(ORIENTATION_2, placement.pos + (0, 1).into()),
+                Orientation3 => vec![
+                    Placement::new(Orientation0, placement.pos + (-1, 0).into()),
+                    Placement::new(Orientation1, placement.pos + (-1, 1).into()),
+                    Placement::new(Orientation2, placement.pos + (0, 1).into()),
                 ],
                 _ => panic!(),
             }
         }
         Piece::I => {
             match placement.orientation {
-                ORIENTATION_0 => vec![
-                    Placement::new(ORIENTATION_2, placement.pos + (1, 0).into()),
+                Orientation0 => vec![
+                    Placement::new(Orientation2, placement.pos + (1, 0).into()),
                 ],
-                ORIENTATION_1 => vec![
-                    Placement::new(ORIENTATION_3, placement.pos + (0, -1).into()),
+                Orientation1 => vec![
+                    Placement::new(Orientation3, placement.pos + (0, -1).into()),
                 ],
-                ORIENTATION_2 => vec![
-                    Placement::new(ORIENTATION_0, placement.pos + (-1, 0).into()),
+                Orientation2 => vec![
+                    Placement::new(Orientation0, placement.pos + (-1, 0).into()),
                 ],
-                ORIENTATION_3 => vec![
-                    Placement::new(ORIENTATION_1, placement.pos + (0, 1).into()),
+                Orientation3 => vec![
+                    Placement::new(Orientation1, placement.pos + (0, 1).into()),
                 ],
                 _ => panic!(),
             }
         }
         Piece::S | Piece::Z => {
             match placement.orientation {
-                ORIENTATION_0 => vec![
-                    Placement::new(ORIENTATION_2, placement.pos + (0, 1).into()),
+                Orientation0 => vec![
+                    Placement::new(Orientation2, placement.pos + (0, 1).into()),
                 ],
-                ORIENTATION_1 => vec![
-                    Placement::new(ORIENTATION_3, placement.pos + (1, 0).into()),
+                Orientation1 => vec![
+                    Placement::new(Orientation3, placement.pos + (1, 0).into()),
                 ],
-                ORIENTATION_2 => vec![
-                    Placement::new(ORIENTATION_0, placement.pos + (0, -1).into()),
+                Orientation2 => vec![
+                    Placement::new(Orientation0, placement.pos + (0, -1).into()),
                 ],
-                ORIENTATION_3 => vec![
-                    Placement::new(ORIENTATION_1, placement.pos + (-1, 0).into()),
+                Orientation3 => vec![
+                    Placement::new(Orientation1, placement.pos + (-1, 0).into()),
                 ],
                 _ => panic!(),
             }
@@ -492,7 +492,7 @@ mod tests {
             "@@ @@@    ",
         ]);
         let fp = FallingPiece::spawn(Piece::T.default_spec(), Some(&pf));
-        let dst = Placement::new(ORIENTATION_2, (1, 0).into());
+        let dst = Placement::new(Orientation2, (1, 0).into());
         let path = get_almost_good_move_path(RotationMode::Srs, &pf, &fp, &dst).unwrap();
         // for i in 0..path.len() {
         //     println!("{:?}", path.items[i]);

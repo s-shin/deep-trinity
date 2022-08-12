@@ -24,7 +24,7 @@ impl Action {
         debug_assert!(0 <= y);
         debug_assert!(y < 30);
         let y = (y * 4 * 2) as u32;
-        let o = mt.placement.orientation.id() as u32 * 2;
+        let o = mt.placement.orientation.to_u8() as u32 * 2;
         let r = if let Some(hint) = mt.hint {
             if let core::Move::Rotate(_) = hint.by { 1 } else { 0 }
         } else { 0 } as u32;

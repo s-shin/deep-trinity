@@ -126,7 +126,7 @@ impl MoveSearcher for AStarMoveSearcher {
 
 #[cfg(test)]
 mod test {
-    use crate::{Game, Piece, MovePlayer, ORIENTATION_3, ORIENTATION_1};
+    use crate::{Game, Piece, MovePlayer, Orientation3, Orientation1};
     use super::*;
 
     #[test]
@@ -140,7 +140,7 @@ mod test {
         ]);
         game.supply_next_pieces(&[Piece::T]);
         game.setup_falling_piece(None).unwrap();
-        let dst = Placement::new(ORIENTATION_3, (6, 0).into());
+        let dst = Placement::new(Orientation3, (6, 0).into());
         let r = game.search_moves(&mut AStarMoveSearcher::new(dst, false));
         assert!(r.is_ok());
         let r = r.unwrap();
@@ -160,7 +160,7 @@ mod test {
         pf.set_rows_with_strs((0, 0).into(), &["@@@@@@@@@@"].repeat(20));
         game.supply_next_pieces(&[Piece::T]);
         game.setup_falling_piece(None).unwrap();
-        let dst = Placement::new(ORIENTATION_1, (3, 20).into());
+        let dst = Placement::new(Orientation1, (3, 20).into());
         let r = game.search_moves(&mut AStarMoveSearcher::new(dst, false));
         assert!(r.is_ok());
         let r = r.unwrap();

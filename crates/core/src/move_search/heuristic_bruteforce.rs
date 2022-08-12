@@ -38,7 +38,7 @@ impl MoveSearcher for HeuristicBruteForceMoveSearcher {
 
 #[cfg(test)]
 mod test {
-    use crate::{Game, Piece, Placement, RotationMode, MovePlayer, ORIENTATION_1, ORIENTATION_3};
+    use crate::{Game, Piece, Placement, RotationMode, MovePlayer, Orientation1, Orientation3};
     use super::*;
 
     #[test]
@@ -59,10 +59,10 @@ mod test {
         let fp = game.state.falling_piece.as_ref().unwrap();
         let conf = SearchConfiguration::new(&pf, fp.piece_spec, fp.placement, RotationMode::Srs);
         let r = search_moves(&conf, false);
-        let dst1 = Placement::new(ORIENTATION_1, (-2, 0).into());
+        let dst1 = Placement::new(Orientation1, (-2, 0).into());
         let path = r.get(&dst1);
         assert!(path.is_some());
-        let dst2 = Placement::new(ORIENTATION_3, (-2, -1).into()); // alt
+        let dst2 = Placement::new(Orientation3, (-2, -1).into()); // alt
         assert!(r.get(&dst2).is_some());
         let print = false;
         if print { println!("{}", game); }

@@ -62,17 +62,17 @@ pub struct PlacementWrapper {
 impl PlacementWrapper {
     #[new]
     pub fn new(orientation: u8, x: i8, y: i8) -> Self {
-        let placement = Placement::new(Orientation::new(orientation), (x, y).into());
+        let placement = Placement::new(Orientation::try_from_u8(orientation).unwrap(), (x, y).into());
         Self { placement }
     }
     #[getter]
-    pub fn orientation(&self) -> PyResult<u8> { Ok(self.placement.orientation.id()) }
+    pub fn orientation(&self) -> PyResult<u8> { Ok(self.placement.orientation.to_u8()) }
     #[getter]
     pub fn x(&self) -> PyResult<i8> { Ok(self.placement.pos.0) }
     #[getter]
     pub fn y(&self) -> PyResult<i8> { Ok(self.placement.pos.1) }
     fn __str__(&self) -> PyResult<String> {
-        Ok(format!("({}, {}, {})", self.placement.orientation.id(), self.placement.pos.0, self.placement.pos.1))
+        Ok(format!("({}, {}, {})", self.placement.orientation.to_u8(), self.placement.pos.0, self.placement.pos.1))
     }
 }
 

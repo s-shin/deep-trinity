@@ -46,8 +46,7 @@ impl FromStr for PiecePlacement {
             return Err("A piece character is required..".into());
         };
 
-        let orientation = u8::from_str(part1.trim())
-            .map(Orientation::new)
+        let orientation = Orientation::from_str(part1.trim())
             .map_err(|_| Self::Err::from("Invalid orientation value."))?;
 
         let x = i8::from_str(part2.trim()).map_err(|_| Self::Err::from("Invalid x value."))?;
@@ -199,7 +198,7 @@ mod tests {
     #[test]
     fn test_piece_placement_from_str() {
         assert_eq!(
-            PiecePlacement::new(Piece::I, Placement::new(Orientation::new(0), (1, 2).into())),
+            PiecePlacement::new(Piece::I, Placement::new(Orientation::Orientation0, (1, 2).into())),
             PiecePlacement::from_str("I,0,1,2").unwrap(),
         );
     }
