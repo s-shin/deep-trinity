@@ -194,6 +194,123 @@ impl Debug for Cell {
 }
 
 //--------------------------------------------------------------------------------------------------
+// PieceSequence
+//--------------------------------------------------------------------------------------------------
+
+pub type PieceSequenceSize = u32;
+
+trait PieceSequence: Clone + Sized {
+    fn empty() -> Self;
+    fn len(&self) -> PieceSequenceSize;
+    fn is_empty(&self) -> bool { self.len() == 0 }
+    fn get(&self, i: PieceSequenceSize) -> Option<Piece> {
+        if i >= self.len() {
+            return None;
+        }
+        let mut seq = self.clone();
+        for _ in 0..i {
+            seq.pop_front();
+        }
+        seq.pop_front()
+    }
+    fn push_back(&mut self, piece: Piece) -> bool;
+    fn pop_front(&mut self) -> Option<Piece>;
+    fn format<Writer: fmt::Write>(&self, w: &mut Writer) -> fmt::Result {
+        let mut seq = self.clone();
+        while let Some(p) = seq.pop_front() {
+            write!(w, "{}", p.to_char())?;
+        }
+        Ok(())
+    }
+    fn to_string(&self) -> String {
+        let mut s = String::new();
+        self.format(&mut s).unwrap();
+        s
+    }
+    fn try_from_str(s: &str) -> Result<Self, &'static str> {
+        let mut seq = Self::empty();
+        for c in s.chars() {
+            seq.push_back(Piece::try_from_char(c)?);
+        }
+        Ok(seq)
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct PrimPieceSequence<T: PrimInt>(T);
+
+impl<T: PrimInt> PrimPieceSequence<T> {
+    const NUM_PIECE_BITS: PieceSequenceSize = 3;
+    fn piece_mask() -> T { T::from(0b111).unwrap() }
+    fn num_bits() -> PieceSequenceSize { T::zero().count_zeros() as PieceSequenceSize /* will be optimized at compile-time. */ }
+    fn max_len() -> PieceSequenceSize { Self::num_bits() / Self::NUM_PIECE_BITS }
+    fn piece_to_value(p: Piece) -> u8 { p.to_u8() + 1 }
+    fn value_to_piece(v: u8) -> Piece { Piece::from_u8_unchecked(v - 1) }
+    fn last_idx(&self) -> Option<PieceSequenceSize> {
+        if self.is_empty() {
+            None
+        } else {
+            Some((Self::num_bits() - 1 - self.0.leading_zeros() as PieceSequenceSize) / Self::NUM_PIECE_BITS)
+        }
+    }
+}
+
+impl<T: PrimInt> PieceSequence for PrimPieceSequence<T> {
+    fn empty() -> Self { Self(T::zero()) }
+    fn len(&self) -> PieceSequenceSize { self.last_idx().map(|i| i + 1).unwrap_or(0) }
+    fn is_empty(&self) -> bool { self.0 == T::zero() }
+    fn get(&self, i: PieceSequenceSize) -> Option<Piece> {
+        let v: T = (self.0 >> (i * Self::NUM_PIECE_BITS) as usize) & Self::piece_mask();
+        if v == T::zero() {
+            None
+        } else {
+            Some(Self::value_to_piece(v.to_u8().unwrap()))
+        }
+    }
+    fn push_back(&mut self, piece: Piece) -> bool {
+        if let Some(last_i) = self.last_idx() {
+            let i = last_i + 1;
+            debug_assert!(i > 0);
+            if i == Self::max_len() {
+                return false;
+            }
+            self.0 = self.0 | T::from(Self::piece_to_value(piece) << (i * Self::NUM_PIECE_BITS) as usize).unwrap();
+        } else {
+            self.0 = self.0 | T::from(Self::piece_to_value(piece)).unwrap();
+        }
+        true
+    }
+    fn pop_front(&mut self) -> Option<Piece> {
+        let p = self.get(0);
+        if p.is_some() {
+            self.0 = self.0 >> Self::NUM_PIECE_BITS as usize;
+        }
+        p
+    }
+}
+
+impl<T: PrimInt> Display for PrimPieceSequence<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.format(f)
+    }
+}
+
+impl<T: PrimInt> Debug for PrimPieceSequence<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "PrimPieceSequence<{}>(", std::any::type_name::<T>())?;
+        self.format(f)?;
+        write!(f, ")")
+    }
+}
+
+impl<T: PrimInt> Default for PrimPieceSequence<T> {
+    fn default() -> Self { Self::empty() }
+}
+
+pub type PrimPieceSequence10 = PrimPieceSequence<u32>;
+pub type PrimPieceSequence21 = PrimPieceSequence<u64>;
+
+//--------------------------------------------------------------------------------------------------
 // Grids
 //--------------------------------------------------------------------------------------------------
 
