@@ -4,7 +4,7 @@ pub mod prelude;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::fmt;
-use std::fmt::{Debug, Display, Formatter, Write};
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::ops;
@@ -1449,7 +1449,7 @@ impl<'a> GameState<'a> {
             Cell::Empty
         };
         if cell == Cell::Empty {
-            cell = s.playfield.grid.cell(pos.into());
+            cell = self.playfield.grid.cell(pos.into());
         }
         cell
     }

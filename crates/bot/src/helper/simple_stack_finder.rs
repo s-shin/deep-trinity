@@ -1,11 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
-use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::str::FromStr;
 use bitvec::prelude::*;
-use core::{Piece, Placement, LineClear, Orientation, Game};
+use core::{Piece, Placement, Orientation, Game};
 use tree::arena::{NodeArena, NodeHandle};
 use crate::Action;
 use crate::helper::stack_tree::{StackTree, StackTreeCommonNodeData, StackTreeNodeData, StackTreeNodeExpander, StackTreeSimulator};
@@ -174,15 +173,15 @@ impl<'a> StackTreeSimulator<'a> for Simulator {
     type NodeData = NodeData<'a>;
     type NodeExpander = NodeExpander;
 
-    fn select(&mut self, tree: &mut StackTree<'a, Self::NodeData>) -> Result<Option<NodeHandle>, Box<dyn Error>> {
+    fn select(&mut self, _tree: &mut StackTree<'a, Self::NodeData>) -> Result<Option<NodeHandle>, Box<dyn Error>> {
         Ok(self.leaf_nodes.pop_back())
     }
 
-    fn expander(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle) -> Result<Self::NodeExpander, Box<dyn Error>> {
+    fn expander(&mut self, _tree: &mut StackTree<'a, Self::NodeData>, _target: NodeHandle) -> Result<Self::NodeExpander, Box<dyn Error>> {
         Ok(NodeExpander::default())
     }
 
-    fn on_expanded(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle, expander: &Self::NodeExpander) -> Result<(), Box<dyn Error>> {
+    fn on_expanded(&mut self, tree: &mut StackTree<'a, Self::NodeData>, target: NodeHandle, _expander: &Self::NodeExpander) -> Result<(), Box<dyn Error>> {
         self.leaf_nodes.extend(tree.arena().get(target).unwrap().children());
         Ok(())
     }
@@ -248,7 +247,7 @@ mod tests {
 
         if debug {
             println!("nodes: {}", tree.arena().len());
-            tree.visit(|arena, node, ctx| {
+            tree.visit(|arena, node, _| {
                 let n = &arena[node];
                 if !n.is_leaf() {
                     return;
