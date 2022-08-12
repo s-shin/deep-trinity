@@ -6,7 +6,6 @@ use clap::Parser;
 use rand::prelude::*;
 use core::prelude::*;
 use bot::Action;
-use grid::Grid;
 use tree::arena::{NodeArena, NodeHandle};
 
 struct NodeData {

@@ -25,7 +25,7 @@ impl ops::Sub for Vec2 {
     fn sub(self, other: Self) -> Self { Self(self.0 - other.0, self.1 - other.1) }
 }
 
-impl cmp::Ord for Vec2 {
+impl Ord for Vec2 {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         (self.0, self.1).cmp(&(other.0, other.1))
     }
@@ -490,7 +490,7 @@ pub trait Grid<C: Cell>: Clone {
     fn density_without_top_padding(&self) -> f32 {
         self.num_blocks() as f32 / (self.width() * (self.height() - self.top_padding())) as f32
     }
-    fn format<Writer: std::fmt::Write>(&self, w: &mut Writer) -> fmt::Result {
+    fn format<Writer: fmt::Write>(&self, w: &mut Writer) -> fmt::Result {
         for y in (0..self.height()).rev() {
             for x in 0..self.width() {
                 let c = self.cell((x, y).into()).to_char();
