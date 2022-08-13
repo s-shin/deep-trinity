@@ -30,7 +30,6 @@ pub fn get_alternative_placements(piece: Piece, placement: &Placement) -> Vec<Pl
                     Placement::new(Orientation1, placement.pos + (-1, 1).into()),
                     Placement::new(Orientation2, placement.pos + (0, 1).into()),
                 ],
-                _ => panic!(),
             }
         }
         Piece::I => {
@@ -47,7 +46,6 @@ pub fn get_alternative_placements(piece: Piece, placement: &Placement) -> Vec<Pl
                 Orientation3 => vec![
                     Placement::new(Orientation1, placement.pos + (0, 1).into()),
                 ],
-                _ => panic!(),
             }
         }
         Piece::S | Piece::Z => {
@@ -64,7 +62,6 @@ pub fn get_alternative_placements(piece: Piece, placement: &Placement) -> Vec<Pl
                 Orientation3 => vec![
                     Placement::new(Orientation1, placement.pos + (-1, 0).into()),
                 ],
-                _ => panic!(),
             }
         }
         _ => vec![],

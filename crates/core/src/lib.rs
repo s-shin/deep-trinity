@@ -113,7 +113,7 @@ impl Display for Piece {
 
 impl Debug for Piece {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Piece {{ {} }}", self.to_char())
+        write!(f, "Piece::{}", self.to_char())
     }
 }
 
@@ -388,6 +388,12 @@ impl Orientation {
 
 impl Default for Orientation {
     fn default() -> Self { Orientation0 }
+}
+
+impl Display for Orientation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_u8())
+    }
 }
 
 impl FromStr for Orientation {
@@ -1178,7 +1184,6 @@ impl<'a> Playfield<'a> {
                         Orientation1 => { (dx, dy) == (2, 0) || (dx, dy) == (2, 2) }
                         Orientation2 => { (dx, dy) == (0, 0) || (dx, dy) == (2, 0) }
                         Orientation3 => { (dx, dy) == (0, 0) || (dx, dy) == (0, 2) }
-                        _ => panic!(),
                     } {
                         num_pointing_side_corners += 1;
                     }
@@ -1809,6 +1814,8 @@ impl<'a> Display for Game<'a> {
         Ok(())
     }
 }
+
+pub type StdGame = Game<'static>;
 
 //--------------------------------------------------------------------------------------------------
 // MovePlayer

@@ -7,7 +7,7 @@ pub use crate::{
     RandomPieceGenerator,
     FallingPiece,
     Playfield,
-    Game,
+    Game, StdGame,
 };
 
 pub use crate::helper::{
