@@ -116,19 +116,19 @@
 //     }
 //     let direction = MoveDirection([
 //         // S
-//         vec![Move::To(Placement::new(core::ORIENTATION_0, (4, 0).into()))],
+//         vec![Move::To(Placement::new(core::Orientation0, (4, 0).into()))],
 //         // Z
-//         vec![Move::To(Placement::new(core::ORIENTATION_1, (1, 0).into()))],
+//         vec![Move::To(Placement::new(core::Orientation1, (1, 0).into()))],
 //         // L
-//         vec![Move::To(Placement::new(core::ORIENTATION_1, (-1, 2).into()))],
+//         vec![Move::To(Placement::new(core::Orientation1, (-1, 2).into()))],
 //         // J
-//         vec![Move::To(Placement::new(core::ORIENTATION_3, (8, 0).into()))],
+//         vec![Move::To(Placement::new(core::Orientation3, (8, 0).into()))],
 //         // I
-//         vec![Move::To(Placement::new(core::ORIENTATION_0, (2, -2).into()))],
+//         vec![Move::To(Placement::new(core::Orientation0, (2, -2).into()))],
 //         // T
 //         vec![Move::Hold],
 //         // O
-//         vec![Move::To(Placement::new(core::ORIENTATION_0, (-1, -1).into()))],
+//         vec![Move::To(Placement::new(core::Orientation0, (-1, -1).into()))],
 //     ]);
 //     Some(EvaluateResult::new(direction))
 // }
@@ -138,7 +138,7 @@
 //     match piece {
 //         Piece::I => {
 //             match placement.orientation {
-//                 core::ORIENTATION_1 | core::ORIENTATION_3 => (-2 <= x && x <= 0) || (pf_width - 4 <= x && x <= pf_width - 2),
+//                 core::Orientation1 | core::Orientation3 => (-2 <= x && x <= 0) || (pf_width - 4 <= x && x <= pf_width - 2),
 //                 _ => false,
 //             }
 //         }
@@ -147,8 +147,8 @@
 //                 true
 //             } else {
 //                 match placement.orientation {
-//                     core::ORIENTATION_0 | core::ORIENTATION_1 => x == -1 || x == pf_width - 4,
-//                     core::ORIENTATION_2 | core::ORIENTATION_3 => x == 1 || x == pf_width - 2,
+//                     core::Orientation0 | core::Orientation1 => x == -1 || x == pf_width - 4,
+//                     core::Orientation2 | core::Orientation3 => x == 1 || x == pf_width - 2,
 //                     _ => false,
 //                 }
 //             }
@@ -158,8 +158,8 @@
 //                 true
 //             } else {
 //                 match placement.orientation {
-//                     core::ORIENTATION_1 => x == -1 || x == pf_width - 4,
-//                     core::ORIENTATION_3 => x == 1 || x == pf_width - 2,
+//                     core::Orientation1 => x == -1 || x == pf_width - 4,
+//                     core::Orientation3 => x == 1 || x == pf_width - 2,
 //                     _ => false,
 //                 }
 //             }

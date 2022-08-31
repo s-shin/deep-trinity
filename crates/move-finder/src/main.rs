@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::ops::Deref;
 use std::process::exit;
 use std::rc::Rc;
@@ -105,11 +106,7 @@ impl FromStr for PiecePlacement {
             return Err("A piece character is required..".into());
         };
         let orientation = if let Some(c) = part0.next() {
-            if let Ok(n) = u8::from_str(c.to_string().as_str()) {
-                Orientation::new(n)
-            } else {
-                return Err(format!("'{}' is invalid orientation value.", c).into());
-            }
+            Orientation::from_str(c.to_string().as_str()).map_err(|e| e.to_string())?
         } else {
             return Err("An orientation value is required..".into());
         };
@@ -167,7 +164,7 @@ fn main() {
     {
         let mut game: Game = Default::default();
         for ps in pps.iter() {
-            println!("{} {} {}", ps.piece.to_char(), ps.placement.orientation.id(), ps.placement.pos);
+            println!("{} {} {}", ps.piece.to_char(), ps.placement.orientation.to_u8(), ps.placement.pos);
             game.state.playfield.grid.put_fast(ps.placement.pos, game.piece_specs.get(ps.piece).grid(ps.placement.orientation));
         }
         println!("Try to find:\n{}", game);

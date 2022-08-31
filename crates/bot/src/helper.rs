@@ -1,2 +1,2 @@
 pub mod stack_tree;
-pub mod simple_stack_finder;
+pub mod fixed_stack_finder;
