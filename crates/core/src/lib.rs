@@ -1,6 +1,7 @@
 pub mod move_search;
 pub mod helper;
 pub mod prelude;
+pub mod bot;
 
 use std::collections::{HashMap, VecDeque, BTreeMap, HashSet};
 use std::error::Error;
