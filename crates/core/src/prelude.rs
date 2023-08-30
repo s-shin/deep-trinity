@@ -14,3 +14,8 @@ pub use crate::helper::{
     MoveDecisionResource,
     MoveDecisionHelper,
 };
+
+pub use crate::bot::{
+    Action,
+    Bot,
+};
