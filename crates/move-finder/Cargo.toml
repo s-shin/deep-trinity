@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-core = { path = "../core" }
-grid = { path = "../grid" }
-bot = { path = "../bot" }
-tree = { path = "../tree" }
+deep-trinity-core = { path = "../deep-trinity-core" }
+deep-trinity-grid = { path = "../deep-trinity-grid" }
+deep-trinity-bot = { path = "../deep-trinity-bot" }
+deep-trinity-tree = { path = "../deep-trinity-tree" }
 rand = "0.8"
 clap =  { version = "3.0", features = ["derive"] }
 assert_cmd = "2.0"

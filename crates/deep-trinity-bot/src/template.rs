@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::error::Error;
-use grid::Vec2;
-use core::{Orientation, Orientation::*, Piece, Move, MoveTransition, Placement, MovePathItem};
+use deep_trinity_grid::Vec2;
+use deep_trinity_core::{Orientation, Orientation::*, Piece, Move, MoveTransition, Placement, MovePathItem};
 use crate::{Game, Bot, Action};
 
 pub type MoveName = &'static str;
@@ -166,7 +166,7 @@ impl Bot for TemplateBot {
 mod tests {
     use super::*;
     use crate::{BotRunner, BotRunnerHooks};
-    use core::Cell;
+    use deep_trinity_core::Cell;
 
     #[test]
     fn test_template_bot() {

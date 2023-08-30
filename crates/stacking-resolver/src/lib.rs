@@ -1,8 +1,8 @@
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use std::str::FromStr;
-use core::prelude::*;
-use tree::arena::{NodeArena, NodeHandle};
+use deep_trinity_core::prelude::*;
+use deep_trinity_tree::arena::{NodeArena, NodeHandle};
 
 // TODO: Remove or refactor move-finder.
 
@@ -75,7 +75,7 @@ impl<'a> NodeData<'a> {
     }
 }
 
-pub type VecNodeArena<'a> = tree::arena::VecNodeArena<NodeData<'a>>;
+pub type VecNodeArena<'a> = deep_trinity_tree::arena::VecNodeArena<NodeData<'a>>;
 
 pub fn expand_node(arena: &mut VecNodeArena, node: NodeHandle) {
     if let Some(fp) = arena[node].data.game.state.falling_piece.clone() {
@@ -130,7 +130,7 @@ pub struct ResolveStackingResult<'a> {
 
 impl<'a> ResolveStackingResult<'a> {
     pub fn write_tree(&self, w: &mut impl std::io::Write) -> std::io::Result<()> {
-        fn write(w: &mut impl std::io::Write, indent: &str, n: &tree::arena::Node<NodeData>) -> std::io::Result<()> {
+        fn write(w: &mut impl std::io::Write, indent: &str, n: &deep_trinity_tree::arena::Node<NodeData>) -> std::io::Result<()> {
             writeln!(w, "{}- by_action: {:?}", indent, n.data.by_action)?;
             writeln!(w, "{}  game: |-\n{}", indent, n.data.game.to_string().split("\n")
                 .map(|line| format!("{}    {}", indent, line)).collect::<Vec<_>>().join("\n"))?;

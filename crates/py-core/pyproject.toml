@@ -1,6 +1,11 @@
 [project]
 name = "deep-trinity"
+requires-python = ">=3.7"
 
 [build-system]
-requires = ["maturin>=0.12,<0.13"]
+requires = ["maturin>=1,<2"]
 build-backend = "maturin"
+
+[tool.maturin]
+# https://pyo3.rs/v0.19.2/faq.html
+features = ["pyo3/extension-module"]

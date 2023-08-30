@@ -1,9 +1,9 @@
 use std::error::Error;
 use std::io::Write;
 use std::marker::PhantomData;
-use core::{Game, Placement};
-use core::helper::MoveDecisionResource;
-use tree::arena::{NodeArena, NodeHandle, VecNodeArena, VisitContext};
+use deep_trinity_core::{Game, Placement};
+use deep_trinity_core::helper::MoveDecisionResource;
+use deep_trinity_tree::arena::{NodeArena, NodeHandle, VecNodeArena, VisitContext};
 use crate::{Action, MoveTransition};
 
 //--------------------------------------------------------------------------------------------------
@@ -189,7 +189,7 @@ mod tests {
     use rand::thread_rng;
     use chrono::prelude::*;
     use prost::Message;
-    use grid::Grid;
+    use deep_trinity_grid::Grid;
 
     #[derive(Default)]
     struct ExpansionStats {

@@ -1,6 +1,6 @@
 use super::Bot;
-use core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, MoveTransition};
-use grid::Grid;
+use deep_trinity_core::{Game, Placement, StatisticsEntryType, TSpin, LineClear, Statistics, MoveTransition};
+use deep_trinity_grid::Grid;
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 use std::collections::HashMap;

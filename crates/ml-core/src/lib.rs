@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use grid::{Grid, Cell};
+use deep_trinity_grid::{Grid, Cell};
 
 #[cfg(feature = "async_session")]
 pub mod async_session;
@@ -14,8 +14,8 @@ pub struct Action(pub u32);
 
 impl Action {
     // hold, (x, y, orientation, is_rotated) = 10 * 30 * 4 * 2
-    pub fn from_move_transition(mt: &core::MoveTransition, piece: core::Piece) -> Self {
-        let offset = if piece == core::Piece::I { 2 } else { 1 } as i32;
+    pub fn from_move_transition(mt: &deep_trinity_core::MoveTransition, piece: deep_trinity_core::Piece) -> Self {
+        let offset = if piece == deep_trinity_core::Piece::I { 2 } else { 1 } as i32;
         let x = mt.placement.pos.0 as i32 + offset;
         debug_assert!(0 <= x);
         debug_assert!(x < 10);
@@ -26,7 +26,7 @@ impl Action {
         let y = (y * 4 * 2) as u32;
         let o = mt.placement.orientation.to_u8() as u32 * 2;
         let r = if let Some(hint) = mt.hint {
-            if let core::Move::Rotate(_) = hint.by { 1 } else { 0 }
+            if let deep_trinity_core::Move::Rotate(_) = hint.by { 1 } else { 0 }
         } else { 0 } as u32;
         let id = 1 + x + y + o + r;
         Self(id)
@@ -34,8 +34,8 @@ impl Action {
     pub fn is_hold(&self) -> bool { self.0 == HOLD_ACTION_ID }
 }
 
-pub fn calc_reward(stats: &core::Statistics) -> f32 {
-    use core::{StatisticsEntryType, LineClear, TSpin};
+pub fn calc_reward(stats: &deep_trinity_core::Statistics) -> f32 {
+    use deep_trinity_core::{StatisticsEntryType, LineClear, TSpin};
     let mut reward = 0.0;
     for (ent_type, val) in &[
         (StatisticsEntryType::LineClear(LineClear::new(1, None)), 0.1),
@@ -68,17 +68,17 @@ pub fn calc_reward(stats: &core::Statistics) -> f32 {
 
 #[derive(Clone, Debug)]
 pub struct GameSession {
-    piece_gen: core::RandomPieceGenerator<StdRng>,
-    game: core::Game<'static>,
-    legal_actions: HashMap<Action, core::MoveTransition>,
+    piece_gen: deep_trinity_core::RandomPieceGenerator<StdRng>,
+    game: deep_trinity_core::Game<'static>,
+    legal_actions: HashMap<Action, deep_trinity_core::MoveTransition>,
     last_reward: f32,
 }
 
 impl GameSession {
     pub fn new(rand_seed: Option<u64>) -> Result<Self, &'static str> {
         let rng = if let Some(seed) = rand_seed { StdRng::seed_from_u64(seed) } else { StdRng::from_entropy() };
-        let mut pg = core::RandomPieceGenerator::new(rng);
-        let mut game: core::Game = Default::default();
+        let mut pg = deep_trinity_core::RandomPieceGenerator::new(rng);
+        let mut game: deep_trinity_core::Game = Default::default();
         game.supply_next_pieces(&pg.generate());
         game.setup_falling_piece(None).unwrap();
         let mut r = Self {
@@ -92,7 +92,7 @@ impl GameSession {
     }
     pub fn reset(&mut self, rand_seed: Option<u64>) -> Result<(), &'static str> {
         if let Some(seed) = rand_seed {
-            self.piece_gen = core::RandomPieceGenerator::new(StdRng::seed_from_u64(seed));
+            self.piece_gen = deep_trinity_core::RandomPieceGenerator::new(StdRng::seed_from_u64(seed));
         }
         self.game = Default::default();
         self.game.supply_next_pieces(&self.piece_gen.generate());
@@ -118,7 +118,7 @@ impl GameSession {
         } else {
             let mt = self.legal_actions.get(&action).unwrap();
             let piece_spec = self.game.state.falling_piece.as_ref().unwrap().piece_spec;
-            let fp = core::FallingPiece::new_with_last_move_transition(piece_spec, &mt);
+            let fp = deep_trinity_core::FallingPiece::new_with_last_move_transition(piece_spec, &mt);
             self.game.state.falling_piece = Some(fp);
             let stats = self.game.stats.clone();
             self.game.lock()?;
@@ -194,9 +194,9 @@ mod tests {
 
     #[test]
     fn test_calc_reward() {
-        let stats: core::Statistics = Default::default();
+        let stats: deep_trinity_core::Statistics = Default::default();
         let mut stats2 = stats.clone();
-        stats2.line_clear.add(&core::LineClear::new(1, None), 1);
+        stats2.line_clear.add(&deep_trinity_core::LineClear::new(1, None), 1);
         let diff = stats2 - stats;
         assert!(calc_reward(&diff) > 0.0);
     }

@@ -1,7 +1,7 @@
 use std::error::Error;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use core::{MoveTransition, RandomPieceGenerator, MovePlayer, FallingPiece};
+use deep_trinity_core::{MoveTransition, RandomPieceGenerator, MovePlayer, FallingPiece};
 
 pub mod simple;
 pub mod simple_tree;
@@ -10,16 +10,16 @@ pub mod tree;
 pub mod template;
 pub mod helper;
 
-pub type Game = core::Game<'static>;
+pub type Game = deep_trinity_core::Game<'static>;
 
-#[deprecated(note = "Use core::bot::Action")]
+#[deprecated(note = "Use deep_trinity_core::bot::Action")]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
     Move(MoveTransition),
     Hold,
 }
 
-#[deprecated(note = "Use core::bot::Bot")]
+#[deprecated(note = "Use deep_trinity_core::bot::Bot")]
 pub trait Bot {
     fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>>;
 }
@@ -38,7 +38,7 @@ pub struct DummyBotRunnerHooks;
 
 impl BotRunnerHooks for DummyBotRunnerHooks {}
 
-#[deprecated(note = "Use core::bot::SimpleBotRunner")]
+#[deprecated(note = "Use deep_trinity_core::bot::SimpleBotRunner")]
 pub struct BotRunner {
     max_iterations: usize,
     quick_action: bool,

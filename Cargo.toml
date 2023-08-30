@@ -1,13 +1,13 @@
 [workspace]
 members = [
-  "crates/grid",
-  "crates/core",
-  "crates/bot",
+  "crates/deep-trinity-grid",
+  "crates/deep-trinity-core",
+  "crates/deep-trinity-bot",
   "crates/web-core",
   "crates/ml-core",
   "crates/py-core",
   "crates/playground",
-  "crates/tree",
+  "crates/deep-trinity-tree",
   "crates/move-finder",
   "crates/list-piece-consumption-patterns",
   "crates/stacking-resolver",

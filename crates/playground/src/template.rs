@@ -20,29 +20,29 @@
 //     }
 //
 //     impl Piece {
-//         pub fn to_core_piece(&self) -> core::Piece {
+//         pub fn to_core_piece(&self) -> deep_trinity_core::Piece {
 //             match self {
-//                 Piece::I => core::Piece::I,
-//                 Piece::T => core::Piece::T,
-//                 Piece::O => core::Piece::O,
-//                 Piece::J => core::Piece::J,
-//                 Piece::L => core::Piece::L,
-//                 Piece::S => core::Piece::S,
-//                 Piece::Z => core::Piece::Z,
+//                 Piece::I => deep_trinity_core::Piece::I,
+//                 Piece::T => deep_trinity_core::Piece::T,
+//                 Piece::O => deep_trinity_core::Piece::O,
+//                 Piece::J => deep_trinity_core::Piece::J,
+//                 Piece::L => deep_trinity_core::Piece::L,
+//                 Piece::S => deep_trinity_core::Piece::S,
+//                 Piece::Z => deep_trinity_core::Piece::Z,
 //             }
 //         }
 //     }
 //
-//     impl From<core::Piece> for Piece {
-//         fn from(p: core::Piece) -> Self {
+//     impl From<deep_trinity_core::Piece> for Piece {
+//         fn from(p: deep_trinity_core::Piece) -> Self {
 //             match p {
-//                 core::Piece::I => Piece::I,
-//                 core::Piece::T => Piece::T,
-//                 core::Piece::O => Piece::O,
-//                 core::Piece::J => Piece::J,
-//                 core::Piece::L => Piece::L,
-//                 core::Piece::S => Piece::S,
-//                 core::Piece::Z => Piece::Z,
+//                 deep_trinity_core::Piece::I => Piece::I,
+//                 deep_trinity_core::Piece::T => Piece::T,
+//                 deep_trinity_core::Piece::O => Piece::O,
+//                 deep_trinity_core::Piece::J => Piece::J,
+//                 deep_trinity_core::Piece::L => Piece::L,
+//                 deep_trinity_core::Piece::S => Piece::S,
+//                 deep_trinity_core::Piece::Z => Piece::Z,
 //             }
 //         }
 //     }
@@ -61,12 +61,12 @@
 //     }
 //
 //     impl<'a> Iterator for PieceSequenceIterator<'a> {
-//         type Item = core::Piece;
+//         type Item = deep_trinity_core::Piece;
 //
 //         fn next(&mut self) -> Option<Self::Item> {
 //             if let Some(c) = self.piece_chars.next() {
-//                 match core::Cell::from(c) {
-//                     core::Cell::Block(core::Block::Piece(p)) => Some(p),
+//                 match deep_trinity_core::Cell::from(c) {
+//                     deep_trinity_core::Cell::Block(deep_trinity_core::Block::Piece(p)) => Some(p),
 //                     _ => panic!("invalid piece character: {}", c),
 //                 }
 //             } else {
@@ -79,8 +79,8 @@
 //     pub struct Playfield(String);
 //
 //     impl Playfield {
-//         pub fn to_core_playfield(&self) -> core::Playfield {
-//             let mut pf = core::Playfield::default();
+//         pub fn to_core_playfield(&self) -> deep_trinity_core::Playfield {
+//             let mut pf = deep_trinity_core::Playfield::default();
 //             for (i, line) in self.0.split('/').enumerate() {
 //                 let line = line.replace('_', " ");
 //                 pf.set_str_rows((0, i as u8).into(), &[&line]);
@@ -112,8 +112,8 @@
 //     pub struct Placement(u8, i8, i8);
 //
 //     impl Placement {
-//         pub fn to_core_placement(&self) -> core::Placement {
-//             core::Placement::new(core::Orientation::new(self.0), core::pos!(self.1, self.2))
+//         pub fn to_core_placement(&self) -> deep_trinity_core::Placement {
+//             deep_trinity_core::Placement::new(deep_trinity_core::Orientation::new(self.0), deep_trinity_core::pos!(self.1, self.2))
 //         }
 //     }
 //
@@ -176,7 +176,7 @@
 //     let tmpl: move_tmpl::Template = serde_yaml::from_str(&data)?;
 //     println!("{:?}", tmpl);
 //
-//     let mut game: core::Game = Default::default();
+//     let mut game: deep_trinity_core::Game = Default::default();
 //     if let Some(ex) = tmpl.examples.get(0) {
 //         game.state.playfield = ex.playfield.to_core_playfield();
 //         game.state.next_pieces.pieces = ex.pieces.iter().collect();

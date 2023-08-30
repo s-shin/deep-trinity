@@ -1,13 +1,7 @@
-extern crate wasm_bindgen;
-extern crate console_error_panic_hook;
-extern crate rand;
-extern crate core;
-extern crate bot;
-
 use wasm_bindgen::prelude::*;
 use rand::SeedableRng;
-use core::MovePathItem;
-use grid::Grid;
+use deep_trinity_core::MovePathItem;
+use deep_trinity_grid::Grid;
 
 #[wasm_bindgen(js_name = setPanicHook)]
 pub fn set_panic_hook() {
@@ -47,8 +41,8 @@ pub enum Cell {
 
 static CELLS: [Cell; 10] = [Cell::Empty, Cell::Any, Cell::S, Cell::Z, Cell::L, Cell::J, Cell::I, Cell::T, Cell::O, Cell::Garbage];
 
-impl From<core::Cell> for Cell {
-    fn from(c: core::Cell) -> Self { CELLS[c.to_u8() as usize] }
+impl From<deep_trinity_core::Cell> for Cell {
+    fn from(c: deep_trinity_core::Cell) -> Self { CELLS[c.to_u8() as usize] }
 }
 
 #[wasm_bindgen]
@@ -78,14 +72,14 @@ pub struct Placement {
     pub y: i8,
 }
 
-impl Into<core::Placement> for Placement {
-    fn into(self) -> core::Placement {
-        core::Placement::new(core::Orientation::try_from_u8(self.orientation).unwrap(), (self.x, self.y).into())
+impl Into<deep_trinity_core::Placement> for Placement {
+    fn into(self) -> deep_trinity_core::Placement {
+        deep_trinity_core::Placement::new(deep_trinity_core::Orientation::try_from_u8(self.orientation).unwrap(), (self.x, self.y).into())
     }
 }
 
-impl From<core::Placement> for Placement {
-    fn from(p: core::Placement) -> Self {
+impl From<deep_trinity_core::Placement> for Placement {
+    fn from(p: deep_trinity_core::Placement) -> Self {
         Self { orientation: p.orientation.to_u8(), x: p.pos.0, y: p.pos.1 }
     }
 }
@@ -100,27 +94,27 @@ pub enum Move {
     Ccw,
 }
 
-impl Into<core::Move> for Move {
-    fn into(self) -> core::Move {
+impl Into<deep_trinity_core::Move> for Move {
+    fn into(self) -> deep_trinity_core::Move {
         match self {
-            Move::Right => core::Move::Shift(1),
-            Move::Left => core::Move::Shift(-1),
-            Move::Down => core::Move::Drop(1),
-            Move::Cw => core::Move::Rotate(1),
-            Move::Ccw => core::Move::Rotate(-1),
+            Move::Right => deep_trinity_core::Move::Shift(1),
+            Move::Left => deep_trinity_core::Move::Shift(-1),
+            Move::Down => deep_trinity_core::Move::Drop(1),
+            Move::Cw => deep_trinity_core::Move::Rotate(1),
+            Move::Ccw => deep_trinity_core::Move::Rotate(-1),
         }
     }
 }
 
-impl From<core::Move> for Move {
-    fn from(mv: core::Move) -> Self {
+impl From<deep_trinity_core::Move> for Move {
+    fn from(mv: deep_trinity_core::Move) -> Self {
         match mv {
-            core::Move::Shift(1) => Move::Right,
-            core::Move::Shift(-1) => Move::Left,
-            core::Move::Drop(1) => Move::Down,
-            core::Move::Rotate(1) => Move::Cw,
-            core::Move::Rotate(-1) => Move::Ccw,
-            _ => panic!("invalid core::Move: {:?}", mv),
+            deep_trinity_core::Move::Shift(1) => Move::Right,
+            deep_trinity_core::Move::Shift(-1) => Move::Left,
+            deep_trinity_core::Move::Drop(1) => Move::Down,
+            deep_trinity_core::Move::Rotate(1) => Move::Cw,
+            deep_trinity_core::Move::Rotate(-1) => Move::Ccw,
+            _ => panic!("invalid deep_trinity_core::Move: {:?}", mv),
         }
     }
 }
@@ -133,9 +127,9 @@ pub struct MoveTransition {
     pub dst: Placement,
 }
 
-impl Into<core::MoveTransition> for MoveTransition {
-    fn into(self) -> core::MoveTransition {
-        core::MoveTransition::new(
+impl Into<deep_trinity_core::MoveTransition> for MoveTransition {
+    fn into(self) -> deep_trinity_core::MoveTransition {
+        deep_trinity_core::MoveTransition::new(
             self.dst.into(),
             if let (Some(src), Some(by)) = (self.src, self.by) {
                 Some(MovePathItem::new(by.into(), src.into()))
@@ -146,8 +140,8 @@ impl Into<core::MoveTransition> for MoveTransition {
     }
 }
 
-impl From<core::MoveTransition> for MoveTransition {
-    fn from(mt: core::MoveTransition) -> Self {
+impl From<deep_trinity_core::MoveTransition> for MoveTransition {
+    fn from(mt: deep_trinity_core::MoveTransition) -> Self {
         if let Some(hint) = mt.hint {
             Self { src: Some(hint.placement.into()), by: Some(hint.by.into()), dst: mt.placement.into() }
         } else {
@@ -158,7 +152,7 @@ impl From<core::MoveTransition> for MoveTransition {
 
 #[wasm_bindgen]
 pub struct Game {
-    game: core::Game<'static>,
+    game: deep_trinity_core::Game<'static>,
 }
 
 #[wasm_bindgen]
@@ -169,10 +163,10 @@ impl Game {
             game: Default::default(),
         }
     }
-    pub fn width(&self) -> grid::X { self.game.state.playfield.width() }
-    pub fn height(&self) -> grid::Y { self.game.state.playfield.height() }
+    pub fn width(&self) -> deep_trinity_grid::X { self.game.state.playfield.width() }
+    pub fn height(&self) -> deep_trinity_grid::Y { self.game.state.playfield.height() }
     #[wasm_bindgen(js_name = visibleHeight)]
-    pub fn visible_height(&self) -> grid::Y { self.game.state.playfield.visible_height }
+    pub fn visible_height(&self) -> deep_trinity_grid::Y { self.game.state.playfield.visible_height }
     #[wasm_bindgen(js_name = getCell)]
     pub fn get_cell(&self, x: i8, y: i8) -> Cell { self.game.state.playfield.grid.cell((x, y).into()).into() }
     #[wasm_bindgen(js_name = getHoldPiece)]
@@ -189,33 +183,33 @@ impl Game {
             .into_boxed_slice()
     }
     #[wasm_bindgen(js_name = getCurrentNumCombos)]
-    pub fn get_current_num_combos(&self) -> Option<core::Count> { self.game.state.num_combos }
+    pub fn get_current_num_combos(&self) -> Option<deep_trinity_core::Count> { self.game.state.num_combos }
     #[wasm_bindgen(js_name = getCurrentNumBTBs)]
-    pub fn get_current_num_btbs(&self) -> Option<core::Count> { self.game.state.num_btbs }
+    pub fn get_current_num_btbs(&self) -> Option<deep_trinity_core::Count> { self.game.state.num_btbs }
     #[wasm_bindgen(js_name = getStatsCount)]
-    pub fn get_stats_count(&self, t: StatisticsEntryType) -> core::Count {
+    pub fn get_stats_count(&self, t: StatisticsEntryType) -> deep_trinity_core::Count {
         self.game.stats.get(match t {
-            StatisticsEntryType::Single => core::StatisticsEntryType::LineClear(core::LineClear::new(1, None)),
-            StatisticsEntryType::Double => core::StatisticsEntryType::LineClear(core::LineClear::new(2, None)),
-            StatisticsEntryType::Triple => core::StatisticsEntryType::LineClear(core::LineClear::new(3, None)),
-            StatisticsEntryType::Tetris => core::StatisticsEntryType::LineClear(core::LineClear::new(4, None)),
-            StatisticsEntryType::Tst => core::StatisticsEntryType::LineClear(core::LineClear::new(3, Some(core::TSpin::Standard))),
-            StatisticsEntryType::Tsd => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Standard))),
-            StatisticsEntryType::Tss => core::StatisticsEntryType::LineClear(core::LineClear::new(1, Some(core::TSpin::Standard))),
-            StatisticsEntryType::Tsmd => core::StatisticsEntryType::LineClear(core::LineClear::new(2, Some(core::TSpin::Mini))),
-            StatisticsEntryType::Tsms => core::StatisticsEntryType::LineClear(core::LineClear::new(1, Some(core::TSpin::Mini))),
-            StatisticsEntryType::MaxCombos => core::StatisticsEntryType::MaxCombos,
-            StatisticsEntryType::MaxBtbs => core::StatisticsEntryType::MaxBtbs,
-            StatisticsEntryType::PerfectClear => core::StatisticsEntryType::PerfectClear,
-            StatisticsEntryType::Hold => core::StatisticsEntryType::Hold,
-            StatisticsEntryType::Lock => core::StatisticsEntryType::Lock,
+            StatisticsEntryType::Single => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(1, None)),
+            StatisticsEntryType::Double => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(2, None)),
+            StatisticsEntryType::Triple => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(3, None)),
+            StatisticsEntryType::Tetris => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(4, None)),
+            StatisticsEntryType::Tst => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(3, Some(deep_trinity_core::TSpin::Standard))),
+            StatisticsEntryType::Tsd => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(2, Some(deep_trinity_core::TSpin::Standard))),
+            StatisticsEntryType::Tss => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(1, Some(deep_trinity_core::TSpin::Standard))),
+            StatisticsEntryType::Tsmd => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(2, Some(deep_trinity_core::TSpin::Mini))),
+            StatisticsEntryType::Tsms => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(1, Some(deep_trinity_core::TSpin::Mini))),
+            StatisticsEntryType::MaxCombos => deep_trinity_core::StatisticsEntryType::MaxCombos,
+            StatisticsEntryType::MaxBtbs => deep_trinity_core::StatisticsEntryType::MaxBtbs,
+            StatisticsEntryType::PerfectClear => deep_trinity_core::StatisticsEntryType::PerfectClear,
+            StatisticsEntryType::Hold => deep_trinity_core::StatisticsEntryType::Hold,
+            StatisticsEntryType::Lock => deep_trinity_core::StatisticsEntryType::Lock,
         })
     }
     #[wasm_bindgen(js_name = supplyNextPieces)]
     pub fn supply_next_pieces(&mut self, pieces: &[u8]) {
-        let mut ps: Vec<core::Piece> = Vec::new();
+        let mut ps: Vec<deep_trinity_core::Piece> = Vec::new();
         for p in pieces.iter() {
-            ps.push(core::Piece::try_from_u8(*p).unwrap());
+            ps.push(deep_trinity_core::Piece::try_from_u8(*p).unwrap());
         }
         self.game.supply_next_pieces(&ps);
     }
@@ -275,7 +269,7 @@ impl Game {
 
 #[wasm_bindgen]
 pub struct RandomPieceGenerator {
-    gen: core::RandomPieceGenerator<rand::rngs::StdRng>,
+    gen: deep_trinity_core::RandomPieceGenerator<rand::rngs::StdRng>,
 }
 
 #[wasm_bindgen]
@@ -283,7 +277,7 @@ impl RandomPieceGenerator {
     #[wasm_bindgen(constructor)]
     pub fn new(seed: u64) -> Self {
         Self {
-            gen: core::RandomPieceGenerator::new(rand::rngs::StdRng::seed_from_u64(seed))
+            gen: deep_trinity_core::RandomPieceGenerator::new(rand::rngs::StdRng::seed_from_u64(seed))
         }
     }
     pub fn generate(&mut self) -> Box<[u8]> {
@@ -297,24 +291,24 @@ impl RandomPieceGenerator {
 
 #[wasm_bindgen]
 pub struct Action {
-    bot_action: bot::Action,
+    bot_action: deep_trinity_bot::Action,
 }
 
 #[wasm_bindgen]
 impl Action {
-    fn new(bot_action: bot::Action) -> Self {
+    fn new(bot_action: deep_trinity_bot::Action) -> Self {
         Self { bot_action }
     }
     pub fn dst(&self) -> Option<MoveTransition> {
         match &self.bot_action {
-            bot::Action::Move(mt) => Some((*mt).into()),
+            deep_trinity_bot::Action::Move(mt) => Some((*mt).into()),
             _ => None,
         }
     }
     #[wasm_bindgen(js_name = isHold)]
     pub fn is_hold(&self) -> bool {
         match self.bot_action {
-            bot::Action::Hold => true,
+            deep_trinity_bot::Action::Hold => true,
             _ => false,
         }
     }
@@ -322,17 +316,17 @@ impl Action {
 
 #[wasm_bindgen]
 pub struct Bot {
-    bot: Box<dyn bot::Bot>,
+    bot: Box<dyn deep_trinity_bot::Bot>,
 }
 
 #[wasm_bindgen]
 impl Bot {
     #[wasm_bindgen(constructor)]
     pub fn new(bot_type: Option<u8>) -> Result<Bot, JsValue> {
-        let bot: Box<dyn bot::Bot> = match bot_type.unwrap_or(1) {
-            1 => Box::new(bot::simple::SimpleBot::default()),
-            2 => Box::new(bot::simple_tree::SimpleTreeBot::default()),
-            3 => Box::new(bot::mcts_puct::MctsPuctBot::default()),
+        let bot: Box<dyn deep_trinity_bot::Bot> = match bot_type.unwrap_or(1) {
+            1 => Box::new(deep_trinity_bot::simple::SimpleBot::default()),
+            2 => Box::new(deep_trinity_bot::simple_tree::SimpleTreeBot::default()),
+            3 => Box::new(deep_trinity_bot::mcts_puct::MctsPuctBot::default()),
             _ => return Err("invalid bot type".into()),
         };
         Ok(Self { bot })
@@ -347,7 +341,7 @@ impl Bot {
 
 #[wasm_bindgen]
 pub struct MovePlayer {
-    move_player: core::MovePlayer,
+    move_player: deep_trinity_core::MovePlayer,
 }
 
 #[wasm_bindgen]
@@ -362,7 +356,7 @@ impl MovePlayer {
         let path = game.game.get_almost_good_move_path(&((*mt).into()))?;
         log(&format!("{:?}: {:?}", &game.game.state.falling_piece.as_ref().unwrap().piece_spec.piece, path));
         Ok(Self {
-            move_player: core::MovePlayer::new(path),
+            move_player: deep_trinity_core::MovePlayer::new(path),
         })
     }
     pub fn step(&mut self, game: &mut Game) -> Result<bool, JsValue> {
