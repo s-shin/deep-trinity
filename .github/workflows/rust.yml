@@ -10,10 +10,10 @@ jobs:
     - uses: extractions/setup-just@v1
     - uses: actions/setup-python@v2
       with:
-        python-version: 3.7
+        python-version: 3.10
     - run: pip install maturin
-#    - name: Install Poetry
-#      uses: snok/install-poetry@v1
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
     - name: Build
       run: cargo build --verbose
     - name: Run tests
