@@ -139,7 +139,7 @@ pub trait Grid<C: Cell>: Clone {
     }
     /// Example:
     /// ```
-    /// use grid::{Grid, Cell, BasicGrid, BinaryCell};
+    /// use deep_trinity_grid::{Grid, Cell, BasicGrid, BinaryCell};
     ///
     /// let mut grid = BasicGrid::<BinaryCell>::new((3, 3).into());
     /// grid.set_rows_with_strs((1, 1).into(), &[
@@ -168,7 +168,7 @@ pub trait Grid<C: Cell>: Clone {
     }
     /// Example:
     /// ```
-    /// use grid::{Grid, Cell, BasicGrid, BinaryCell};
+    /// use deep_trinity_grid::{Grid, Cell, BasicGrid, BinaryCell};
     ///
     /// let mut grid = BasicGrid::<BinaryCell>::new((3, 3).into());
     /// grid.set_rows_with_bits((1, 1).into(), 3, 0b011001);
@@ -426,7 +426,7 @@ pub trait Grid<C: Cell>: Clone {
     }
     /// Example:
     /// ```
-    /// use grid::{Grid, BasicGrid, BinaryCell};
+    /// use deep_trinity_grid::{Grid, BasicGrid, BinaryCell};
     /// let mut grid = BasicGrid::<BinaryCell>::new((5, 3).into());
     /// grid.set_rows_with_strs((0, 0).into(), &[
     ///     "@ @ @",
@@ -460,7 +460,7 @@ pub trait Grid<C: Cell>: Clone {
     }
     /// Example:
     /// ```
-    /// use grid::{Grid, BasicGrid, BinaryCell};
+    /// use deep_trinity_grid::{Grid, BasicGrid, BinaryCell};
     /// let mut grid = BasicGrid::<BinaryCell>::new((4, 4).into());
     /// grid.set_rows_with_strs((0, 0).into(), &[
     ///     "@   ",

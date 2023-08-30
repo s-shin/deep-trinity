@@ -1,8 +1,8 @@
 /// MCTS-base bot implementation by the PUCT algorithm.
 /// https://doi.org/10.1007/978-3-642-40988-2_13
 use crate::{Bot, Action};
-use core::{Game, StatisticsEntryType, LineClear, TSpin};
-use grid::Grid;
+use deep_trinity_core::{Game, StatisticsEntryType, LineClear, TSpin};
+use deep_trinity_grid::Grid;
 use std::error::Error;
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;

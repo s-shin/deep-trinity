@@ -1,6 +1,6 @@
 /// Heuristic move searcher by brute force approach.
 /// By using this, we can get at least all lockable placements.
-use grid::Grid;
+use deep_trinity_grid::Grid;
 use crate::{Move, MovePathItem};
 use super::{SearchConfiguration, SearchResult, MoveSearcher};
 

@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::str::FromStr;
 use bitvec::prelude::*;
-use core::{Piece, Placement, Orientation, Game};
-use tree::arena::{NodeArena, NodeHandle};
+use deep_trinity_core::{Piece, Placement, Orientation, Game};
+use deep_trinity_tree::arena::{NodeArena, NodeHandle};
 use crate::Action;
 use crate::helper::stack_tree::{StackTree, StackTreeCommonNodeData, StackTreeNodeData, StackTreeNodeExpander, StackTreeSimulator};
 

@@ -4,8 +4,8 @@ use std::str::FromStr;
 use std::fmt::Write;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use core::prelude::*;
-use grid::{X, Y};
+use deep_trinity_core::prelude::*;
+use deep_trinity_grid::{X, Y};
 
 #[derive(Clone, Debug)]
 pub struct Constraint {

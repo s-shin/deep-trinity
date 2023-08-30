@@ -23,7 +23,7 @@
 
 //---
 
-// use core::{Game, Placement, Piece, Grid, FallingPiece, MoveTransition, LineClear, TSpinJudgementMode};
+// use deep_trinity_core::{Game, Placement, Piece, Grid, FallingPiece, MoveTransition, LineClear, TSpinJudgementMode};
 // use crate::{Action, Bot};
 // use std::error::Error;
 // use rand::prelude::StdRng;
@@ -116,19 +116,19 @@
 //     }
 //     let direction = MoveDirection([
 //         // S
-//         vec![Move::To(Placement::new(core::Orientation0, (4, 0).into()))],
+//         vec![Move::To(Placement::new(deep_trinity_core::Orientation0, (4, 0).into()))],
 //         // Z
-//         vec![Move::To(Placement::new(core::Orientation1, (1, 0).into()))],
+//         vec![Move::To(Placement::new(deep_trinity_core::Orientation1, (1, 0).into()))],
 //         // L
-//         vec![Move::To(Placement::new(core::Orientation1, (-1, 2).into()))],
+//         vec![Move::To(Placement::new(deep_trinity_core::Orientation1, (-1, 2).into()))],
 //         // J
-//         vec![Move::To(Placement::new(core::Orientation3, (8, 0).into()))],
+//         vec![Move::To(Placement::new(deep_trinity_core::Orientation3, (8, 0).into()))],
 //         // I
-//         vec![Move::To(Placement::new(core::Orientation0, (2, -2).into()))],
+//         vec![Move::To(Placement::new(deep_trinity_core::Orientation0, (2, -2).into()))],
 //         // T
 //         vec![Move::Hold],
 //         // O
-//         vec![Move::To(Placement::new(core::Orientation0, (-1, -1).into()))],
+//         vec![Move::To(Placement::new(deep_trinity_core::Orientation0, (-1, -1).into()))],
 //     ]);
 //     Some(EvaluateResult::new(direction))
 // }
@@ -138,7 +138,7 @@
 //     match piece {
 //         Piece::I => {
 //             match placement.orientation {
-//                 core::Orientation1 | core::Orientation3 => (-2 <= x && x <= 0) || (pf_width - 4 <= x && x <= pf_width - 2),
+//                 deep_trinity_core::Orientation1 | deep_trinity_core::Orientation3 => (-2 <= x && x <= 0) || (pf_width - 4 <= x && x <= pf_width - 2),
 //                 _ => false,
 //             }
 //         }
@@ -147,8 +147,8 @@
 //                 true
 //             } else {
 //                 match placement.orientation {
-//                     core::Orientation0 | core::Orientation1 => x == -1 || x == pf_width - 4,
-//                     core::Orientation2 | core::Orientation3 => x == 1 || x == pf_width - 2,
+//                     deep_trinity_core::Orientation0 | deep_trinity_core::Orientation1 => x == -1 || x == pf_width - 4,
+//                     deep_trinity_core::Orientation2 | deep_trinity_core::Orientation3 => x == 1 || x == pf_width - 2,
 //                     _ => false,
 //                 }
 //             }
@@ -158,8 +158,8 @@
 //                 true
 //             } else {
 //                 match placement.orientation {
-//                     core::Orientation1 => x == -1 || x == pf_width - 4,
-//                     core::Orientation3 => x == 1 || x == pf_width - 2,
+//                     deep_trinity_core::Orientation1 => x == -1 || x == pf_width - 4,
+//                     deep_trinity_core::Orientation3 => x == 1 || x == pf_width - 2,
 //                     _ => false,
 //                 }
 //             }
@@ -288,7 +288,7 @@
 //                 }
 //                 Move::To(placement) => {
 //                     let mt = data.move_candidates.iter()
-//                         .filter(|mt| mt.placement == placement || core::get_placement_aliases(current_piece, &mt.placement).iter().find(|p| **p == placement).is_some())
+//                         .filter(|mt| mt.placement == placement || deep_trinity_core::get_placement_aliases(current_piece, &mt.placement).iter().find(|p| **p == placement).is_some())
 //                         .take(1)
 //                         .next()
 //                         .unwrap();
@@ -340,7 +340,7 @@
 
 //---
 
-// use core::{MoveTransition, Placement, Piece, Game};
+// use deep_trinity_core::{MoveTransition, Placement, Piece, Game};
 // use std::error::Error;
 // use crate::Bot;
 //

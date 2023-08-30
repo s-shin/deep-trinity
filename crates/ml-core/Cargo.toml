@@ -7,6 +7,6 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-core = { path = "../core" }
-grid = { path = "../grid" }
+deep-trinity-core = { path = "../deep-trinity-core" }
+deep-trinity-grid = { path = "../deep-trinity-grid" }
 rand = "0.8"

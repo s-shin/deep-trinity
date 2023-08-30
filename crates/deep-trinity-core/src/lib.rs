@@ -16,8 +16,8 @@ use rand::seq::SliceRandom;
 use bitflags::bitflags;
 use num_traits::PrimInt;
 use once_cell::sync::Lazy;
-use grid::{Cell as CellTrait, Grid, X, Y, Vec2};
-use grid::bitgrid::BitGridTrait;
+use deep_trinity_grid::{Cell as CellTrait, Grid, X, Y, Vec2};
+use deep_trinity_grid::bitgrid::BitGridTrait;
 
 //--------------------------------------------------------------------------------------------------
 // Default Value Configurations
@@ -224,12 +224,12 @@ impl FromStr for Cell {
 // Grids
 //--------------------------------------------------------------------------------------------------
 
-type BasicGrid = grid::BasicGrid<Cell>;
+type BasicGrid = deep_trinity_grid::BasicGrid<Cell>;
 
 type BitGridInt = u64;
-type PrimBitGridConstantsStore = grid::bitgrid::PrimBitGridConstantsStore<BitGridInt>;
-type PrimBitGrid<'a> = grid::bitgrid::PrimBitGrid<'a, BitGridInt, Cell>;
-type BasicBitGrid<'a> = grid::bitgrid::BasicBitGrid<'a, BitGridInt, Cell>;
+type PrimBitGridConstantsStore = deep_trinity_grid::bitgrid::PrimBitGridConstantsStore<BitGridInt>;
+type PrimBitGrid<'a> = deep_trinity_grid::bitgrid::PrimBitGrid<'a, BitGridInt, Cell>;
+type BasicBitGrid<'a> = deep_trinity_grid::bitgrid::BasicBitGrid<'a, BitGridInt, Cell>;
 
 pub static DEFAULT_PRIM_GRID_CONSTANTS_STORE: Lazy<PrimBitGridConstantsStore> = Lazy::new(|| {
     let def = default_value_config();

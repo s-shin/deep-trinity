@@ -1,5 +1,5 @@
 use crate::{Bot, Action};
-use core::Game;
+use deep_trinity_core::Game;
 use std::error::Error;
 
 #[derive(Copy, Clone, Debug, Default)]

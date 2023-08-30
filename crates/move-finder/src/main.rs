@@ -5,9 +5,9 @@ use std::rc::Rc;
 use std::str::FromStr;
 use clap::Parser;
 use rand::prelude::*;
-use core::prelude::*;
-use bot::Action;
-use tree::arena::{NodeArena, NodeHandle};
+use deep_trinity_core::prelude::*;
+use deep_trinity_bot::Action;
+use deep_trinity_tree::arena::{NodeArena, NodeHandle};
 
 struct NodeData {
     by_action: Option<Action>,
@@ -23,7 +23,7 @@ impl NodeData {
     }
 }
 
-type VecNodeArena = tree::arena::VecNodeArena<NodeData>;
+type VecNodeArena = deep_trinity_tree::arena::VecNodeArena<NodeData>;
 
 fn expand_node(arena: &mut VecNodeArena, node: NodeHandle) {
     if let Some(fp) = arena[node].data.game.state.falling_piece.clone() {
@@ -65,10 +65,10 @@ fn expand_node(arena: &mut VecNodeArena, node: NodeHandle) {
 // macro_rules! pp {
 //     ($piece_name:ident, $orientation:literal, $x:literal, $y:literal) => {
 //         PiecePlacement::new(
-//             core::Piece::$piece_name,
+//             deep_trinity_core::Piece::$piece_name,
 //             Placement::new(
-//                 core::ORIENTATIONS[$orientation],
-//                 grid::Vec2($x, $y),
+//                 deep_trinity_core::ORIENTATIONS[$orientation],
+//                 deep_trinity_grid::Vec2($x, $y),
 //             ),
 //         )
 //     }

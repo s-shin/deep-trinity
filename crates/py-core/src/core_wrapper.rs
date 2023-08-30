@@ -1,7 +1,7 @@
 use std::collections::{HashSet, VecDeque};
-use core::prelude::*;
-use core::helper::MoveDecisionResource;
-use grid::{Grid, Y, Cell as _};
+use deep_trinity_core::prelude::*;
+use deep_trinity_core::helper::MoveDecisionResource;
+use deep_trinity_grid::{Grid, Y, Cell as _};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 
@@ -37,7 +37,7 @@ impl CellWrapper {
         Ok(Self(cell))
     }
     #[classmethod]
-    pub fn from_str(cls: &PyType, s: String) -> PyResult<Self> {
+    pub fn from_str(_cls: &PyType, s: String) -> PyResult<Self> {
         if s.len() != 1 {
             Err(pyo3::exceptions::PyValueError::new_err("Invalid string representation of cell."))
         } else {

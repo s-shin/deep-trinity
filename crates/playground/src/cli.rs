@@ -1,9 +1,9 @@
-use core::{Game, RandomPieceGenerator, MovePlayer};
+use deep_trinity_core::{Game, RandomPieceGenerator, MovePlayer};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use anyhow::Result;
 use std::io::{stdout, Write};
-use bot::{Bot, Action};
+use deep_trinity_bot::{Bot, Action};
 use std::error::Error;
 
 pub fn run() -> Result<(), Box<dyn Error>> {
@@ -14,10 +14,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     game.supply_next_pieces(&pg.generate());
     game.setup_falling_piece(None)?;
 
-    let mut bot: bot::tree::TreeBot = Default::default();
-    // let mut bot: bot::simple_tree::SimpleTreeBot = Default::default();
-    // let mut bot: bot::simple::SimpleBot = Default::default();
-    // let mut bot: bot::mcts_puct::MctsPuctBot = Default::default();
+    let mut bot: deep_trinity_bot::tree::TreeBot = Default::default();
+    // let mut bot: deep_trinity_bot::simple_tree::SimpleTreeBot = Default::default();
+    // let mut bot: deep_trinity_bot::simple::SimpleBot = Default::default();
+    // let mut bot: deep_trinity_bot::mcts_puct::MctsPuctBot = Default::default();
     let mut action = None;
     let mut move_player = None;
     loop {

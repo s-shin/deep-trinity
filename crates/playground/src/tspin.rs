@@ -1,4 +1,4 @@
-// use core::{Game, FallingPiece, MoveTransition, Piece};
+// use deep_trinity_core::{Game, FallingPiece, MoveTransition, Piece};
 // use std::error::Error;
 // use std::collections::{HashMap, HashSet};
 //
@@ -101,7 +101,7 @@
 //     use super::*;
 //     use rand::rngs::StdRng;
 //     use rand::SeedableRng;
-//     use core::{RandomPieceGenerator};
+//     use deep_trinity_core::{RandomPieceGenerator};
 //
 //     #[test]
 //     fn test() {
