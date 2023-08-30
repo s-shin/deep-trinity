@@ -196,7 +196,7 @@ mod tests {
     fn test_calc_reward() {
         let stats: deep_trinity_core::Statistics = Default::default();
         let mut stats2 = stats.clone();
-        stats2.line_clear.add(&core::LineClear::new(1, None), 1);
+        stats2.line_clear.add(&deep_trinity_core::LineClear::new(1, None), 1);
         let diff = stats2 - stats;
         assert!(calc_reward(&diff) > 0.0);
     }
