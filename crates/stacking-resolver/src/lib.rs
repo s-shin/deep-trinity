@@ -4,7 +4,7 @@ use std::str::FromStr;
 use core::prelude::*;
 use tree::arena::{NodeArena, NodeHandle};
 
-# TODO: Remove move-finder.
+// TODO: Remove or refactor move-finder.
 
 pub struct PiecePlacement {
     pub piece: Piece,
