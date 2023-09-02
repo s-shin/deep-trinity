@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import { ThemeProvider } from '@emotion/react';
 import * as core from "@deep-trinity/web-core";
 import * as coreHelper from "@deep-trinity/web-core-helper";
@@ -43,8 +43,4 @@ const App: React.FC = () => {
   );
 };
 
-ReactDOM.render(
-  <App/>,
-  document.querySelector("main"),
-);
-
+createRoot(document.querySelector("main")!).render(<App />);

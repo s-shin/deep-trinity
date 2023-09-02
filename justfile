@@ -3,7 +3,7 @@ web_dir := justfile_directory() + '/web'
 tools_dir := justfile_directory() + '/tools'
 
 default:
-    @just --list
+    @just --choose
 
 test:
     cargo test --verbose --workspace --exclude py-core
@@ -11,7 +11,7 @@ test:
     just prepare_and_test_python_core
 
 build_web_core:
-    cd '{{ crates_dir }}/web-core' && wasm-pack build -s deep-trinity -d '{{ web_dir }}/packages/web-core'
+    cd '{{ crates_dir }}/web-core' && wasm-pack build --target bundler -s deep-trinity -d '{{ web_dir }}/packages/web-core'
 
 build_python_core:
     cd '{{ crates_dir }}/py-core' && maturin build --no-sdist

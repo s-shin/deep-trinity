@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import { ThemeProvider } from '@emotion/react';
 import { useForm } from "react-hook-form";
 import * as core from "@deep-trinity/web-core";
@@ -207,4 +207,4 @@ const App: React.FC = () => {
   );
 };
 
-ReactDOM.render(<App/>, document.querySelector("main"));
+createRoot(document.querySelector("main")!).render(<App />);

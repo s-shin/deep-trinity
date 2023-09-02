@@ -19,9 +19,10 @@ const RootInner = styled.div`
 
 export type SimpleFullScreenSinglePlayProps = {
   game: model.Game,
+  children?: React.ReactNode,
 };
 
-export const SimpleFullScreenSinglePlay: React.FC<SimpleFullScreenSinglePlayProps> = props => {
+export function SimpleFullScreenSinglePlay(props: SimpleFullScreenSinglePlayProps) {
   return (
     <div>
       <Root>
@@ -33,6 +34,6 @@ export const SimpleFullScreenSinglePlay: React.FC<SimpleFullScreenSinglePlayProp
       </Root>
     </div>
   );
-};
+}
 
 export default SimpleFullScreenSinglePlay;

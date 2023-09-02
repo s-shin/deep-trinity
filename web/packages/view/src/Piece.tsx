@@ -1,4 +1,3 @@
-import React from "react";
 import * as model from "@deep-trinity/model";
 import { useTheme } from "./theme";
 import Grid, { GridProps } from "./Grid";
@@ -27,11 +26,11 @@ export type PieceProps = {
   piece: model.Piece,
 };
 
-export const Piece: React.FC<PieceProps> = props => {
+export function Piece(props: PieceProps) {
   const theme = useTheme();
   return (
     <Grid {...pieceSpecs[props.piece]} borderStyle={theme.pieceCellBorderStyle}/>
   );
-};
+}
 
 export default Piece;

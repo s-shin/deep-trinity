@@ -1,4 +1,3 @@
-import React from "react";
 import styled from "@emotion/styled";
 import * as model from "@deep-trinity/model";
 import { useTheme } from "./theme";
@@ -21,7 +20,7 @@ export type CellProps = {
   borderStyle?: string,
 };
 
-export const Cell: React.FC<CellProps> = props => {
+export function Cell(props: CellProps) {
   const theme = useTheme();
   return (
     <CellElement
@@ -33,6 +32,6 @@ export const Cell: React.FC<CellProps> = props => {
       }
     />
   );
-};
+}
 
 export default Cell;

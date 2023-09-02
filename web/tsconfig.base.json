@@ -1,16 +1,17 @@
 {
   "compilerOptions": {
-    "target": "es2015",
-    "module": "commonjs",
+    "target": "es2017",
+    "module": "ES2022",
     "declaration": true,
     "sourceMap": true,
-    "moduleResolution": "node",
-    "esModuleInterop": true,
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "esModuleInterop": false,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "noUnusedLocals": true,
     "noFallthroughCasesInSwitch": true,
-    "jsx": "react"
+    "jsx": "react-jsx"
   },
   "exclude": [
     "templates/**/*"

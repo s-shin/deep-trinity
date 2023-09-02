@@ -1,4 +1,3 @@
-import React from "react";
 import * as model from "@deep-trinity/model";
 import Grid from "./Grid";
 
@@ -6,7 +5,7 @@ export type PlayfieldProps = {
   game: model.Game,
 };
 
-export const Playfield: React.FC<PlayfieldProps> = props => {
+export function Playfield(props: PlayfieldProps) {
   return (
     <Grid
       width={props.game.width}
@@ -14,6 +13,6 @@ export const Playfield: React.FC<PlayfieldProps> = props => {
       cells={props.game.cells}
     />
   );
-};
+}
 
 export default Playfield;

@@ -1,4 +1,3 @@
-import React from "react";
 import styled from "@emotion/styled";
 import * as model from "@deep-trinity/model";
 import NextPieces from "./NextPieces";
@@ -21,7 +20,7 @@ export type GameProps = {
   game: model.Game,
 };
 
-export const Game: React.FC<GameProps> = props => {
+export function Game(props: GameProps) {
   return (
     <GameRoot>
       <GameRootInner>
@@ -31,6 +30,6 @@ export const Game: React.FC<GameProps> = props => {
       </GameRootInner>
     </GameRoot>
   )
-};
+}
 
 export default Game;

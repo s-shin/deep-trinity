@@ -1,7 +1,6 @@
-import React from "react";
 import * as model from "@deep-trinity/model";
-export declare type PlayfieldProps = {
+export type PlayfieldProps = {
     game: model.Game;
 };
-export declare const Playfield: React.FC<PlayfieldProps>;
+export declare function Playfield(props: PlayfieldProps): import("react/jsx-runtime").JSX.Element;
 export default Playfield;

@@ -1,7 +1,6 @@
-import React from "react";
 import * as model from "@deep-trinity/model";
-export declare type PieceProps = {
+export type PieceProps = {
     piece: model.Piece;
 };
-export declare const Piece: React.FC<PieceProps>;
+export declare function Piece(props: PieceProps): import("react/jsx-runtime").JSX.Element;
 export default Piece;

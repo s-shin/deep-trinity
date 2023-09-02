@@ -1,31 +1,20 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.Game = void 0;
-const react_1 = __importDefault(require("react"));
-const styled_1 = __importDefault(require("@emotion/styled"));
-const NextPieces_1 = __importDefault(require("./NextPieces"));
-const Playfield_1 = __importDefault(require("./Playfield"));
-const PieceContainer_1 = __importDefault(require("./PieceContainer"));
-const GameRoot = styled_1.default.div `
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import styled from "@emotion/styled";
+import NextPieces from "./NextPieces";
+import Playfield from "./Playfield";
+import PieceContainer from "./PieceContainer";
+const GameRoot = styled.div `
   display: grid;
   align-items: center;
   place-items: center;
   height: 100%;
 `;
-const GameRootInner = styled_1.default.div `
+const GameRootInner = styled.div `
   display: grid;
   grid-template-columns: min-content min-content min-content;
 `;
-const Game = props => {
-    return (react_1.default.createElement(GameRoot, null,
-        react_1.default.createElement(GameRootInner, null,
-            react_1.default.createElement(PieceContainer_1.default, { piece: props.game.holdPiece }),
-            react_1.default.createElement(Playfield_1.default, { game: props.game }),
-            react_1.default.createElement(NextPieces_1.default, { pieces: props.game.nextPieces }))));
-};
-exports.Game = Game;
-exports.default = exports.Game;
+export function Game(props) {
+    return (_jsx(GameRoot, { children: _jsxs(GameRootInner, { children: [_jsx(PieceContainer, { piece: props.game.holdPiece }), _jsx(Playfield, { game: props.game }), _jsx(NextPieces, { pieces: props.game.nextPieces })] }) }));
+}
+export default Game;
 //# sourceMappingURL=Game.js.map
