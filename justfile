@@ -3,7 +3,7 @@ web_dir := justfile_directory() + '/web'
 tools_dir := justfile_directory() + '/tools'
 
 default:
-    @just --choose
+    @just --list
 
 test:
     cargo test --verbose --workspace --exclude py-core
