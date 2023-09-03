@@ -1,5 +1,5 @@
+# Deep Trinity Web
+
 ```sh
 npm i
-
-npm run -ws lint
 ```
