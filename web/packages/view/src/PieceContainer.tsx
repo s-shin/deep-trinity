@@ -1,4 +1,3 @@
-import React from "react";
 import styled from "@emotion/styled";
 import * as model from "@deep-trinity/model";
 import { useTheme } from "./theme";
@@ -21,13 +20,13 @@ export type PieceContainerProps = {
   piece?: model.Piece,
 };
 
-export const PieceContainer: React.FC<PieceContainerProps> = props => {
+export function PieceContainer(props: PieceContainerProps) {
   const theme = useTheme();
   return (
     <PieceContainerRoot margin={theme.pieceContainerMargin} size={theme.pieceContainerSize}>
       {props.piece != undefined && <Piece piece={props.piece}/>}
     </PieceContainerRoot>
   );
-};
+}
 
 export default PieceContainer;

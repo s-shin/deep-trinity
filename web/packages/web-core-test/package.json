@@ -8,9 +8,8 @@
     "lib"
   ],
   "scripts": {
-    "build": "rimraf lib && webpack --config webpack.config.js",
-    "dev": "webpack-dev-server",
-    "lint": "eslint --ext .ts,.tsx,.js,.jsx src",
+    "dev": "vite dev",
+    "lint": "eslint .",
     "fmt": "prettier --write src/*",
     "test": "jest"
   },

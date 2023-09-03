@@ -1,8 +1,7 @@
-import React from "react";
 import * as model from "@deep-trinity/model";
-export declare type StatisticsProps = {
+export type StatisticsProps = {
     game: model.Game;
     types: model.StatisticsEntryType[];
 };
-export declare const Statistics: React.FC<StatisticsProps>;
+export declare function Statistics(props: StatisticsProps): import("react/jsx-runtime").JSX.Element;
 export default Statistics;

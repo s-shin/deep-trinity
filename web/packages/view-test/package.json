@@ -8,9 +8,8 @@
     "lib"
   ],
   "scripts": {
-    "build": "rimraf lib && webpack --config webpack.config.js",
-    "dev": "webpack-dev-server",
-    "lint": "eslint --ext .ts,.tsx,.js,.jsx src",
+    "dev": "vite",
+    "lint": "eslint .",
     "fmt": "prettier --write src/*",
     "test": "jest"
   },
@@ -35,11 +34,11 @@
     "@deep-trinity/web-core-helper": "^0.1.0",
     "@emotion/react": "^11.7.1",
     "@emotion/styled": "^11.6.0",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@types/react": "^17.0.38",
-    "@types/react-dom": "^17.0.11"
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0"
   }
 }

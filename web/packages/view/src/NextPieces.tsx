@@ -1,4 +1,3 @@
-import React from "react";
 import styled from "@emotion/styled";
 import * as model from "@deep-trinity/model";
 import PieceContainer from "./PieceContainer";
@@ -9,7 +8,7 @@ export type NextPiecesProps = {
   pieces: ArrayLike<model.Piece>,
 };
 
-export const NextPieces: React.FC<NextPiecesProps> = props => {
+export function NextPieces(props: NextPiecesProps) {
   const elPieces = [];
   for (let i = 0; i < props.pieces.length; i++) {
     elPieces.push(
@@ -24,6 +23,6 @@ export const NextPieces: React.FC<NextPiecesProps> = props => {
       {elPieces}
     </NextPiecesRoot>
   );
-};
+}
 
 export default NextPieces;

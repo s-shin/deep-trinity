@@ -38,10 +38,10 @@ export declare enum StatisticsEntryType {
     Lock = 13
 }
 export declare const STATISTICS_ENTRY_TYPES: StatisticsEntryType[];
-export declare type Statistics = {
+export type Statistics = {
     [entryType in StatisticsEntryType]: number;
 };
-export declare type Game = {
+export type Game = {
     width: number;
     height: number;
     visibleHeight: number;

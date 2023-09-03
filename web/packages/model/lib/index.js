@@ -1,6 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var Piece;
+export var Piece;
 (function (Piece) {
     Piece[Piece["S"] = 0] = "S";
     Piece[Piece["Z"] = 1] = "Z";
@@ -9,8 +7,8 @@ var Piece;
     Piece[Piece["I"] = 4] = "I";
     Piece[Piece["T"] = 5] = "T";
     Piece[Piece["O"] = 6] = "O";
-})(Piece = exports.Piece || (exports.Piece = {}));
-var Cell;
+})(Piece || (Piece = {}));
+export var Cell;
 (function (Cell) {
     Cell[Cell["Empty"] = 0] = "Empty";
     Cell[Cell["Any"] = 1] = "Any";
@@ -22,10 +20,10 @@ var Cell;
     Cell[Cell["T"] = 7] = "T";
     Cell[Cell["O"] = 8] = "O";
     Cell[Cell["Garbage"] = 9] = "Garbage";
-})(Cell = exports.Cell || (exports.Cell = {}));
-exports.pieceToCell = (p) => p + 2;
-exports.cellToPiece = (c) => (c < 2 || 8 < c) ? undefined : c - 2;
-var StatisticsEntryType;
+})(Cell || (Cell = {}));
+export const pieceToCell = (p) => p + 2;
+export const cellToPiece = (c) => (c < 2 || 8 < c) ? undefined : c - 2;
+export var StatisticsEntryType;
 (function (StatisticsEntryType) {
     StatisticsEntryType[StatisticsEntryType["Single"] = 0] = "Single";
     StatisticsEntryType[StatisticsEntryType["Double"] = 1] = "Double";
@@ -41,7 +39,7 @@ var StatisticsEntryType;
     StatisticsEntryType[StatisticsEntryType["PerfectClear"] = 11] = "PerfectClear";
     StatisticsEntryType[StatisticsEntryType["Hold"] = 12] = "Hold";
     StatisticsEntryType[StatisticsEntryType["Lock"] = 13] = "Lock";
-})(StatisticsEntryType = exports.StatisticsEntryType || (exports.StatisticsEntryType = {}));
-exports.STATISTICS_ENTRY_TYPES = Object.values(StatisticsEntryType).filter(v => typeof v === "number");
-exports.getIndex = (w, x, y) => x + y * w;
+})(StatisticsEntryType || (StatisticsEntryType = {}));
+export const STATISTICS_ENTRY_TYPES = Object.values(StatisticsEntryType).filter(v => typeof v === "number");
+export const getIndex = (w, x, y) => x + y * w;
 //# sourceMappingURL=index.js.map

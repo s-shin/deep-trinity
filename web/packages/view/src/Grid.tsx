@@ -1,4 +1,3 @@
-import React from "react";
 import styled from "@emotion/styled";
 import * as model from "@deep-trinity/model";
 import { useTheme } from "./theme";
@@ -25,7 +24,7 @@ export type GridProps = {
   borderStyle?: string,
 };
 
-export const Grid: React.FC<GridProps> = props => {
+export function Grid(props: GridProps) {
   const theme = useTheme();
   const cells = [];
   for (let y = props.height - 1; y >= 0; y--) {
@@ -49,6 +48,6 @@ export const Grid: React.FC<GridProps> = props => {
       {cells}
     </GridRoot>
   );
-};
+}
 
 export default Grid;

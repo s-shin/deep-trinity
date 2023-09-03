@@ -12,7 +12,7 @@
   "scripts": {
     "build": "rimraf lib && tsc",
     "watch": "tsc -w",
-    "lint": "eslint --ext .ts,.tsx,.js,.jsx src",
+    "lint": "eslint .",
     "fmt": "prettier --write src/*",
     "test": "jest"
   },

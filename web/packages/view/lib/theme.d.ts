@@ -1,4 +1,4 @@
-export declare type Theme = {
+export type Theme = {
     gridGap: string;
     cellSize: string;
     cellBorderStyle: string;
@@ -14,7 +14,7 @@ export declare type Theme = {
     };
 };
 export declare const DEFAULT_THEME: Theme;
-export declare type StyledProps = {
+export type StyledProps = {
     theme: Theme;
 };
 export declare const useTheme: () => Theme;

@@ -1,4 +1,3 @@
-import React from "react";
 import styled from "@emotion/styled";
 import * as model from "@deep-trinity/model";
 
@@ -33,7 +32,7 @@ const STRS = [
   "Lock",
 ];
 
-export const Statistics: React.FC<StatisticsProps> = props => {
+export function Statistics(props: StatisticsProps) {
   const rows = props.types.map(t => (
     <tr key={t}>
       <td><Key>{STRS[t]}</Key></td>
@@ -49,6 +48,6 @@ export const Statistics: React.FC<StatisticsProps> = props => {
       </table>
     </div>
   );
-};
+}
 
 export default Statistics;

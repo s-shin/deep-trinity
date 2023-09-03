@@ -12,7 +12,7 @@
   "scripts": {
     "build": "rimraf lib && tsc",
     "watch": "tsc -w",
-    "lint": "eslint --ext .ts,.tsx,.js,.jsx src",
+    "lint": "eslint .",
     "fmt": "prettier --write src/*",
     "test": "jest"
   },
@@ -36,15 +36,15 @@
   "peerDependencies": {
     "@emotion/react": "^11.7.1",
     "@emotion/styled": "^11.6.0",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@emotion/react": "^11.7.1",
     "@emotion/styled": "^11.6.0",
-    "@types/react": "^17.0.38",
-    "@types/react-dom": "^17.0.11",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2"
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   }
 }

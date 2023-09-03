@@ -1,7 +1,6 @@
-import React from "react";
 import * as model from "@deep-trinity/model";
-export declare type GameProps = {
+export type GameProps = {
     game: model.Game;
 };
-export declare const Game: React.FC<GameProps>;
+export declare function Game(props: GameProps): import("react/jsx-runtime").JSX.Element;
 export default Game;
