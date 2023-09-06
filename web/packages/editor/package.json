@@ -1,0 +1,46 @@
+{
+  "name": "@deep-trinity/editor",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "package.json",
+    "README.md",
+    "lib"
+  ],
+  "scripts": {
+    "dev": "vite dev",
+    "lint": "eslint .",
+    "fmt": "prettier --write src/*",
+    "test": "jest"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js",
+      "jsx",
+      "json",
+      "node"
+    ],
+    "testRegex": "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$",
+    "transform": {
+      "^.+\\.tsx?$": "ts-jest"
+    }
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^2.8.0",
+    "@deep-trinity/model": "^0.1.0",
+    "@deep-trinity/view": "^0.1.0",
+    "@deep-trinity/web-core": "^0.1.0",
+    "@deep-trinity/web-core-helper": "^0.1.0",
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "framer-motion": "^10.16.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0"
+  }
+}
