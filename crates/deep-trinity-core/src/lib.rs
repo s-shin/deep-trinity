@@ -1717,6 +1717,33 @@ impl<'a> Game<'a> {
         self.stats.hold += 1;
         Ok(r.is_ok())
     }
+    pub fn valid_moves(&self) -> Vec<Move> {
+        let Some(fp) = &self.state.falling_piece else {
+            return vec![];
+        };
+        let mut moves = Vec::with_capacity(5);
+        let r = self.state.playfield.num_shiftable_cols(fp, true);
+        let l = self.state.playfield.num_shiftable_cols(fp, false);
+        let d = self.state.playfield.num_droppable_rows(fp);
+        let cw = self.state.playfield.check_rotation(RotationMode::Srs, fp, true);
+        let ccw = self.state.playfield.check_rotation(RotationMode::Srs, fp, false);
+        if r > 0 {
+            moves.push(Move::Shift(r));
+        }
+        if l > 0 {
+            moves.push(Move::Shift(-l));
+        }
+        if d > 0 {
+            moves.push(Move::Drop(d));
+        }
+        if cw {
+            moves.push(Move::Rotate(1));
+        }
+        if ccw {
+            moves.push(Move::Rotate(-1));
+        }
+        moves
+    }
     pub fn search_moves(&self, searcher: &mut impl move_search::MoveSearcher) -> Result<move_search::SearchResult, &'static str> {
         let s = &self.state;
         if s.falling_piece.is_none() {

@@ -168,7 +168,7 @@ impl Game {
     #[wasm_bindgen(js_name = visibleHeight)]
     pub fn visible_height(&self) -> deep_trinity_grid::Y { self.game.state.playfield.visible_height }
     #[wasm_bindgen(js_name = getCell)]
-    pub fn get_cell(&self, x: i8, y: i8) -> Cell { self.game.state.playfield.grid.cell((x, y).into()).into() }
+    pub fn get_cell(&self, x: i8, y: i8) -> Cell { self.game.get_cell((x, y).into()).into() }
     #[wasm_bindgen(js_name = getHoldPiece)]
     pub fn get_hold_piece(&self) -> Option<u8> {
         self.game.state.hold_piece.map(|p| { p as u8 })
