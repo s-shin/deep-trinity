@@ -1725,8 +1725,8 @@ impl<'a> Game<'a> {
         let r = self.state.playfield.num_shiftable_cols(fp, true);
         let l = self.state.playfield.num_shiftable_cols(fp, false);
         let d = self.state.playfield.num_droppable_rows(fp);
-        let cw = self.state.playfield.check_rotation(RotationMode::Srs, fp, true);
-        let ccw = self.state.playfield.check_rotation(RotationMode::Srs, fp, false);
+        let cw = self.state.playfield.check_rotation(RotationMode::Srs, fp, true).is_some();
+        let ccw = self.state.playfield.check_rotation(RotationMode::Srs, fp, false).is_some();
         if r > 0 {
             moves.push(Move::Shift(r));
         }

@@ -1,5 +1,4 @@
-use crate::{Bot, Action};
-use deep_trinity_core::Game;
+use deep_trinity_core::prelude::*;
 use std::error::Error;
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -21,12 +20,12 @@ impl Bot for SimpleBot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BotRunner;
+    use deep_trinity_core::bot::SimpleBotRunner;
 
     #[test]
     fn test_simple_bot() {
         let seed = 0;
-        let runner = BotRunner::new(100, true, Some(seed), false);
+        let runner = SimpleBotRunner::new(100, true, Some(seed), false);
         let mut bot = SimpleBot::default();
         let game = runner.run_with_no_hooks(&mut bot).unwrap();
         // let game = test_bot(&mut bot, seed, 100, false).unwrap();

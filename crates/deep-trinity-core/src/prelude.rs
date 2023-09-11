@@ -3,11 +3,13 @@ pub use crate::{
     Piece,
     Orientation, Orientation::*,
     Placement,
-    MoveTransition,
+    Move, MoveTransition, MovePathItem,
     RandomPieceGenerator,
+    Statistics, StatisticsEntryType, LineClear, TSpin,
     FallingPiece,
     Playfield,
     Game, StdGame,
+    MovePlayer,
 };
 
 pub use crate::helper::{

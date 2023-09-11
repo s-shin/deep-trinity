@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 use std::error::Error;
 use deep_trinity_grid::Vec2;
-use deep_trinity_core::{Orientation, Orientation::*, Piece, Move, MoveTransition, Placement, MovePathItem};
-use crate::{Game, Bot, Action};
+use deep_trinity_core::prelude::*;
 
 pub type MoveName = &'static str;
 
@@ -165,8 +164,7 @@ impl Bot for TemplateBot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{BotRunner, BotRunnerHooks};
-    use deep_trinity_core::Cell;
+    use deep_trinity_core::bot::{SimpleBotRunner, SimpleBotRunnerHooks};
 
     #[test]
     fn test_template_bot() {
@@ -174,7 +172,7 @@ mod tests {
             next_pieces: Vec<Piece>,
         }
 
-        impl BotRunnerHooks for Hooks {
+        impl SimpleBotRunnerHooks for Hooks {
             fn on_start(&mut self, game: &mut Game) -> Result<(), Box<dyn Error>> {
                 game.supply_next_pieces(&self.next_pieces);
                 game.setup_falling_piece(None)?;
@@ -215,7 +213,7 @@ mod tests {
             Params::new(tsd_opener_r_01(), "IJOSZLT", false),
             Params::new(tsd_opener_r_02(), "IJOLZST", false),
         ] {
-            let runner = BotRunner::new(100, true, None, params.debug_print);
+            let runner = SimpleBotRunner::new(100, true, None, params.debug_print);
             let mut hooks = Hooks {
                 next_pieces: params.next_pieces.clone(),
             };

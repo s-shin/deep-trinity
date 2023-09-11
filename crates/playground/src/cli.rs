@@ -1,9 +1,8 @@
-use deep_trinity_core::{Game, RandomPieceGenerator, MovePlayer};
+use deep_trinity_core::prelude::*;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use anyhow::Result;
 use std::io::{stdout, Write};
-use deep_trinity_bot::{Bot, Action};
 use std::error::Error;
 
 pub fn run() -> Result<(), Box<dyn Error>> {

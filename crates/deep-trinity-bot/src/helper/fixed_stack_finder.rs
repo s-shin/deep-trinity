@@ -4,9 +4,8 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::str::FromStr;
 use bitvec::prelude::*;
-use deep_trinity_core::{Piece, Placement, Orientation, Game};
+use deep_trinity_core::prelude::*;
 use deep_trinity_tree::arena::{NodeArena, NodeHandle};
-use crate::Action;
 use crate::helper::stack_tree::{StackTree, StackTreeCommonNodeData, StackTreeNodeData, StackTreeNodeExpander, StackTreeSimulator};
 
 //--------------------------------------------------------------------------------------------------
@@ -192,7 +191,6 @@ impl<'a> StackTreeSimulator<'a> for Simulator {
 mod tests {
     use rand::prelude::*;
     use crate::helper::stack_tree::simulate_once;
-    use crate::RandomPieceGenerator;
     use super::*;
 
     #[test]

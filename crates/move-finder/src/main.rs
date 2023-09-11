@@ -6,7 +6,6 @@ use std::str::FromStr;
 use clap::Parser;
 use rand::prelude::*;
 use deep_trinity_core::prelude::*;
-use deep_trinity_bot::Action;
 use deep_trinity_tree::arena::{NodeArena, NodeHandle};
 
 struct NodeData {

@@ -1,7 +1,6 @@
 use wasm_bindgen::prelude::*;
 use rand::SeedableRng;
-use deep_trinity_core::MovePathItem;
-use deep_trinity_grid::Grid;
+use deep_trinity_core::prelude::*;
 
 #[wasm_bindgen(js_name = setPanicHook)]
 pub fn set_panic_hook() {
@@ -10,10 +9,10 @@ pub fn set_panic_hook() {
     }
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = Piece)]
 #[derive(Copy, Clone)]
 #[repr(u8)]
-pub enum Piece {
+pub enum JsPiece {
     S,
     Z,
     L,
@@ -23,10 +22,10 @@ pub enum Piece {
     O,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = Cell)]
 #[derive(Copy, Clone)]
 #[repr(u8)]
-pub enum Cell {
+pub enum JsCell {
     Empty,
     Any,
     S,
@@ -39,15 +38,15 @@ pub enum Cell {
     Garbage,
 }
 
-static CELLS: [Cell; 10] = [Cell::Empty, Cell::Any, Cell::S, Cell::Z, Cell::L, Cell::J, Cell::I, Cell::T, Cell::O, Cell::Garbage];
+static CELLS: [JsCell; 10] = [JsCell::Empty, JsCell::Any, JsCell::S, JsCell::Z, JsCell::L, JsCell::J, JsCell::I, JsCell::T, JsCell::O, JsCell::Garbage];
 
-impl From<deep_trinity_core::Cell> for Cell {
-    fn from(c: deep_trinity_core::Cell) -> Self { CELLS[c.to_u8() as usize] }
+impl From<Cell> for JsCell {
+    fn from(c: Cell) -> Self { CELLS[c.to_u8() as usize] }
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = StatisticsEntryType)]
 #[derive(Copy, Clone, Debug)]
-pub enum StatisticsEntryType {
+pub enum JsStatisticsEntryType {
     Single,
     Double,
     Triple,
@@ -64,29 +63,29 @@ pub enum StatisticsEntryType {
     Lock,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = Placement)]
 #[derive(Copy, Clone, Debug)]
-pub struct Placement {
+pub struct JsPlacement {
     pub orientation: u8,
     pub x: i8,
     pub y: i8,
 }
 
-impl Into<deep_trinity_core::Placement> for Placement {
-    fn into(self) -> deep_trinity_core::Placement {
-        deep_trinity_core::Placement::new(deep_trinity_core::Orientation::try_from_u8(self.orientation).unwrap(), (self.x, self.y).into())
+impl Into<Placement> for JsPlacement {
+    fn into(self) -> Placement {
+        Placement::new(Orientation::try_from_u8(self.orientation).unwrap(), (self.x, self.y).into())
     }
 }
 
-impl From<deep_trinity_core::Placement> for Placement {
-    fn from(p: deep_trinity_core::Placement) -> Self {
+impl From<Placement> for JsPlacement {
+    fn from(p: Placement) -> Self {
         Self { orientation: p.orientation.to_u8(), x: p.pos.0, y: p.pos.1 }
     }
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = MoveType)]
 #[derive(Copy, Clone, Debug)]
-pub enum Move {
+pub enum JsMoveType {
     Right,
     Left,
     Down,
@@ -94,42 +93,42 @@ pub enum Move {
     Ccw,
 }
 
-impl Into<deep_trinity_core::Move> for Move {
-    fn into(self) -> deep_trinity_core::Move {
+impl Into<Move> for JsMoveType {
+    fn into(self) -> Move {
         match self {
-            Move::Right => deep_trinity_core::Move::Shift(1),
-            Move::Left => deep_trinity_core::Move::Shift(-1),
-            Move::Down => deep_trinity_core::Move::Drop(1),
-            Move::Cw => deep_trinity_core::Move::Rotate(1),
-            Move::Ccw => deep_trinity_core::Move::Rotate(-1),
+            JsMoveType::Right => Move::Shift(1),
+            JsMoveType::Left => Move::Shift(-1),
+            JsMoveType::Down => Move::Drop(1),
+            JsMoveType::Cw => Move::Rotate(1),
+            JsMoveType::Ccw => Move::Rotate(-1),
         }
     }
 }
 
-impl From<deep_trinity_core::Move> for Move {
-    fn from(mv: deep_trinity_core::Move) -> Self {
+impl From<Move> for JsMoveType {
+    fn from(mv: Move) -> Self {
         match mv {
-            deep_trinity_core::Move::Shift(1) => Move::Right,
-            deep_trinity_core::Move::Shift(-1) => Move::Left,
-            deep_trinity_core::Move::Drop(1) => Move::Down,
-            deep_trinity_core::Move::Rotate(1) => Move::Cw,
-            deep_trinity_core::Move::Rotate(-1) => Move::Ccw,
+            Move::Shift(n) if n > 0 => JsMoveType::Right,
+            Move::Shift(n) if n < 0 => JsMoveType::Left,
+            Move::Drop(n) if n > 0 => JsMoveType::Down,
+            Move::Rotate(n) if n > 0 => JsMoveType::Cw,
+            Move::Rotate(n) if n < 0 => JsMoveType::Ccw,
             _ => panic!("invalid deep_trinity_core::Move: {:?}", mv),
         }
     }
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = MoveTransition)]
 #[derive(Copy, Clone, Debug)]
-pub struct MoveTransition {
-    pub src: Option<Placement>,
-    pub by: Option<Move>,
-    pub dst: Placement,
+pub struct JsMoveTransition {
+    pub src: Option<JsPlacement>,
+    pub by: Option<JsMoveType>,
+    pub dst: JsPlacement,
 }
 
-impl Into<deep_trinity_core::MoveTransition> for MoveTransition {
-    fn into(self) -> deep_trinity_core::MoveTransition {
-        deep_trinity_core::MoveTransition::new(
+impl Into<MoveTransition> for JsMoveTransition {
+    fn into(self) -> MoveTransition {
+        MoveTransition::new(
             self.dst.into(),
             if let (Some(src), Some(by)) = (self.src, self.by) {
                 Some(MovePathItem::new(by.into(), src.into()))
@@ -140,8 +139,8 @@ impl Into<deep_trinity_core::MoveTransition> for MoveTransition {
     }
 }
 
-impl From<deep_trinity_core::MoveTransition> for MoveTransition {
-    fn from(mt: deep_trinity_core::MoveTransition) -> Self {
+impl From<MoveTransition> for JsMoveTransition {
+    fn from(mt: MoveTransition) -> Self {
         if let Some(hint) = mt.hint {
             Self { src: Some(hint.placement.into()), by: Some(hint.by.into()), dst: mt.placement.into() }
         } else {
@@ -150,13 +149,13 @@ impl From<deep_trinity_core::MoveTransition> for MoveTransition {
     }
 }
 
-#[wasm_bindgen]
-pub struct Game {
-    game: deep_trinity_core::Game<'static>,
+#[wasm_bindgen(js_name = Game)]
+pub struct JsGame {
+    game: Game<'static>,
 }
 
 #[wasm_bindgen]
-impl Game {
+impl JsGame {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
@@ -168,7 +167,7 @@ impl Game {
     #[wasm_bindgen(js_name = visibleHeight)]
     pub fn visible_height(&self) -> deep_trinity_grid::Y { self.game.state.playfield.visible_height }
     #[wasm_bindgen(js_name = getCell)]
-    pub fn get_cell(&self, x: i8, y: i8) -> Cell { self.game.get_cell((x, y).into()).into() }
+    pub fn get_cell(&self, x: i8, y: i8) -> JsCell { self.game.get_cell((x, y).into()).into() }
     #[wasm_bindgen(js_name = getHoldPiece)]
     pub fn get_hold_piece(&self) -> Option<u8> {
         self.game.state.hold_piece.map(|p| { p as u8 })
@@ -187,22 +186,22 @@ impl Game {
     #[wasm_bindgen(js_name = getCurrentNumBTBs)]
     pub fn get_current_num_btbs(&self) -> Option<deep_trinity_core::Count> { self.game.state.num_btbs }
     #[wasm_bindgen(js_name = getStatsCount)]
-    pub fn get_stats_count(&self, t: StatisticsEntryType) -> deep_trinity_core::Count {
+    pub fn get_stats_count(&self, t: JsStatisticsEntryType) -> deep_trinity_core::Count {
         self.game.stats.get(match t {
-            StatisticsEntryType::Single => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(1, None)),
-            StatisticsEntryType::Double => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(2, None)),
-            StatisticsEntryType::Triple => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(3, None)),
-            StatisticsEntryType::Tetris => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(4, None)),
-            StatisticsEntryType::Tst => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(3, Some(deep_trinity_core::TSpin::Standard))),
-            StatisticsEntryType::Tsd => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(2, Some(deep_trinity_core::TSpin::Standard))),
-            StatisticsEntryType::Tss => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(1, Some(deep_trinity_core::TSpin::Standard))),
-            StatisticsEntryType::Tsmd => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(2, Some(deep_trinity_core::TSpin::Mini))),
-            StatisticsEntryType::Tsms => deep_trinity_core::StatisticsEntryType::LineClear(deep_trinity_core::LineClear::new(1, Some(deep_trinity_core::TSpin::Mini))),
-            StatisticsEntryType::MaxCombos => deep_trinity_core::StatisticsEntryType::MaxCombos,
-            StatisticsEntryType::MaxBtbs => deep_trinity_core::StatisticsEntryType::MaxBtbs,
-            StatisticsEntryType::PerfectClear => deep_trinity_core::StatisticsEntryType::PerfectClear,
-            StatisticsEntryType::Hold => deep_trinity_core::StatisticsEntryType::Hold,
-            StatisticsEntryType::Lock => deep_trinity_core::StatisticsEntryType::Lock,
+            JsStatisticsEntryType::Single => StatisticsEntryType::LineClear(LineClear::new(1, None)),
+            JsStatisticsEntryType::Double => StatisticsEntryType::LineClear(LineClear::new(2, None)),
+            JsStatisticsEntryType::Triple => StatisticsEntryType::LineClear(LineClear::new(3, None)),
+            JsStatisticsEntryType::Tetris => StatisticsEntryType::LineClear(LineClear::new(4, None)),
+            JsStatisticsEntryType::Tst => StatisticsEntryType::LineClear(LineClear::new(3, Some(TSpin::Standard))),
+            JsStatisticsEntryType::Tsd => StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Standard))),
+            JsStatisticsEntryType::Tss => StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Standard))),
+            JsStatisticsEntryType::Tsmd => StatisticsEntryType::LineClear(LineClear::new(2, Some(TSpin::Mini))),
+            JsStatisticsEntryType::Tsms => StatisticsEntryType::LineClear(LineClear::new(1, Some(TSpin::Mini))),
+            JsStatisticsEntryType::MaxCombos => StatisticsEntryType::MaxCombos,
+            JsStatisticsEntryType::MaxBtbs => StatisticsEntryType::MaxBtbs,
+            JsStatisticsEntryType::PerfectClear => StatisticsEntryType::PerfectClear,
+            JsStatisticsEntryType::Hold => StatisticsEntryType::Hold,
+            JsStatisticsEntryType::Lock => StatisticsEntryType::Lock,
         })
     }
     #[wasm_bindgen(js_name = supplyNextPieces)]
@@ -261,23 +260,24 @@ impl Game {
             Err(e) => Err(e.into()),
         }
     }
+    // pub fn valid_moves(&self) -> Result<>
     #[wasm_bindgen(js_name = toString)]
     pub fn to_string(&self) -> String {
         self.game.to_string()
     }
 }
 
-#[wasm_bindgen]
-pub struct RandomPieceGenerator {
-    gen: deep_trinity_core::RandomPieceGenerator<rand::rngs::StdRng>,
+#[wasm_bindgen(js_name = RandomPieceGenerator)]
+pub struct JsRandomPieceGenerator {
+    gen: RandomPieceGenerator<rand::rngs::StdRng>,
 }
 
 #[wasm_bindgen]
-impl RandomPieceGenerator {
+impl JsRandomPieceGenerator {
     #[wasm_bindgen(constructor)]
     pub fn new(seed: u64) -> Self {
         Self {
-            gen: deep_trinity_core::RandomPieceGenerator::new(rand::rngs::StdRng::seed_from_u64(seed))
+            gen: RandomPieceGenerator::new(rand::rngs::StdRng::seed_from_u64(seed))
         }
     }
     pub fn generate(&mut self) -> Box<[u8]> {
@@ -289,59 +289,59 @@ impl RandomPieceGenerator {
     }
 }
 
-#[wasm_bindgen]
-pub struct Action {
-    bot_action: deep_trinity_bot::Action,
+#[wasm_bindgen(js_name = Action)]
+pub struct JsAction {
+    bot_action: Action,
 }
 
 #[wasm_bindgen]
-impl Action {
-    fn new(bot_action: deep_trinity_bot::Action) -> Self {
+impl JsAction {
+    fn new(bot_action: Action) -> Self {
         Self { bot_action }
     }
-    pub fn dst(&self) -> Option<MoveTransition> {
+    pub fn dst(&self) -> Option<JsMoveTransition> {
         match &self.bot_action {
-            deep_trinity_bot::Action::Move(mt) => Some((*mt).into()),
+            Action::Move(mt) => Some((*mt).into()),
             _ => None,
         }
     }
     #[wasm_bindgen(js_name = isHold)]
     pub fn is_hold(&self) -> bool {
         match self.bot_action {
-            deep_trinity_bot::Action::Hold => true,
+            Action::Hold => true,
             _ => false,
         }
     }
 }
 
-#[wasm_bindgen]
-pub struct Bot {
-    bot: Box<dyn deep_trinity_bot::Bot>,
+#[wasm_bindgen(js_name = Bot)]
+pub struct JsBot {
+    bot: Box<dyn Bot>,
 }
 
 #[wasm_bindgen]
-impl Bot {
+impl JsBot {
     #[wasm_bindgen(constructor)]
-    pub fn new(bot_type: Option<u8>) -> Result<Bot, JsValue> {
-        let bot: Box<dyn deep_trinity_bot::Bot> = match bot_type.unwrap_or(1) {
+    pub fn new(bot_type: Option<u8>) -> Result<JsBot, JsValue> {
+        let bot: Box<dyn Bot> = match bot_type.unwrap_or(1) {
             1 => Box::new(deep_trinity_bot::simple::SimpleBot::default()),
-            2 => Box::new(deep_trinity_bot::simple_tree::SimpleTreeBot::default()),
-            3 => Box::new(deep_trinity_bot::mcts_puct::MctsPuctBot::default()),
+            // 2 => Box::new(deep_trinity_bot::simple_tree::SimpleTreeBot::default()),
+            // 3 => Box::new(deep_trinity_bot::mcts_puct::MctsPuctBot::default()),
             _ => return Err("invalid bot type".into()),
         };
         Ok(Self { bot })
     }
-    pub fn think(&mut self, game: &Game) -> Result<Action, JsValue> {
+    pub fn think(&mut self, game: &JsGame) -> Result<JsAction, JsValue> {
         match self.bot.think(&game.game) {
             Err(e) => Err(e.to_string().into()),
-            Ok(action) => Ok(Action::new(action)),
+            Ok(action) => Ok(JsAction::new(action)),
         }
     }
 }
 
-#[wasm_bindgen]
-pub struct MovePlayer {
-    move_player: deep_trinity_core::MovePlayer,
+#[wasm_bindgen(js_name = MovePlayer)]
+pub struct JsMovePlayer {
+    move_player: MovePlayer,
 }
 
 #[wasm_bindgen]
@@ -351,15 +351,15 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-impl MovePlayer {
-    pub fn from(game: &Game, mt: &MoveTransition) -> Result<MovePlayer, JsValue> {
+impl JsMovePlayer {
+    pub fn from(game: &JsGame, mt: &JsMoveTransition) -> Result<JsMovePlayer, JsValue> {
         let path = game.game.get_almost_good_move_path(&((*mt).into()))?;
         log(&format!("{:?}: {:?}", &game.game.state.falling_piece.as_ref().unwrap().piece_spec.piece, path));
         Ok(Self {
             move_player: deep_trinity_core::MovePlayer::new(path),
         })
     }
-    pub fn step(&mut self, game: &mut Game) -> Result<bool, JsValue> {
+    pub fn step(&mut self, game: &mut JsGame) -> Result<bool, JsValue> {
         self.move_player.step(&mut game.game).map_err(|e| { e.into() })
     }
     #[wasm_bindgen(js_name = isEnd)]

@@ -1,10 +1,8 @@
 use std::error::Error;
 use std::io::Write;
 use std::marker::PhantomData;
-use deep_trinity_core::{Game, Placement};
-use deep_trinity_core::helper::MoveDecisionResource;
+use deep_trinity_core::prelude::*;
 use deep_trinity_tree::arena::{NodeArena, NodeHandle, VecNodeArena, VisitContext};
-use crate::{Action, MoveTransition};
 
 //--------------------------------------------------------------------------------------------------
 // StackTreeNodeData
@@ -179,13 +177,11 @@ pub fn simulate_once<'a, NodeData, NodeExpander>(
 
 #[cfg(test)]
 mod tests {
-    use crate::RandomPieceGenerator;
     use super::*;
     use std::collections::VecDeque;
     use std::fmt;
     use std::fmt::Formatter;
     use std::fs::File;
-    use std::time::SystemTime;
     use rand::thread_rng;
     use chrono::prelude::*;
     use prost::Message;

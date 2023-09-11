@@ -35,8 +35,8 @@ impl Bot for SimpleBot {
 //---
 
 pub trait SimpleBotRunnerHooks {
-    fn on_start(&mut self, _game: &Game) -> Result<(), Box<dyn Error>> { Ok(()) }
-    fn on_iter(&mut self, _game: &Game) -> Result<bool, Box<dyn Error>> { Ok(true) }
+    fn on_start(&mut self, _game: &mut Game) -> Result<(), Box<dyn Error>> { Ok(()) }
+    fn on_iter(&mut self, _game: &mut Game) -> Result<bool, Box<dyn Error>> { Ok(true) }
     fn on_action(&mut self, _game: &Game, _action: &Action) -> Result<(), Box<dyn Error>> { Ok(()) }
     fn on_move_step(&mut self, _game: &Game) -> Result<(), Box<dyn Error>> { Ok(()) }
     fn on_end(&mut self, _game: &Game) -> Result<(), Box<dyn Error>> { Ok(()) }
@@ -69,10 +69,10 @@ impl SimpleBotRunner {
             game.supply_next_pieces(&rpg.generate());
             game.setup_falling_piece(None).unwrap();
         }
-        hook.on_start(&game)?;
+        hook.on_start(&mut game)?;
 
         for n in 0..self.max_iterations {
-            if !hook.on_iter(&game)? {
+            if !hook.on_iter(&mut game)? {
                 break;
             }
             if self.debug_print { println!("===== {} =====\n{}", n, game); }

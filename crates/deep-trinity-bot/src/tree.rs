@@ -1,20 +1,19 @@
-use crate::{Bot, Action};
-use deep_trinity_core::{Game, FallingPiece, Piece, LineClear};
+use deep_trinity_core::prelude::*;
 use deep_trinity_grid::Grid;
 use std::error::Error;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
-struct NodeData {
+struct NodeData<'a> {
     by: Option<Action>,
-    game: Game<'static>,
+    game: Game<'a>,
     num_covered_empty_cells: usize,
     stop: bool,
 }
 
-impl NodeData {
-    fn new(by: Option<Action>, game: Game<'static>, stop: bool) -> Self {
+impl<'a> NodeData<'a> {
+    fn new(by: Option<Action>, game: Game<'a>, stop: bool) -> Self {
         let num_covered_empty_cells = game.state.playfield.grid.num_covered_empty_cells();
         Self {
             by,
@@ -25,7 +24,7 @@ impl NodeData {
     }
 }
 
-type Node = deep_trinity_tree::Node<NodeData>;
+type Node<'a> = deep_trinity_tree::Node<NodeData<'a>>;
 
 fn expand_node(node: &Rc<RefCell<Node>>) -> Result<(), Box<dyn Error>> {
     if node.borrow().data.game.state.can_hold {
@@ -374,7 +373,7 @@ pub struct TreeBot {
 }
 
 impl Bot for TreeBot {
-    fn think(&mut self, game: &Game<'static>) -> Result<Action, Box<dyn Error>> {
+    fn think(&mut self, game: &Game) -> Result<Action, Box<dyn Error>> {
         let root = deep_trinity_tree::new(NodeData::new(None, game.clone(), false));
         let started_at = std::time::SystemTime::now();
         const NUM_EXPANSIONS: usize = 2;
@@ -439,12 +438,12 @@ impl Bot for TreeBot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BotRunner;
+    use deep_trinity_core::bot::SimpleBotRunner;
 
     #[test]
     fn test_tree_bot() {
         let seed = 0;
-        let runner = BotRunner::new(5, true, Some(seed), false);
+        let runner = SimpleBotRunner::new(5, true, Some(seed), false);
         let mut bot = TreeBot::default();
         let _game = runner.run_with_no_hooks(&mut bot).unwrap();
         // assert!(game.stats.lock > 40);
