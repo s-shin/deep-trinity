@@ -15,7 +15,7 @@
 </script>
 
 <div class="grid-wrapper">
-  <div class="grid" style:--grid-cols={numCols} style:--grid-rows={numRows}>
+  <div class="grid" style:--_grid-cols={numCols} style:--_grid-rows={numRows}>
     {#each generateGridIndices() as i}
       <div class="cell cell-{cells[i]}"></div>
     {/each}
@@ -23,29 +23,53 @@
 </div>
 
 <style>
+  @property --cell-size {
+    syntax: "<length-percentage>";
+    inherits: true;
+    initial-value: 25px;
+  }
+  @property --grid-gap {
+    syntax: "<length-percentage>";
+    inherits: true;
+    initial-value: 0px;
+  }
+  @property --grid-border {
+    syntax: "*";
+    inherits: true;
+    initial-value: 2px solid #ccc;
+  }
+  @property --grid-cell-border {
+    syntax: "*";
+    inherits: true;
+    initial-value: 1px solid #fff;
+  }
+  @property --grid-empty-cell-border {
+    syntax: "*";
+    inherits: true;
+    initial-value: 1px solid #eee;
+  }
+
   .grid-wrapper {
-    height: 100%;
     display: flex;
     justify-content: center;
   }
   .grid {
-    height: 100%;
-    aspect-ratio: calc(var(--grid-cols) / var(--grid-rows));
+    aspect-ratio: calc(var(--_grid-cols) / var(--_grid-rows));
     box-sizing: border-box;
     display: grid;
-    grid-template-columns: repeat(var(--grid-cols), var(--grid-cell-size, 1fr));
-    gap: var(--grid-gap, 0px);
-    border: var(--grid-border, 2px solid #ccc);
+    grid-template-columns: repeat(var(--_grid-cols), var(--cell-size));
+    gap: var(--grid-gap);
+    border: var(--grid-border);
   }
   .cell {
     box-sizing: border-box;
     aspect-ratio: 1;
-    border: var(--grid-cell-border, 1px solid #fff);
+    border: var(--grid-cell-border);
   }
   /* Empty */
   .cell-0 {
     background-color: #fff;
-    border: var(--grid-empty-cell-border, 1px solid #eee);
+    border: var(--grid-empty-cell-border);
   }
   /* Any */
   .cell-1 {

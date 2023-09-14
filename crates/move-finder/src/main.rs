@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::ops::Deref;
 use std::process::exit;
 use std::rc::Rc;

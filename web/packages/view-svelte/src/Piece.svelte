@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Piece, Cell } from "@deep-trinity/model";
   import Grid from "./Grid.svelte";
-  export let piece: Piece;
+
+  export let piece: Piece | undefined = void 0;
 
   const [E, S, Z, L, J, I, T, O] = [
     Cell.Empty,
@@ -50,18 +51,53 @@
       cells: [O, O, O, O],
     },
   };
+  const EMPTY_GRID = {
+    numCols: 4,
+    numRows: 2,
+    cells: [E, E, E, E, E, E],
+  };
 
-  $: g = PIECE_GRIDS[piece];
+  $: g = piece !== void 0 ? PIECE_GRIDS[piece] : EMPTY_GRID;
 </script>
 
-<div class="piece">
+<div class="piece piece-{piece !== void 0 ? `${piece}` : 'empty'}">
   <Grid cells={g.cells} numCols={g.numCols} numRows={g.numRows}></Grid>
 </div>
 
 <style>
+  @property --piece-grid-border {
+    syntax: "*";
+    inherits: true;
+    initial-value: 0;
+  }
+  @property --piece-cell-border {
+    syntax: "*";
+    inherits: true;
+    initial-value: 1px solid #fff;
+  }
+  @property --piece-empty-cell-border {
+    syntax: "*";
+    inherits: true;
+    initial-value: 0;
+  }
+  @property --piece-padding {
+    syntax: "*";
+    inherits: true;
+    initial-value: 10px;
+  }
+  @property --piece-i-padding {
+    syntax: "*";
+    inherits: true;
+    initial-value: 22.5;
+  }
+
   .piece {
-    --grid-border: var(--piece-grid-border, none);
+    padding: var(--piece-padding) 0;
+    --grid-border: var(--piece-grid-border);
     --grid-cell-border: var(--piece-cell-border);
-    --grid-empty-cell-border: var(--piece-empty-cell-border, 1px solid #fff);
+    --grid-empty-cell-border: var(--piece-empty-cell-border);
+  }
+  .piece-4 {
+    padding: var(--piece-i-padding, var(--piece-padding)) 0;
   }
 </style>

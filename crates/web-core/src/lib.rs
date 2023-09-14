@@ -86,43 +86,54 @@ impl From<Placement> for JsPlacement {
 #[wasm_bindgen(js_name = MoveType)]
 #[derive(Copy, Clone, Debug)]
 pub enum JsMoveType {
-    Right,
-    Left,
-    Down,
-    Cw,
-    Ccw,
-}
-
-impl Into<Move> for JsMoveType {
-    fn into(self) -> Move {
-        match self {
-            JsMoveType::Right => Move::Shift(1),
-            JsMoveType::Left => Move::Shift(-1),
-            JsMoveType::Down => Move::Drop(1),
-            JsMoveType::Cw => Move::Rotate(1),
-            JsMoveType::Ccw => Move::Rotate(-1),
-        }
-    }
+    Shift,
+    Drop,
+    Rotate,
 }
 
 impl From<Move> for JsMoveType {
     fn from(mv: Move) -> Self {
         match mv {
-            Move::Shift(n) if n > 0 => JsMoveType::Right,
-            Move::Shift(n) if n < 0 => JsMoveType::Left,
-            Move::Drop(n) if n > 0 => JsMoveType::Down,
-            Move::Rotate(n) if n > 0 => JsMoveType::Cw,
-            Move::Rotate(n) if n < 0 => JsMoveType::Ccw,
-            _ => panic!("invalid deep_trinity_core::Move: {:?}", mv),
+            Move::Shift(_) => JsMoveType::Shift,
+            Move::Drop(_) => JsMoveType::Drop,
+            Move::Rotate(_) => JsMoveType::Rotate,
         }
     }
+}
+
+#[wasm_bindgen(js_name = Move)]
+#[derive(Copy, Clone, Debug)]
+pub struct JsMove {
+    mv: Move,
+}
+
+#[wasm_bindgen(js_class = Move)]
+impl JsMove {
+    #[wasm_bindgen(getter)]
+    pub fn move_type(&self) -> JsMoveType { self.mv.into() }
+    #[wasm_bindgen(getter)]
+    pub fn count(&self) -> i8 {
+        match self.mv {
+            Move::Shift(n) => n,
+            Move::Drop(n) => n,
+            Move::Rotate(n) => n,
+        }
+    }
+}
+
+impl Into<Move> for JsMove {
+    fn into(self) -> Move { self.mv }
+}
+
+impl From<Move> for JsMove {
+    fn from(mv: Move) -> Self { Self { mv } }
 }
 
 #[wasm_bindgen(js_name = MoveTransition)]
 #[derive(Copy, Clone, Debug)]
 pub struct JsMoveTransition {
     pub src: Option<JsPlacement>,
-    pub by: Option<JsMoveType>,
+    pub by: Option<JsMove>,
     pub dst: JsPlacement,
 }
 
@@ -151,10 +162,10 @@ impl From<MoveTransition> for JsMoveTransition {
 
 #[wasm_bindgen(js_name = Game)]
 pub struct JsGame {
-    game: Game<'static>,
+    game: StdGame,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = Game)]
 impl JsGame {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
@@ -260,7 +271,6 @@ impl JsGame {
             Err(e) => Err(e.into()),
         }
     }
-    // pub fn valid_moves(&self) -> Result<>
     #[wasm_bindgen(js_name = toString)]
     pub fn to_string(&self) -> String {
         self.game.to_string()
@@ -272,7 +282,7 @@ pub struct JsRandomPieceGenerator {
     gen: RandomPieceGenerator<rand::rngs::StdRng>,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = RandomPieceGenerator)]
 impl JsRandomPieceGenerator {
     #[wasm_bindgen(constructor)]
     pub fn new(seed: u64) -> Self {
@@ -294,7 +304,7 @@ pub struct JsAction {
     bot_action: Action,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = Action)]
 impl JsAction {
     fn new(bot_action: Action) -> Self {
         Self { bot_action }
@@ -319,12 +329,13 @@ pub struct JsBot {
     bot: Box<dyn Bot>,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = Bot)]
 impl JsBot {
     #[wasm_bindgen(constructor)]
     pub fn new(bot_type: Option<u8>) -> Result<JsBot, JsValue> {
         let bot: Box<dyn Bot> = match bot_type.unwrap_or(1) {
             1 => Box::new(deep_trinity_bot::simple::SimpleBot::default()),
+            // TODO
             // 2 => Box::new(deep_trinity_bot::simple_tree::SimpleTreeBot::default()),
             // 3 => Box::new(deep_trinity_bot::mcts_puct::MctsPuctBot::default()),
             _ => return Err("invalid bot type".into()),
@@ -350,7 +361,7 @@ extern "C" {
     fn log(s: &str);
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class = MovePlayer)]
 impl JsMovePlayer {
     pub fn from(game: &JsGame, mt: &JsMoveTransition) -> Result<JsMovePlayer, JsValue> {
         let path = game.game.get_almost_good_move_path(&((*mt).into()))?;
