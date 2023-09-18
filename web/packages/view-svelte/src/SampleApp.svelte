@@ -9,110 +9,47 @@
   import Statistics from "./Statistics.svelte";
   import { GameRunner } from "./gameSystem";
 
-  const game = new core.Game();
-  game.supplyNextPieces(
-    new Uint8Array([
-      core.Piece.L,
-      core.Piece.J,
-      core.Piece.I,
-      core.Piece.O,
-      core.Piece.T,
-      core.Piece.S,
-      core.Piece.Z,
-      core.Piece.L,
-      core.Piece.J,
-      core.Piece.I,
-      core.Piece.O,
-      core.Piece.T,
-      core.Piece.S,
-      core.Piece.Z,
-    ]),
-  );
-  game.setupFallingPiece();
-  $: g = coreHelper.getGameModel(game, true);
-  let runner = new GameRunner(game, {
-    onGameUpdated(game) {
-      g = coreHelper.getGameModel(game, true);
-    },
-  });
+  function rand(max = 100000) {
+    return Math.floor(Math.random() * max);
+  }
+
+  function newGame() {
+    const g = new core.Game();
+    const rpg = new core.RandomPieceGenerator(BigInt(rand()));
+    g.supplyNextPieces(rpg.generate());
+    g.setupFallingPiece();
+    return new GameRunner(g, {
+      onGameUpdated(g) {
+        if (g.shouldSupplyNextPieces()) {
+          g.supplyNextPieces(rpg.generate());
+        }
+        game = coreHelper.getGameModel(g, true);
+      },
+    });
+  }
+
+  let ctx = {
+    runner: newGame(),
+  };
+
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
     if (ev.code === "KeyA") {
       console.log("start runner");
-      runner.start();
+      ctx.runner.start();
     }
     if (ev.code === "KeyS") {
       console.log("stop runner");
-      runner.stop();
+      ctx.runner.stop();
+    }
+    if (ev.code === "KeyR") {
+      console.log("reset game");
+      ctx.runner.stop();
+      ctx.runner = newGame();
     }
   });
 
-  // function* run() {
-  //   game.firmDrop();
-  //   yield;
-  //   game.lock();
-  //   yield;
-
-  //   game.shift(1, true);
-  //   yield;
-  //   game.firmDrop();
-  //   yield;
-  //   game.lock();
-  //   yield;
-
-  //   game.hold();
-  //   yield;
-
-  //   game.shift(-1, true);
-  //   yield;
-  //   game.firmDrop();
-  //   yield;
-  //   game.lock();
-  //   yield;
-  // }
-
-  // window.addEventListener("keydown", (ev) => {
-  //   // if (ev.repeat) return;
-  //   switch (ev.code) {
-  //     case "ArrowUp": {
-  //       game.firmDrop();
-  //       game.lock();
-  //       break;
-  //     }
-  //     case "ArrowDown": {
-  //       game.drop(1);
-  //       break;
-  //     }
-  //     case "ArrowRight": {
-  //       game.shift(1, false);
-  //       break;
-  //     }
-  //     case "ArrowLeft": {
-  //       game.shift(-1, false);
-  //       break;
-  //     }
-  //     case "KeyZ": {
-  //       game.rotate(-1);
-  //       break;
-  //     }
-  //     case "KeyX": {
-  //       game.rotate(1);
-  //       break;
-  //     }
-  //     case "ShiftLeft": {
-  //       game.hold();
-  //       break;
-  //     }
-  //   }
-  //   g = coreHelper.getGameModel(game, true);
-  // });
-
-  // (async () => {
-  //   for (const _ of run()) {
-  //     await new Promise((resolve) => setTimeout(resolve, 1000));
-  //     g = coreHelper.getGameModel(game, true);
-  //   }
-  // })();
+  $: game = coreHelper.getGameModel(ctx.runner.game, true);
 </script>
 
 <div class="container">
@@ -120,21 +57,22 @@
     <Panel title="HOLD">
       <div class="hold-piece">
         <PiecePlaceholder></PiecePlaceholder>
-        <Piece piece={g.holdPiece}></Piece>
+        <Piece piece={game.holdPiece}></Piece>
       </div>
     </Panel>
   </div>
   <div class="column center">
-    <Grid cells={g.cells} numCols={g.width} numRows={g.visibleHeight}></Grid>
+    <Grid cells={game.cells} numCols={game.width} numRows={game.visibleHeight}
+    ></Grid>
   </div>
   <div class="column right">
     <Panel title="NEXT">
       <PiecePlaceholder></PiecePlaceholder>
-      <NextPieces pieces={g.nextPieces}></NextPieces>
+      <NextPieces pieces={game.nextPieces}></NextPieces>
     </Panel>
   </div>
   <div class="column">
-    <Statistics stats={g.stats}></Statistics>
+    <Statistics stats={game.stats}></Statistics>
   </div>
 </div>
 

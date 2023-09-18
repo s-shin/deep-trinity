@@ -8,6 +8,7 @@ pub use crate::{
     Statistics, StatisticsEntryType, LineClear, TSpin,
     FallingPiece,
     Playfield,
+    ActionHint,
     Game, StdGame,
     MovePlayer,
 };

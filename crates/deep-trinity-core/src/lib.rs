@@ -1535,6 +1535,20 @@ impl Default for GameState<'static> {
 }
 
 //--------------------------------------------------------------------------------------------------
+// ActionHint
+//--------------------------------------------------------------------------------------------------
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct ActionHint {
+    pub right: i8,
+    pub left: i8,
+    pub drop: i8,
+    pub cw: bool,
+    pub ccw: bool,
+    pub hold: bool,
+}
+
+//--------------------------------------------------------------------------------------------------
 // Game
 //--------------------------------------------------------------------------------------------------
 
@@ -1716,6 +1730,20 @@ impl<'a> Game<'a> {
         self.state.can_hold = false;
         self.stats.hold += 1;
         Ok(r.is_ok())
+    }
+    pub fn action_hint(&self) -> Result<ActionHint, &'static str> {
+        if self.state.falling_piece.is_none() {
+            return Err("no falling piece");
+        }
+        let fp = self.state.falling_piece.as_ref().unwrap();
+        Ok(ActionHint {
+            right: self.state.playfield.num_shiftable_cols(fp, true),
+            left: self.state.playfield.num_shiftable_cols(fp, false),
+            drop: self.state.playfield.num_droppable_rows(fp),
+            cw: self.state.playfield.check_rotation(self.rules.rotation_mode, fp, true).is_some(),
+            ccw: self.state.playfield.check_rotation(self.rules.rotation_mode, fp, false).is_some(),
+            hold: self.state.can_hold,
+        })
     }
     pub fn search_moves(&self, searcher: &mut impl move_search::MoveSearcher) -> Result<move_search::SearchResult, &'static str> {
         let s = &self.state;

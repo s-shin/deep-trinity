@@ -1,4 +1,5 @@
-import { Game } from "@deep-trinity/web-core";
+// TODO: move to another package.
+import { ActionHint, Game } from "@deep-trinity/web-core";
 
 const Input = {
   UP: 0b0000_0001,
@@ -12,6 +13,8 @@ const Input = {
 
 type InputName = keyof typeof Input;
 type Input = (typeof Input)[InputName];
+
+//---
 
 class InputState {
   private state: number;
@@ -37,6 +40,8 @@ class InputState {
     return (this.state & t) === 0;
   }
 }
+
+//---
 
 const DEFAULT_INPUT_MAPPING = {
   ArrowUp: Input.UP,
@@ -87,13 +92,77 @@ export class InputWatcher {
   }
 }
 
+//---
+
+const DEFAULT_DAS_OPTIONS = {
+  autoShiftDelayFrameCount: 9,
+  autoRepeatIntervalFrameCount: 1,
+};
+
+type DasOptions = typeof DEFAULT_DAS_OPTIONS;
+
+// cf. https://harddrop.com/wiki/DAS
+class DasFrameCounter {
+  private count = 0;
+  private _shouldShift = false;
+  private opts: DasOptions;
+  constructor(opts: Partial<DasOptions>) {
+    this.opts = { ...DEFAULT_DAS_OPTIONS, ...opts };
+  }
+  get shouldShift() {
+    return this._shouldShift;
+  }
+  update(active: boolean) {
+    if (active) {
+      this.count++;
+      this._shouldShift = this.check();
+      return this._shouldShift;
+    } else {
+      this.count = 0;
+      this._shouldShift = false;
+      return false;
+    }
+  }
+  private check() {
+    if (this.count === 1) return true;
+    let n = this.count - 2 - this.opts.autoShiftDelayFrameCount;
+    if (n < 0) return false;
+    if (n === 0) return true;
+    if (this.opts.autoRepeatIntervalFrameCount === 0) {
+      this.count--;
+      return false;
+    }
+    if (n % this.opts.autoRepeatIntervalFrameCount === 0) {
+      this.count -= this.opts.autoRepeatIntervalFrameCount;
+      return true;
+    }
+    return false;
+  }
+}
+
+//---
+
+// TODO: fix step delay
+// TODO: delay on clearing
+// TODO: fix unexpected move errors (detect cond of repro)
+// TODO: show fps
+// interface CustomCallback {
+//   intervalMs: number;
+//   callback: (runner: GameRunner) => void;
+// }
+
+interface InternalProcessResult {
+  isLockedOrHeld?: boolean;
+  isGameUpdated?: boolean;
+}
+
 const DEFAULT_GAME_RUNNER_OPTIONS = {
   frameTimeMs: 16,
   onGameUpdated(game: Game) {},
   gravity: 0.02 as number | ((frame: number, game: Game) => number),
   softDropGravity: 5,
-  // https://harddrop.com/wiki/DAS
-  dasDelayFrameCount: 3,
+  das: DEFAULT_DAS_OPTIONS as Partial<DasOptions>,
+  lockDelayFrameCount: 30,
   // TODO: ARE, IRS, IHS
   // https://harddrop.com/wiki/ARE
   // areFrameCount: number;
@@ -107,22 +176,37 @@ type GameRunnerOptions = typeof DEFAULT_GAME_RUNNER_OPTIONS;
 
 // cf. https://developer.mozilla.org/ja/docs/Games/Anatomy
 export class GameRunner {
-  private inputWatcher = new InputWatcher();
-  private currentFrame = 0;
-  private lastTime = 0;
-  private frameRequestId?: number;
-  private prevInputState = new InputState();
-  private rightDasFrameCounter = 0;
-  private leftDasFrameCounter = 0;
-  private accumulatedGravity = 0;
-  public game: Game;
+  private _game: Game;
   private opts: GameRunnerOptions;
+  private _currentFrame = 0;
+  private lastFrameTime = 0;
+  private _lsatFrameDeltaTime = 0;
+  private frameRequestId?: number;
+  private inputWatcher = new InputWatcher();
+  private prevInputState = new InputState();
+  private lockDelayFrameCounter = 0;
+  private accumulatedGravity = 0;
+  private fpMostBottomY: number;
+  private rightwardDasFrameCounter: DasFrameCounter;
+  private leftwardDasFrameCounter: DasFrameCounter;
 
   constructor(game: Game, opts: Partial<GameRunnerOptions>) {
-    this.game = game;
+    this._game = game;
     this.opts = { ...DEFAULT_GAME_RUNNER_OPTIONS, ...opts };
+    this.rightwardDasFrameCounter = new DasFrameCounter(this.opts.das);
+    this.leftwardDasFrameCounter = new DasFrameCounter(this.opts.das);
+    this.fpMostBottomY = game.height();
   }
 
+  get currentFrame() {
+    return this._currentFrame;
+  }
+  get lastFrameDeltaTime() {
+    return this._lsatFrameDeltaTime;
+  }
+  get game() {
+    return this._game;
+  }
   get isRunning() {
     return this.frameRequestId !== void 0;
   }
@@ -142,119 +226,139 @@ export class GameRunner {
   private getGravity() {
     return typeof this.opts.gravity == "number"
       ? this.opts.gravity
-      : this.opts.gravity(this.currentFrame, this.game);
+      : this.opts.gravity(this._currentFrame, this._game);
+  }
+
+  private resetOnLockedOrHeld() {
+    this.lockDelayFrameCounter = 0;
+    this.accumulatedGravity = 0;
+    this.fpMostBottomY = this.game.height();
+    this.rightwardDasFrameCounter.update(false);
+    this.leftwardDasFrameCounter.update(false);
   }
 
   private update() {
     this.frameRequestId = requestAnimationFrame(() => this.update());
     let now = performance.now();
-    let dt = now - this.lastTime;
+    let dt = now - this.lastFrameTime;
     if (dt < this.opts.frameTimeMs) return;
-    this.lastTime = now;
+    this.lastFrameTime = now;
+    this._lsatFrameDeltaTime = dt;
 
+    let hint = this._game.action_hint();
     let isGameUpdated = false;
-    // hold
-    {
+    for (const proc of [this.processDrop.bind(this), this.processInput.bind(this)]) {
+      let r = proc(hint);
+      if (r.isLockedOrHeld) {
+        this.resetOnLockedOrHeld();
+        isGameUpdated = true;
+        break;
+      }
+      isGameUpdated ||= !!r.isGameUpdated;
+    }
+    if (isGameUpdated) {
+      this.opts.onGameUpdated(this._game);
+    }
+    this.prevInputState = this.inputWatcher.dumpState();
+    this._currentFrame++;
+  }
+
+  private processDrop(hint: ActionHint): InternalProcessResult {
+    if (hint.drop === 0) {
+      // step delay emulation
+      let fp = this.game.falling_piece_placement();
+      if (fp) {
+        // TODO: Is '>=' correct?
+        if (hint.drop === 0 && this.lockDelayFrameCounter++ >= this.opts.lockDelayFrameCount) {
+          this.game.lock();
+          return { isLockedOrHeld: true };
+        }
+        if (fp.y < this.fpMostBottomY) {
+          this.fpMostBottomY = fp.y;
+          this.lockDelayFrameCounter = 0;
+        }
+      }
+    } else {
+      this.accumulatedGravity += this.getGravity();
+      let n = Math.floor(this.accumulatedGravity);
+      if (n > 0) {
+        this._game.drop(Math.min(n, hint.drop));
+        this.accumulatedGravity = 0;
+        return { isGameUpdated: true };
+      }
+    }
+    return {};
+  }
+
+  private processInput(hint: ActionHint): InternalProcessResult {
+    let isGameUpdated = false;
+    // Hold
+    if (hint.hold) {
       let isOn = this.inputWatcher.isOn(Input.HOLD);
       let isOnPrev = this.prevInputState.isOn(Input.HOLD);
       if (isOn && !isOnPrev) {
-        try {
-          this.game.hold();
-          isGameUpdated = true;
-        } catch {
-          // do nothing
-        }
+        this._game.hold();
+        return { isLockedOrHeld: true };
       }
     }
-    // up
+    // Hard drop (up)
     {
       let isOn = this.inputWatcher.isOn(Input.UP);
       let isOnPrev = this.prevInputState.isOn(Input.UP);
       if (isOn && !isOnPrev) {
-        this.game.firmDrop();
-        this.game.lock();
-        isGameUpdated = true;
+        if (hint.drop > 0) this._game.firmDrop();
+        this._game.lock();
+        return { isLockedOrHeld: true };
       }
     }
-    // down
+    // Soft drop (down)
     {
       let isOn = this.inputWatcher.isOn(Input.DOWN);
-      if (isOn) {
-        this.game.drop(Math.min(1, this.opts.softDropGravity));
+      if (isOn && hint.drop > 0) {
+        this._game.drop(Math.min(1, this.opts.softDropGravity));
         isGameUpdated = true;
       }
     }
-    // cw, ccw
+    // Rotation (cw, ccw)
     {
       let isCwOn = this.inputWatcher.isOn(Input.CW);
       let isCwOnPrev = this.prevInputState.isOn(Input.CW);
       let isCcwOn = this.inputWatcher.isOn(Input.CCW);
       let isCcwOnPrev = this.prevInputState.isOn(Input.CCW);
-      if (isCwOn && !isCcwOn && !isCwOnPrev) {
-        try {
-          this.game.rotate(1);
-          isGameUpdated = true;
-        } catch {
-          // do nothing
-        }
+      if (isCwOn && !isCcwOn && !isCwOnPrev && hint.cw) {
+        this._game.rotate(1);
+        isGameUpdated = true;
       }
-      if (isCcwOn && !isCwOn && !isCcwOnPrev) {
-        try {
-          this.game.rotate(-1);
-          isGameUpdated = true;
-        } catch {
-          // do nothing
-        }
+      if (isCcwOn && !isCwOn && !isCcwOnPrev && hint.ccw) {
+        this._game.rotate(-1);
+        isGameUpdated = true;
       }
     }
-    // right, left
+    // Shift (right, left)
     {
       let isRightOn = this.inputWatcher.isOn(Input.RIGHT);
       let isLeftOn = this.inputWatcher.isOn(Input.LEFT);
       if (isRightOn && !isLeftOn) {
-        let c = this.rightDasFrameCounter;
-        if (c == 0 || c > this.opts.dasDelayFrameCount) {
-          try {
-            this.game.shift(1, false);
+        if (this.rightwardDasFrameCounter.update(true)) {
+          if (hint.right > 0) {
+            this._game.shift(1, false);
             isGameUpdated = true;
-          } catch {
-            // do nothing
           }
         }
-        this.rightDasFrameCounter++;
       } else {
-        this.rightDasFrameCounter = 0;
+        this.rightwardDasFrameCounter.update(false);
       }
       if (isLeftOn && !isRightOn) {
-        let c = this.leftDasFrameCounter;
-        if (c == 0 || c > this.opts.dasDelayFrameCount) {
-          try {
-            this.game.shift(-1, false);
+        if (this.leftwardDasFrameCounter.update(true)) {
+          if (hint.left > 0) {
+            this._game.shift(-1, false);
             isGameUpdated = true;
-          } catch {
-            // do nothing
           }
         }
-        this.leftDasFrameCounter++;
       } else {
-        this.leftDasFrameCounter = 0;
+        this.leftwardDasFrameCounter.update(false);
       }
     }
-    // automatic drop
-    {
-      this.accumulatedGravity += this.getGravity();
-      let n = Math.floor(this.accumulatedGravity);
-      if (n > 0) {
-        this.game.drop(n);
-        isGameUpdated = true;
-        this.accumulatedGravity = 0;
-      }
-    }
-
-    if (isGameUpdated) {
-      this.opts.onGameUpdated(this.game);
-    }
-    this.prevInputState = this.inputWatcher.dumpState();
-    this.currentFrame++;
+    return { isGameUpdated };
   }
 }

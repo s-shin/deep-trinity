@@ -160,6 +160,23 @@ impl From<MoveTransition> for JsMoveTransition {
     }
 }
 
+#[wasm_bindgen(js_name = ActionHint)]
+pub struct JsActionHint {
+    pub right: i8,
+    pub left: i8,
+    pub drop: i8,
+    pub cw: bool,
+    pub ccw: bool,
+    pub hold: bool,
+}
+
+impl From<ActionHint> for JsActionHint {
+    fn from(value: ActionHint) -> Self {
+        let ActionHint { right, left, drop, cw, ccw, hold } = value;
+        Self { right, left, drop, cw, ccw, hold }
+    }
+}
+
 #[wasm_bindgen(js_name = Game)]
 pub struct JsGame {
     game: StdGame,
@@ -270,6 +287,15 @@ impl JsGame {
             Ok(b) => Ok(b),
             Err(e) => Err(e.into()),
         }
+    }
+    pub fn action_hint(&self) -> Result<JsActionHint, JsValue> {
+        match self.game.action_hint() {
+            Ok(hint) => Ok(hint.into()),
+            Err(e) => Err(e.into()),
+        }
+    }
+    pub fn falling_piece_placement(&self) -> Option<JsPlacement> {
+        self.game.state.falling_piece.as_ref().map(|fp| fp.placement.into())
     }
     #[wasm_bindgen(js_name = toString)]
     pub fn to_string(&self) -> String {
