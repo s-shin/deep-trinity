@@ -1,5 +1,4 @@
 <script lang="ts">
-  import * as core from "@deep-trinity/web-core";
   import * as coreHelper from "@deep-trinity/web-core-helper";
   import Grid from "./Grid.svelte";
   import NextPieces from "./NextPieces.svelte";
@@ -9,27 +8,30 @@
   import Statistics from "./Statistics.svelte";
   import { GameRunner } from "./gameSystem";
 
-  function rand(max = 100000) {
-    return Math.floor(Math.random() * max);
-  }
-
-  function newGame() {
-    const g = new core.Game();
-    const rpg = new core.RandomPieceGenerator(BigInt(rand()));
-    g.supplyNextPieces(rpg.generate());
-    g.setupFallingPiece();
-    return new GameRunner(g, {
-      onGameUpdated(g) {
-        if (g.shouldSupplyNextPieces()) {
-          g.supplyNextPieces(rpg.generate());
+  function newGameRunner() {
+    let frameSpan = { startedAt: 0, frameCount: 0 };
+    return new GameRunner({
+      onFrameEntered(runner, dt) {
+        let now = performance.now();
+        if (frameSpan.startedAt === 0) {
+          frameSpan.startedAt = now;
+          return;
         }
-        game = coreHelper.getGameModel(g, true);
+        frameSpan.frameCount++;
+        if (now - frameSpan.startedAt > 1000) {
+          console.log(frameSpan.frameCount);
+          frameSpan.startedAt = now;
+          frameSpan.frameCount = 0;
+        }
+      },
+      onGameUpdated(runner) {
+        game = coreHelper.getGameModel(runner.game, true);
       },
     });
   }
 
   let ctx = {
-    runner: newGame(),
+    runner: newGameRunner(),
   };
 
   window.addEventListener("keydown", (ev) => {
@@ -45,7 +47,7 @@
     if (ev.code === "KeyR") {
       console.log("reset game");
       ctx.runner.stop();
-      ctx.runner = newGame();
+      ctx.runner = newGameRunner();
     }
   });
 
