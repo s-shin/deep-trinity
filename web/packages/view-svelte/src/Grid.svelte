@@ -1,23 +1,54 @@
+<script lang="ts" context="module">
+  import { Cell } from "@deep-trinity/model";
+
+  export const CellStyle = {
+    NORMAL: 0,
+    GHOST: 1,
+  } as const;
+
+  export type CellStyle = (typeof CellStyle)[keyof typeof CellStyle];
+
+  export type CellInfo = {
+    cell: Cell;
+    style?: CellStyle;
+  };
+</script>
+
 <script lang="ts">
-  import { type Cell } from "@deep-trinity/model";
   export let numCols: number;
   export let numRows: number;
-  export let cells: ArrayLike<Cell>;
+  export let cells: Iterable<Cell | CellInfo>;
 
-  function* generateGridIndices() {
+  function* iterate(
+    cells: Iterable<Cell | CellInfo>,
+  ): Iterable<CellInfo & { order: number }> {
+    let it = cells[Symbol.iterator]();
     for (let y = numRows - 1; y >= 0; y--) {
-      const baseIndex = y * numCols;
+      let orderBase = y * numCols;
       for (let x = 0; x < numCols; x++) {
-        yield baseIndex + x;
+        let order = orderBase + x;
+        let cell = it.next();
+        if (cell.done) {
+          yield { cell: Cell.Empty, order };
+        } else if (typeof cell.value === "number") {
+          yield { cell: cell.value, order };
+        } else {
+          yield { ...cell.value, order };
+        }
       }
     }
   }
+
+  $: it = iterate(cells);
 </script>
 
 <div class="grid-wrapper">
   <div class="grid" style:--_grid-cols={numCols} style:--_grid-rows={numRows}>
-    {#each generateGridIndices() as i}
-      <div class="cell cell-{cells[i]}"></div>
+    {#each it as { cell, style, order }}
+      <div
+        class="cell cell-{cell} {style === CellStyle.GHOST ? 'ghost' : ''}"
+        style="order: {order}"
+      ></div>
     {/each}
   </div>
 </div>
@@ -65,6 +96,9 @@
     box-sizing: border-box;
     aspect-ratio: 1;
     border: var(--grid-cell-border);
+  }
+  .ghost {
+    opacity: 0.5; /* TODO: prop */
   }
   /* Empty */
   .cell-0 {
